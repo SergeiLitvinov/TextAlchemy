@@ -36,6 +36,11 @@ def _setup_parser():
     p.add_argument("--tool", choices=["pdf2docx", "pymupdf", "libreoffice"], default="pdf2docx")
     p.add_argument("--dry-run", action="store_true")
 
+    p = sub.add_parser("pptx2html", help="Конвертация .pptx в автономный HTML-просмотрщик")
+    p.add_argument("-i", "--input", required=True, help="Путь к .pptx файлу")
+    p.add_argument("-o", "--output", required=True, help="Директория для HTML-результата")
+    p.add_argument("--no-assets", action="store_true", help="Не копировать встроенные css/js (если они уже есть)")
+
     p = sub.add_parser("match", help="Сопоставить и переименовать файлы")
     p.add_argument("-s", "--source", default="./literature_files")
     p.add_argument("-o", "--output", default="./renamed")
@@ -102,6 +107,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return _cmd_extract(args)
             case "convert":
                 return _cmd_convert(args)
+            case "pptx2html":
+                return _cmd_pptx2html(args)
             case "match":
                 return _cmd_match(args)
             case "gost":
@@ -176,6 +183,17 @@ def _cmd_convert(args: argparse.Namespace) -> int:
             failed += 1
     print(f"\nDone: {success} converted, {failed} failed")
     return 0 if failed == 0 else 1
+
+
+def _cmd_pptx2html(args: argparse.Namespace) -> int:
+    from textalchemy.convert.pptx_to_html import PptxToHtmlConverter
+    converter = PptxToHtmlConverter(copy_assets=not args.no_assets)
+    result = converter.convert(args.input, args.output)
+    if result.success:
+        print(f"OK: {result.output_path}")
+        return 0
+    print(f"Error: {result.error}", file=sys.stderr)
+    return 1
 
 
 def _cmd_match(args: argparse.Namespace) -> int:

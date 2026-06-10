@@ -5,9 +5,11 @@ from textalchemy.convert.pdf_to_docx import (
     PyMuPdfConverter,
     create_converter,
 )
+from textalchemy.convert.pptx_to_html import PptxToHtmlConverter, convert as pptx_to_html
 
 __all__ = [
     "BaseConverter", "ConversionResult",
     "Pdf2DocxConverter", "PyMuPdfConverter", "LibreOfficeConverter",
     "create_converter",
+    "PptxToHtmlConverter", "pptx_to_html",
 ]
