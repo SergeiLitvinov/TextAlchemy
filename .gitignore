@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+wheels/
+*.egg
+
+# Virtual environment
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Project-specific
+literature_files/
+renamed_literature/
+converted_docx/
+*.log
+report.json
+
+# Coverage
+.coverage
+htmlcov/
+
+# Project runtime data
+.textalchemy/
+
+# Root-level temp files from testing
+/out.txt
+/bibliography.json
+/test_bib.txt
+
+# Large binaries
+*.pdf
+*.doc
+*.docx
+!tests/**/fixtures/*.pdf
+!reference/*.doc
+!reference/*.docx
+
+# Recognition models
+models/
+recognize/models/

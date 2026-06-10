@@ -1,0 +1,358 @@
+import argparse
+import json
+import logging
+import sys
+from pathlib import Path
+from typing import Any, Optional
+
+logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
+logger = logging.getLogger("textalchemy")
+
+
+def _eprint(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
+
+def _setup_parser():
+    parser = argparse.ArgumentParser(
+        prog="textalchemy",
+        description="TextAlchemy — универсальный инструментарий обработки документов",
+    )
+    parser.add_argument("--version", action="version",
+                        version=f"TextAlchemy {__import__('textalchemy').__version__}")
+    parser.add_argument("-c", "--config", help="Путь к конфигурационному файлу JSON")
+
+    sub = parser.add_subparsers(dest="command", help="Команды")
+
+    p = sub.add_parser("extract", help="Извлечение текста/LaTeX из DOCX")
+    p.add_argument("input", type=str, help="Входной DOCX файл")
+    p.add_argument("output", type=str, nargs="?", help="Выходной файл")
+    p.add_argument("--format", choices=["text", "latex", "pandoc"], default="text")
+    p.add_argument("--doc-type", choices=["manuscript", "abstract"], default="manuscript")
+
+    p = sub.add_parser("convert", help="Конвертация PDF в DOCX")
+    p.add_argument("-i", "--input", required=True)
+    p.add_argument("-o", "--output")
+    p.add_argument("--tool", choices=["pdf2docx", "pymupdf", "libreoffice"], default="pdf2docx")
+    p.add_argument("--dry-run", action="store_true")
+
+    p = sub.add_parser("match", help="Сопоставить и переименовать файлы")
+    p.add_argument("-s", "--source", default="./literature_files")
+    p.add_argument("-o", "--output", default="./renamed")
+    p.add_argument("-b", "--bibliography")
+    p.add_argument("-t", "--threshold", type=float, default=0.30)
+    p.add_argument("--json", action="store_true", help="Сохранить отчёт в JSON")
+    p.add_argument("--dry-run", action="store_true")
+
+    p = sub.add_parser("gost", help="Конвертация библиографии в ГОСТ")
+    p.add_argument("-i", "--input", required=True)
+    p.add_argument("-o", "--output", required=True)
+
+    p = sub.add_parser("stats", help="Статистика библиотеки")
+    p.add_argument("-s", "--source", default="./literature_files")
+    p.add_argument("-o", "--output", default="./renamed")
+    p.add_argument("-b", "--bibliography")
+
+    p = sub.add_parser("export", help="Экспорт библиографии")
+    p.add_argument("-i", "--input", required=True)
+    p.add_argument("-o", "--output")
+    p.add_argument("-f", "--format", choices=["json", "markdown", "gost"], default="json")
+
+    p = sub.add_parser("generate", help="Генерация из шаблонов")
+    p.add_argument("template", type=str, nargs="?", default=None)
+    p.add_argument("output", type=str, nargs="?", default=None)
+    p.add_argument("-p", "--param", action="append")
+    p.add_argument("--list", action="store_true")
+    p.add_argument("--templates-dir", type=str)
+
+    p = sub.add_parser("recognize", help="OCR распознавание")
+    p.add_argument("input", type=str)
+    p.add_argument("--lang", default="rus+eng")
+    p.add_argument("--output", type=str)
+    p.add_argument("--backend", choices=["auto", "tesseract", "easyocr"], default="auto")
+
+    p = sub.add_parser("bibtex", help="Генерация .bib из PDF")
+    p.add_argument("-s", "--source", default="./literature_files")
+    p.add_argument("-o", "--output", default="bibliography.bib")
+
+    p = sub.add_parser("init", help="Создать конфигурационный файл")
+    p.add_argument("-o", "--output", default="config.json")
+
+    p = sub.add_parser("web", help="Запуск веб-интерфейса")
+    p.add_argument("--port", type=int, default=8000)
+    p.add_argument("--host", type=str, default="127.0.0.1")
+
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+
+    parser = _setup_parser()
+    args = parser.parse_args(argv)
+
+    if not args.command:
+        parser.print_help()
+        return 1
+
+    try:
+        match args.command:
+            case "extract":
+                return _cmd_extract(args)
+            case "convert":
+                return _cmd_convert(args)
+            case "match":
+                return _cmd_match(args)
+            case "gost":
+                return _cmd_gost(args)
+            case "stats":
+                return _cmd_stats(args)
+            case "export":
+                return _cmd_export(args)
+            case "generate":
+                return _cmd_generate(args)
+            case "recognize":
+                return _cmd_recognize(args)
+            case "bibtex":
+                return _cmd_bibtex(args)
+            case "init":
+                return _cmd_init(args)
+            case "web":
+                return _cmd_web(args)
+            case _:
+                parser.print_help()
+                return 1
+    except Exception as e:
+        _eprint(f"Error: {e}")
+        logger.exception("Command failed")
+        return 1
+
+
+def _cmd_extract(args: argparse.Namespace) -> int:
+    from textalchemy.extract import docx_to_latex, docx_to_latex_pandoc, extract_text
+    if args.format == "latex":
+        result = docx_to_latex(args.input, args.output, args.doc_type)
+    elif args.format == "pandoc":
+        result = docx_to_latex_pandoc(args.input, args.output, args.doc_type)
+    else:
+        result = extract_text(args.input, args.output)
+    if args.output:
+        print(f"Saved: {args.output}")
+    else:
+        print(result)
+    return 0
+
+
+def _cmd_convert(args: argparse.Namespace) -> int:
+    from tqdm import tqdm
+
+    from textalchemy.convert import create_converter
+    input_dir = Path(args.input)
+    if not input_dir.is_dir():
+        print(f"Error: {args.input} is not a directory")
+        return 1
+    output_dir = Path(args.output) if args.output else input_dir / "converted"
+    converter = create_converter(args.tool)
+    pdf_files = sorted(input_dir.rglob("*.pdf"))
+    if not pdf_files:
+        print("No PDF files found")
+        return 0
+    if args.dry_run:
+        print(f"Found {len(pdf_files)} PDF files:")
+        for f in pdf_files:
+            print(f"  {f}")
+        return 0
+    success = 0
+    failed = 0
+    for pdf_path in tqdm(pdf_files, desc="Converting"):
+        rel = pdf_path.relative_to(input_dir)
+        out_path = output_dir / rel.with_suffix(".docx")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        result = converter.convert(pdf_path, out_path)
+        if result.success:
+            success += 1
+        else:
+            failed += 1
+    print(f"\nDone: {success} converted, {failed} failed")
+    return 0 if failed == 0 else 1
+
+
+def _cmd_match(args: argparse.Namespace) -> int:
+    import shutil
+
+    from textalchemy.organize import (
+        BibliographyParser,
+        build_filename,
+        get_file_content,
+        load_manual_matches,
+        match_file_to_bibliography,
+        progress_bar,
+    )
+    from textalchemy.organize.filename import DocType
+
+    source_dir = Path(args.source)
+    output_dir = Path(args.output)
+    if not args.dry_run:
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+    bib_path = args.bibliography
+    if not bib_path:
+        candidates = list(Path(".").glob("*bibliography*"))
+        if not candidates:
+            print("Error: no bibliography file found. Use -b.")
+            return 1
+        bib_path = str(candidates[0])
+
+    items = BibliographyParser.parse_file(bib_path)
+    manual = load_manual_matches()
+    print(f"Loaded {len(items)} entries, {len(manual)} manual matches")
+
+    ext_map = {".pdf", ".docx", ".djvu", ".txt"}
+    files = [f for f in source_dir.rglob("*") if f.is_file() and f.suffix.lower() in ext_map]
+    if not files:
+        print("No files found")
+        return 0
+
+    if args.dry_run:
+        print(f"Found {len(files)} files, {len(items)} bibliography entries")
+        return 0
+
+    results: dict[str, Any] = {"matched": [], "unmatched": [], "errors": []}
+    for i, file in enumerate(files):
+        print(f"\r   {progress_bar(i, len(files))}", end="")
+        try:
+            content = get_file_content(file)
+            idx, _, score = match_file_to_bibliography(content, file.name, items, args.threshold, manual)
+            if idx >= 0:
+                item = items[idx]
+                dt = DocType.from_str(item.doc_type)
+                new_name = build_filename(idx + 1, item.authors, item.title, dt, ext=file.suffix.lower())
+                shutil.copy2(file, output_dir / new_name)
+                results["matched"].append({"original": file.name, "new": new_name, "score": round(score, 2)})
+            else:
+                results["unmatched"].append({"file": file.name})
+        except Exception as e:
+            results["errors"].append({"file": file.name, "error": str(e)})
+
+    print(f"\n\nMatched: {len(results['matched'])}, Unmatched: {len(results['unmatched'])}, Errors: {len(results['errors'])}")
+    if args.json:
+        report_path = "matching_report.json"
+        Path(report_path).write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"Report saved: {report_path}")
+    return 0
+
+
+def _cmd_gost(args: argparse.Namespace) -> int:
+    from textalchemy.organize import BibliographyParser, GostFormatter
+    items = BibliographyParser.parse_file(args.input)
+    result = GostFormatter().format_bibliography(items)
+    Path(args.output).write_text(result, encoding="utf-8")
+    print(f"Saved: {args.output} ({len(items)} entries)")
+    return 0
+
+
+def _cmd_stats(args: argparse.Namespace) -> int:
+    from textalchemy.organize import BibliographyParser
+    source = Path(args.source)
+    output = Path(args.output)
+    bib_items = []
+    if args.bibliography:
+        bib_items = BibliographyParser.parse_file(args.bibliography)
+    total = len([f for f in source.rglob("*") if f.is_file()]) if source.exists() else 0
+    matched = len([f for f in output.rglob("*") if f.is_file()]) if output.exists() else 0
+    print("Statistics:")
+    print(f"  Total files: {total}")
+    print(f"  Matched: {matched}")
+    print(f"  Unmatched: {total - matched}")
+    print(f"  Bibliography: {len(bib_items)} entries")
+    if bib_items:
+        print(f"  Progress: {matched / len(bib_items) * 100:.1f}%")
+    return 0
+
+
+def _cmd_export(args: argparse.Namespace) -> int:
+    from textalchemy.organize import BibliographyParser
+    items = BibliographyParser.parse_file(args.input)
+    out = args.output
+    if args.format == "json":
+        data = BibliographyParser.to_json(items)
+        out = out or "bibliography.json"
+        Path(out).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    elif args.format == "markdown":
+        md = BibliographyParser.to_markdown(items)
+        out = out or "bibliography.md"
+        Path(out).write_text(md, encoding="utf-8")
+    elif args.format == "gost":
+        gost = BibliographyParser.to_gost(items)
+        out = out or "bibliography_gost.txt"
+        Path(out).write_text(gost, encoding="utf-8")
+    print(f"Exported: {out}")
+    return 0
+
+
+def _cmd_generate(args: argparse.Namespace) -> int:
+    from textalchemy.generate import generate_document, list_templates
+    if args.list:
+        templates = list_templates(args.templates_dir)
+        if not templates:
+            print("No templates found")
+        else:
+            for t in templates:
+                print(f"  {t.name} — {t.description}")
+        return 0
+    params = {}
+    if args.param:
+        for p in args.param:
+            if "=" in p:
+                k, v = p.split("=", 1)
+                params[k] = v
+    result = generate_document(args.template, args.output, params, args.templates_dir)
+    print(f"Generated: {result}")
+    return 0
+
+
+def _cmd_recognize(args: argparse.Namespace) -> int:
+    from textalchemy.recognize import OcrEngine
+    engine = OcrEngine(languages=args.lang.split("+"))
+    if not engine.is_available:
+        text = f"[STUB] OCR for: {args.input}\n[STUB] Backend: {engine.backend_name}\n[STUB] Install pytesseract or easyocr"
+    else:
+        text = engine.recognize(args.input).text
+    if args.output:
+        Path(args.output).write_text(text, encoding="utf-8")
+        print(f"Saved: {args.output}")
+    else:
+        print(text)
+    return 0
+
+
+def _cmd_bibtex(args: argparse.Namespace) -> int:
+    from textalchemy.organize.bibtex import generate_bib
+    bib = generate_bib(args.source, args.output)
+    count = bib.count("@misc{")
+    print(f"Generated {count} BibTeX entries")
+    if args.output:
+        print(f"Saved: {args.output}")
+    return 0
+
+
+def _cmd_init(args: argparse.Namespace) -> int:
+    from textalchemy.core.config import generate_default_config
+    config = generate_default_config()
+    config.save(args.output)
+    print(f"Config saved: {args.output}")
+    return 0
+
+
+def _cmd_web(args) -> int:
+    import uvicorn
+
+    from textalchemy.web import app
+    print(f"Starting TextAlchemy web at http://{args.host}:{args.port}")
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

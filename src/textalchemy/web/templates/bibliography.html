@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextAlchemy — Библиография</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>📚 Библиография</h1>
+        <nav>
+            <a href="/">Главная</a>
+            <a href="/bibliography" class="active">Библиография</a>
+            <a href="/matching">Сопоставление</a>
+            <a href="/rename">Реймен</a>
+            <a href="/reports">Отчёты</a>
+            <a href="/export">Экспорт</a>
+            <a href="/extract">Извлечь</a>
+            <a href="/convert">Конверт</a>
+            <a href="/recognize">Распознать</a>
+            <a href="/generate">Сгенерить</a>
+        </nav>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h2>Добавить/Редактировать</h2>
+            <form id="bibForm">
+                <input type="hidden" id="itemId" value="">
+                <label>Авторы (через точку с запятой)</label>
+                <input type="text" id="authors" required>
+                <label>Название</label>
+                <input type="text" id="title" required>
+                <label>Тип документа</label>
+                <select id="doc_type">
+                    <option value="article">Статья</option>
+                    <option value="book">Книга</option>
+                    <option value="conference">Конференция</option>
+                    <option value="thesis">Диссертация</option>
+                    <option value="report">Отчёт</option>
+                    <option value="patent">Патент</option>
+                    <option value="standard">Стандарт</option>
+                    <option value="methodical">Методичка</option>
+                    <option value="electronic">Эл. ресурс</option>
+                    <option value="other">Прочее</option>
+                </select>
+                <label>Год</label>
+                <input type="text" id="year">
+                <label>Журнал</label>
+                <input type="text" id="journal">
+                <label>Издательство</label>
+                <input type="text" id="publisher">
+                <label>Город</label>
+                <input type="text" id="city">
+                <label>Страницы</label>
+                <input type="text" id="pages">
+                <label>ISBN</label>
+                <input type="text" id="isbn">
+                <label>DOI</label>
+                <input type="text" id="doi">
+                <label>Источник (путь к файлу)</label>
+                <input type="text" id="source">
+                <div class="form-actions">
+                    <button type="submit">Сохранить</button>
+                    <button type="button" id="cancelEdit" style="display:none">Отмена</button>
+                </div>
+            </form>
+        </div>
+        <div class="card">
+            <h2>Библиография (<span id="bibCount">{{ bib_items|length }}</span>)</h2>
+            <div style="margin-bottom:1rem">
+                <form id="importForm" enctype="multipart/form-data" style="display:inline">
+                    <input type="file" name="file" accept=".json,.bib,.txt" id="importFile">
+                    <button type="submit">Импорт</button>
+                </form>
+            </div>
+            <table id="bibTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Авторы</th>
+                        <th>Название</th>
+                        <th>Тип</th>
+                        <th>Год</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="bibBody">
+                    {% for item in bib_items %}
+                    <tr>
+                        <td>{{ item.id }}</td>
+                        <td>{{ item.authors|join('; ') }}</td>
+                        <td>{{ item.title }}</td>
+                        <td>{{ item.doc_type }}</td>
+                        <td>{{ item.year }}</td>
+                        <td>
+                            <button onclick="editItem({{ item.id }})">✏️</button>
+                            <button onclick="deleteItem({{ item.id }})">🗑️</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        const form = document.getElementById('bibForm');
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('itemId').value;
+            const fd = new FormData();
+            fd.set('authors', document.getElementById('authors').value);
+            fd.set('title', document.getElementById('title').value);
+            fd.set('doc_type', document.getElementById('doc_type').value);
+            fd.set('year', document.getElementById('year').value);
+            fd.set('journal', document.getElementById('journal').value);
+            fd.set('publisher', document.getElementById('publisher').value);
+            fd.set('city', document.getElementById('city').value);
+            fd.set('pages', document.getElementById('pages').value);
+            fd.set('isbn', document.getElementById('isbn').value);
+            fd.set('doi', document.getElementById('doi').value);
+            fd.set('source', document.getElementById('source').value);
+            const url = id ? `/api/bibliography/${id}` : '/api/bibliography';
+            const method = id ? 'PUT' : 'POST';
+            const res = await fetch(url, { method, body: fd });
+            if (res.ok) location.reload();
+        });
+
+        document.getElementById('cancelEdit').addEventListener('click', () => {
+            document.getElementById('itemId').value = '';
+            form.reset();
+            document.getElementById('cancelEdit').style.display = 'none';
+        });
+
+        async function editItem(id) {
+            const items = await (await fetch('/api/bibliography')).json();
+            const item = items.find(i => i.id === id);
+            if (!item) return;
+            document.getElementById('itemId').value = item.id;
+            document.getElementById('authors').value = (item.authors || []).join('; ');
+            document.getElementById('title').value = item.title || '';
+            document.getElementById('doc_type').value = item.doc_type || 'article';
+            document.getElementById('year').value = item.year || '';
+            document.getElementById('journal').value = item.journal || '';
+            document.getElementById('publisher').value = item.publisher || '';
+            document.getElementById('city').value = item.city || '';
+            document.getElementById('pages').value = item.pages || '';
+            document.getElementById('isbn').value = item.isbn || '';
+            document.getElementById('doi').value = item.doi || '';
+            document.getElementById('source').value = item.source || '';
+            document.getElementById('cancelEdit').style.display = 'inline';
+        }
+
+        async function deleteItem(id) {
+            if (!confirm('Удалить запись?')) return;
+            await fetch(`/api/bibliography/${id}`, { method: 'DELETE' });
+            location.reload();
+        }
+
+        document.getElementById('importForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('importFile');
+            if (!fileInput.files[0]) return;
+            const fd = new FormData();
+            fd.set('file', fileInput.files[0]);
+            await fetch('/api/bibliography/import', { method: 'POST', body: fd });
+            location.reload();
+        });
+    </script>
+</body>
+</html>

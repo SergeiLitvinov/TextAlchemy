@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organize — TextAlchemy</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>⚗️ TextAlchemy</h1>
+        <nav>
+            <a href="/">Главная</a>
+            <a href="/extract">Извлечь</a>
+            <a href="/convert">Конверт</a>
+            <a href="/organize" class="active">Органайз</a>
+            <a href="/recognize">Распознать</a>
+            <a href="/generate">Сгенерить</a>
+        </nav>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h2>Организация библиотеки</h2>
+            <p>Загрузите файл библиографии и PDF для автоматического сопоставления и переименования.</p>
+            <div style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">
+                Функция доступна через CLI: <code>textalchemy organize &lt;source&gt; &lt;output&gt; -b bibliography.txt</code>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

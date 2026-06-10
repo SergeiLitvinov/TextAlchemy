@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextAlchemy — Сопоставление</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>🔗 Сопоставление</h1>
+        <nav>
+            <a href="/">Главная</a>
+            <a href="/bibliography">Библиография</a>
+            <a href="/matching" class="active">Сопоставление</a>
+            <a href="/rename">Реймен</a>
+            <a href="/reports">Отчёты</a>
+            <a href="/export">Экспорт</a>
+            <a href="/extract">Извлечь</a>
+            <a href="/convert">Конверт</a>
+            <a href="/recognize">Распознать</a>
+            <a href="/generate">Сгенерить</a>
+        </nav>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h2>Параметры сопоставления</h2>
+            <form id="matchForm">
+                <label>Директория исходных файлов</label>
+                <input type="text" id="source_dir" value="{{ config.source_dir }}">
+                <label>Директория для сохранения</label>
+                <input type="text" id="output_dir" value="{{ config.output_dir }}">
+                <label>Порог совпадения (0–1)</label>
+                <input type="number" id="threshold" step="0.01" value="{{ config.threshold }}">
+                <label>Файл библиографии</label>
+                <input type="text" id="bibliography_file" value="{{ config.bibliography_file }}">
+                <div class="form-actions">
+                    <button type="button" id="previewBtn">Предпросмотр</button>
+                    <button type="submit">Запустить сопоставление</button>
+                    <label><input type="checkbox" id="dryRun" checked> Только сухой прогон</label>
+                </div>
+            </form>
+        </div>
+        <div class="card" id="resultsCard" style="display:none">
+            <h2>Результаты</h2>
+            <div id="resultsSummary"></div>
+            <table id="resultsTable">
+                <thead>
+                    <tr>
+                        <th>Исходный файл</th>
+                        <th>Новое имя</th>
+                        <th>Совпадение</th>
+                        <th>Оценка</th>
+                    </tr>
+                </thead>
+                <tbody id="resultsBody"></tbody>
+            </table>
+        </div>
+        <div class="card">
+            <h2>Файлы в директории</h2>
+            <table>
+                <thead><tr><th>Файл</th></tr></thead>
+                <tbody>
+                    {% for f in files %}
+                    <tr><td>{{ f }}</td></tr>
+                    {% else %}
+                    <tr><td>Нет файлов (директория не существует или пуста)</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        document.getElementById('previewBtn').addEventListener('click', async () => {
+            const fd = new FormData();
+            fd.set('source_dir', document.getElementById('source_dir').value);
+            fd.set('threshold', document.getElementById('threshold').value);
+            fd.set('bibliography_file', document.getElementById('bibliography_file').value);
+            const res = await fetch('/api/preview/rename', { method: 'POST', body: fd });
+            const data = await res.json();
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+            for (const item of data.preview) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.original}</td><td>${item.new}</td><td>${item.match ? '✅' : '❌'}</td><td>${item.score}</td>`;
+                tbody.appendChild(tr);
+            }
+            document.getElementById('resultsSummary').textContent =
+                `Найдено: ${data.total}, совпадений: ${data.matched}`;
+            document.getElementById('resultsCard').style.display = 'block';
+        });
+
+        document.getElementById('matchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData();
+            fd.set('source_dir', document.getElementById('source_dir').value);
+            fd.set('output_dir', document.getElementById('output_dir').value);
+            fd.set('threshold', document.getElementById('threshold').value);
+            fd.set('bibliography_file', document.getElementById('bibliography_file').value);
+            fd.set('dry_run', document.getElementById('dryRun').checked ? 'true' : 'false');
+            const res = await fetch('/api/match/run', { method: 'POST', body: fd });
+            const data = await res.json();
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+            for (const item of data.matched) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.original}</td><td>${item.new}</td><td>✅</td><td>${item.score}</td>`;
+                tbody.appendChild(tr);
+            }
+            for (const item of data.unmatched) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${item.file}</td><td>—</td><td>❌</td><td>0</td>`;
+                tbody.appendChild(tr);
+            }
+            document.getElementById('resultsSummary').textContent =
+                `Всего: ${data.total}, совпадений: ${data.matched.length}, без совпадений: ${data.unmatched.length}, ошибок: ${data.errors.length}`;
+            document.getElementById('resultsCard').style.display = 'block';
+        });
+    </script>
+</body>
+</html>

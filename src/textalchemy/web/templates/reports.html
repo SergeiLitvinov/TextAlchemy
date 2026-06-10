@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextAlchemy — Отчёты</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Отчёты</h1>
+        <nav>
+            <a href="/">Главная</a>
+            <a href="/bibliography">Библиография</a>
+            <a href="/matching">Сопоставление</a>
+            <a href="/rename">Реймен</a>
+            <a href="/reports" class="active">Отчёты</a>
+            <a href="/export">Экспорт</a>
+            <a href="/extract">Извлечь</a>
+            <a href="/convert">Конверт</a>
+            <a href="/recognize">Распознать</a>
+            <a href="/generate">Сгенерить</a>
+        </nav>
+    </div>
+    <div class="container">
+        <div class="grid-2">
+            <div class="card">
+                <h2>Статистика</h2>
+                <div id="stats">
+                    <p>Загрузка...</p>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Типы документов</h2>
+                <div id="docTypes">
+                    <p>Загрузка...</p>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Последнее сопоставление</h2>
+            <div id="lastMatching">
+                {% if report %}
+                <p>Совпадений: {{ report.matched|length }}, без совпадений: {{ report.unmatched|length }}, ошибок: {{ report.errors|length }}</p>
+                <table>
+                    <thead>
+                        <tr><th>Оригинал</th><th>Новое имя</th><th>Оценка</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for m in report.matched %}
+                        <tr><td>{{ m.original }}</td><td>{{ m.new }}</td><td>{{ m.score }}</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p>Сопоставление ещё не запускалось.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <script>
+        async function loadStats() {
+            const res = await fetch('/api/stats');
+            const data = await res.json();
+            document.getElementById('stats').innerHTML = `
+                <p>Записей в библиографии: ${data.total_bib}</p>
+                <p>Всего файлов: ${data.total_files}</p>
+                <p>Совпало: ${data.matched_files}</p>
+                <p>Без совпадения: ${data.unmatched}</p>
+                <p>Прогресс: ${data.progress}%</p>
+            `;
+            const dtHtml = Object.entries(data.doc_types)
+                .map(([k, v]) => `<p>${k}: ${v}</p>`).join('');
+            document.getElementById('docTypes').innerHTML = dtHtml || '<p>Нет данных</p>';
+        }
+        loadStats();
+    </script>
+</body>
+</html>

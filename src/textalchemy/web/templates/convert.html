@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convert — TextAlchemy</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>⚗️ TextAlchemy</h1>
+        <nav>
+            <a href="/">Главная</a>
+            <a href="/extract">Извлечь</a>
+            <a href="/convert" class="active">Конверт</a>
+            <a href="/organize">Органайз</a>
+            <a href="/recognize">Распознать</a>
+            <a href="/generate">Сгенерить</a>
+        </nav>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h2>Конвертация PDF → DOCX</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Инструмент конвертации</label>
+                    <select id="tool">
+                        <option value="pdf2docx">pdf2docx</option>
+                        <option value="pymupdf">PyMuPDF</option>
+                    </select>
+                </div>
+            </div>
+            <div class="file-drop" id="dropZone" style="margin-top:1rem;">
+                <div style="font-size:3rem;margin-bottom:0.5rem;">📄</div>
+                <strong>Перетащите PDF файл сюда</strong>
+                <div class="hint">или нажмите для выбора файла</div>
+                <input type="file" id="fileInput" accept=".pdf">
+            </div>
+        </div>
+        <div class="card">
+            <div id="status" class="status-bar" style="display:none;"></div>
+        </div>
+    </div>
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const statusBar = document.getElementById('status');
+        const toolSelect = document.getElementById('tool');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', (e) => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); });
+        fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+        async function handleFile(file) {
+            if (!file.name.endsWith('.pdf')) { showStatus('Пожалуйста, выберите PDF файл', 'error'); return; }
+            showStatus('Конвертация...', 'info');
+            const form = new FormData();
+            form.append('file', file);
+            form.append('tool', toolSelect.value);
+            try {
+                const res = await fetch('/api/convert', { method: 'POST', body: form });
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = file.name.replace('.pdf', '.docx');
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showStatus('Готово! DOCX файл загружен.', 'success');
+                } else {
+                    const data = await res.json();
+                    showStatus(`Ошибка: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                showStatus(`Ошибка сети: ${e.message}`, 'error');
+            }
+        }
+
+        function showStatus(msg, type) {
+            statusBar.textContent = msg;
+            statusBar.className = 'status-bar ' + type;
+            statusBar.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

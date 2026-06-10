@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextAlchemy — Реймен</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>✏️ Реймен файлов</h1>
+        <nav>
+            <a href="/">Главная</a>
+            <a href="/bibliography">Библиография</a>
+            <a href="/matching">Сопоставление</a>
+            <a href="/rename" class="active">Реймен</a>
+            <a href="/reports">Отчёты</a>
+            <a href="/export">Экспорт</a>
+            <a href="/extract">Извлечь</a>
+            <a href="/convert">Конверт</a>
+            <a href="/recognize">Распознать</a>
+            <a href="/generate">Сгенерить</a>
+        </nav>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h2>Предпросмотр переименования</h2>
+            <form id="previewForm">
+                <label>Директория исходных файлов</label>
+                <input type="text" id="source_dir" value="{{ config.source_dir }}">
+                <label>Порог совпадения (0–1)</label>
+                <input type="number" id="threshold" step="0.01" value="{{ config.threshold }}">
+                <div class="form-actions">
+                    <button type="submit">Показать предпросмотр</button>
+                </div>
+            </form>
+        </div>
+        <div class="card" id="previewCard" style="display:none">
+            <h2>Предпросмотр</h2>
+            <div id="previewSummary"></div>
+            <table>
+                <thead>
+                    <tr><th>Исходный файл</th><th>Новое имя</th><th>Статус</th></tr>
+                </thead>
+                <tbody id="previewBody"></tbody>
+            </table>
+        </div>
+    </div>
+    <script>
+        document.getElementById('previewForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData();
+            fd.set('source_dir', document.getElementById('source_dir').value);
+            fd.set('threshold', document.getElementById('threshold').value);
+            const res = await fetch('/api/preview/rename', { method: 'POST', body: fd });
+            const data = await res.json();
+            const tbody = document.getElementById('previewBody');
+            tbody.innerHTML = '';
+            for (const item of data.preview) {
+                const tr = document.createElement('tr');
+                const status = item.match ? '✅ Совпало' : '❌ Без совпадения';
+                tr.innerHTML = `<td>${item.original}</td><td>${item.new}</td><td>${status} (${item.score})</td>`;
+                tbody.appendChild(tr);
+            }
+            document.getElementById('previewSummary').textContent =
+                `Всего: ${data.total}, совпало: ${data.matched}`;
+            document.getElementById('previewCard').style.display = 'block';
+        });
+    </script>
+</body>
+</html>

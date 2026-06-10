@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextAlchemy</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>⚗️ TextAlchemy</h1>
+        <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
+        <nav>
+            <a href="/" class="active">Главная</a>
+            <a href="/bibliography">Библиография</a>
+            <a href="/matching">Сопоставление</a>
+            <a href="/rename">Реймен</a>
+            <a href="/reports">Отчёты</a>
+            <a href="/export">Экспорт</a>
+            <a href="/extract">Извлечь</a>
+            <a href="/convert">Конверт</a>
+            <a href="/recognize">Распознать</a>
+            <a href="/generate">Сгенерить</a>
+        </nav>
+    </div>
+    <div class="container">
+        <div class="stats-bar">
+            <span>📚 Библиография: <strong>{{ bib_count }}</strong> записей</span>
+            {% if report %}
+            <span>✅ Совпало: <strong>{{ report.matched|length }}</strong></span>
+            <span>❌ Без совпадения: <strong>{{ report.unmatched|length }}</strong></span>
+            {% endif %}
+        </div>
+        <div class="grid">
+            <a href="/extract" class="module-card">
+                <span class="icon">📄</span>
+                <h3>Extract</h3>
+                <p>Извлечение текста и LaTeX из DOCX</p>
+            </a>
+            <a href="/convert" class="module-card">
+                <span class="icon">🔄</span>
+                <h3>Convert</h3>
+                <p>Пакетная конвертация PDF → DOCX</p>
+            </a>
+            <a href="/bibliography" class="module-card">
+                <span class="icon">📚</span>
+                <h3>Библиография</h3>
+                <p>CRUD библиотеки, импорт</p>
+            </a>
+            <a href="/matching" class="module-card">
+                <span class="icon">🔗</span>
+                <h3>Сопоставление</h3>
+                <p>Fuzzy-матчинг файлов с библиографией</p>
+            </a>
+            <a href="/rename" class="module-card">
+                <span class="icon">✏️</span>
+                <h3>Реймен</h3>
+                <p>Предпросмотр и переименование файлов</p>
+            </a>
+            <a href="/reports" class="module-card">
+                <span class="icon">📊</span>
+                <h3>Отчёты</h3>
+                <p>Статистика и результаты</p>
+            </a>
+            <a href="/export" class="module-card">
+                <span class="icon">💾</span>
+                <h3>Экспорт</h3>
+                <p>JSON, Markdown, ГОСТ</p>
+            </a>
+            <a href="/recognize" class="module-card">
+                <span class="icon">👁️</span>
+                <h3>Recognize</h3>
+                <p>OCR и визуальное распознавание</p>
+            </a>
+            <a href="/generate" class="module-card">
+                <span class="icon">⚙️</span>
+                <h3>Generate</h3>
+                <p>Генерация документов из шаблонов</p>
+            </a>
+        </div>
+    </div>
+    <script>
+        function toggleTheme() {
+            const root = document.documentElement;
+            const isDark = root.style.getPropertyValue('--bg') === '#0f172a' ||
+                getComputedStyle(root).getPropertyValue('--bg').trim() === '#0f172a';
+            if (isDark) {
+                root.style.setProperty('--bg', '#f5f5f5');
+                root.style.setProperty('--surface', '#ffffff');
+                root.style.setProperty('--text', '#1e293b');
+                root.style.setProperty('--text-muted', '#64748b');
+                root.style.setProperty('--border', '#e2e8f0');
+            } else {
+                root.style.setProperty('--bg', '#0f172a');
+                root.style.setProperty('--surface', '#1e293b');
+                root.style.setProperty('--text', '#f1f5f9');
+                root.style.setProperty('--text-muted', '#94a3b8');
+                root.style.setProperty('--border', '#334155');
+            }
+        }
+        function showLoading(el) { el.classList.add('loading'); }
+        function hideLoading(el) { el.classList.remove('loading'); }
+    </script>
+</body>
+</html>

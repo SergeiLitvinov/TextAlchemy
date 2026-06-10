@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TextAlchemy — Экспорт</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="header">
+        <h1>💾 Экспорт библиографии</h1>
+        <nav>
+            <a href="/">Главная</a>
+            <a href="/bibliography">Библиография</a>
+            <a href="/matching">Сопоставление</a>
+            <a href="/rename">Реймен</a>
+            <a href="/reports">Отчёты</a>
+            <a href="/export" class="active">Экспорт</a>
+            <a href="/extract">Извлечь</a>
+            <a href="/convert">Конверт</a>
+            <a href="/recognize">Распознать</a>
+            <a href="/generate">Сгенерить</a>
+        </nav>
+    </div>
+    <div class="container">
+        <div class="grid-3">
+            <div class="card text-center">
+                <h2>JSON</h2>
+                <p>Структурированный формат для обмена данными</p>
+                <a href="/api/export/json" class="btn">Скачать JSON</a>
+            </div>
+            <div class="card text-center">
+                <h2>Markdown</h2>
+                <p>Человекочитаемый формат разметки</p>
+                <a href="/api/export/markdown" class="btn">Скачать Markdown</a>
+            </div>
+            <div class="card text-center">
+                <h2>ГОСТ</h2>
+                <p>Оформление по ГОСТ Р 7.0.100-2018</p>
+                <a href="/api/export/gost" class="btn">Скачать ГОСТ</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
