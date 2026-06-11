@@ -16,6 +16,8 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
   - `extract.py` — `extract.text`: `Document` → `Text` (universal reader).
   - `signals.py` — author/title/year/doi/isbn signals with configurable weights.
   - `match.py` — `match.bibliography`: `Text`+`Document`+`BibItem[]` → `Match`.
+  - `match_files.py` — `match.files`: directory + BibItem[] → `Match[]` (batch; copies matched files to `output_dir`).
+  - `bibliography.py` — `bibliography.parse` (path → BibItem[]), `bibliography.smart_parse` (text → BibItem[]).
   - `name.py` — `name.from_match`: `Match` → filename.
   - `render.py` — `render.latex`, `render.latex.pandoc`, `render.docx`, `render.bibtex`, `render.gost`, `render.markdown`, `render.json`.
   - `runner.py` — YAML/TOML/JSON pipeline runner.

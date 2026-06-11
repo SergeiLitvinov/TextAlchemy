@@ -67,6 +67,9 @@ Final: \documentclass[12pt,a4paper]{article}...
 | `ingest.file` | path | `Document` | Открыть файл, посчитать SHA-256 |
 | `extract.text` | `Document` | `Text` | Универсальный ридер (PDF/DOCX/TXT/DjVu) |
 | `match.bibliography` | `Text`, `Document`, BibItem[] | `Match` | Сопоставить документ со списком записей |
+| `match.files` | path, BibItem[] | Match[] | Батч-матчинг директории; копирует в `output_dir` |
+| `bibliography.parse` | path | BibItem[] | Распарсить файл библиографии |
+| `bibliography.smart_parse` | text | BibItem[] | Auto-detect формата библиографии |
 | `name.from_match` | `Match` | str | Сгенерировать имя файла по BibItem |
 | `render.latex` | `Text` | str | Text → LaTeX (статья, с преамблой) |
 | `render.latex.pandoc` | `Text` | str | Text → LaTeX через pandoc |
@@ -96,7 +99,7 @@ Final: \documentclass[12pt,a4paper]{article}...
 | Команда | Описание | Пример |
 |---------|----------|--------|
 | `textalchemy extract` | Извлечение текста/LaTeX из DOCX | `textalchemy extract file.docx --format latex` |
-| `textalchemy convert` | Пакетная конвертация PDF→DOCX | `textalchemy convert -i ./pdfs -o ./docs` |
+| `textalchemy convert` | Пакетная конвертация PDF→DOCX (по умолчанию fan-out) | `textalchemy convert -i ./pdfs -o ./docs` |
 | `textalchemy pptx2html` | PPTX → автономный HTML | `textalchemy pptx2html -i deck.pptx -o ./out` |
 | `textalchemy match` | Сопоставить и переименовать PDF | `textalchemy match -s ./literature -b bib.txt` |
 | `textalchemy gost` | Форматирование в ГОСТ Р 7.0.100 | `textalchemy gost -i bib.txt -o gost.txt` |
@@ -136,11 +139,13 @@ src/textalchemy/
 │   ├── ingest.py      # @operation("ingest.file")
 │   ├── extract.py     # @operation("extract.text")
 │   ├── match.py       # @operation("match.bibliography")
+│   ├── match_files.py # @operation("match.files") — батч-матчинг
+│   ├── bibliography.py# @operation("bibliography.parse/smart_parse")
 │   ├── name.py        # @operation("name.from_match")
 │   ├── render.py      # @operation("render.*")
 │   ├── signals.py     # автор/title/год/doi сигналы для матчинга
 │   └── runner.py      # YAML/TOML/JSON → последовательность операций
-├── convert/           # PDF→DOCX (3 бэкенда) + PPTX→HTML
+├── convert/           # PDF→DOCX (3 бэкенда + FanOut) + PPTX→HTML
 ├── extract/           # legacy: docx→text/latex
 ├── organize/          # legacy: bibparser, match, gost
 ├── recognize/         # OCR / layout / classifier
