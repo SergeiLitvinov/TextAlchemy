@@ -1,0 +1,218 @@
+"""Тесты core.io — единый набор утилит (заменил дубли в core/file_utils и organize/utils)."""
+from __future__ import annotations
+
+import zipfile
+
+import pytest
+
+from textalchemy.core.io import (
+    compute_hash,
+    create_zip_archive,
+    ensure_dir,
+    ensure_folder,
+    find_duplicates_by_paths,
+    find_duplicates_in_folder,
+    get_file_info,
+    list_files,
+    progress_bar,
+    read_text_file,
+    sanitize_filename,
+    sanitize_path,
+    validate_pdf,
+    write_text_file,
+)
+
+
+class TestComputeHash:
+    def test_sha256(self, tmp_path):
+        f = tmp_path / "f.bin"
+        f.write_bytes(b"hello")
+        h = compute_hash(f, algorithm="sha256")
+        assert len(h) == 64
+
+    def test_md5(self, tmp_path):
+        f = tmp_path / "f.bin"
+        f.write_bytes(b"hello")
+        h = compute_hash(f, algorithm="md5")
+        assert len(h) == 32
+
+    def test_missing(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            compute_hash(tmp_path / "nope")
+
+
+class TestFindDuplicatesByPaths:
+    def test_finds_dups(self, tmp_path):
+        a, b = tmp_path / "a", tmp_path / "b"
+        a.write_bytes(b"same")
+        b.write_bytes(b"same")
+        dups = find_duplicates_by_paths([a, b])
+        assert len(dups) == 1
+        assert dups[0] == {a, b}
+
+    def test_no_dups(self, tmp_path):
+        a, b = tmp_path / "a", tmp_path / "b"
+        a.write_bytes(b"x")
+        b.write_bytes(b"y")
+        assert find_duplicates_by_paths([a, b]) == []
+
+    def test_skips_dirs(self, tmp_path):
+        d = tmp_path / "sub"
+        d.mkdir()
+        assert find_duplicates_by_paths([d]) == []
+
+    def test_empty(self):
+        assert find_duplicates_by_paths([]) == []
+
+
+class TestFindDuplicatesInFolder:
+    def test_scans_recursively(self, tmp_path):
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        a = tmp_path / "a.txt"
+        b = sub / "b.txt"
+        a.write_bytes(b"same")
+        b.write_bytes(b"same")
+        dups = find_duplicates_in_folder(tmp_path)
+        assert a in dups
+        assert b in dups[a]
+
+    def test_no_dups(self, tmp_path):
+        a = tmp_path / "a.txt"
+        a.write_bytes(b"unique")
+        assert find_duplicates_in_folder(tmp_path) == {}
+
+
+class TestSanitize:
+    def test_filename_default(self):
+        assert sanitize_filename("a<b>c") == "a_b_c"
+        assert sanitize_filename("<>test<>") == "test"
+        assert sanitize_filename("normal") == "normal"
+
+    def test_filename_custom_replacement(self):
+        assert sanitize_filename("a<b>c", replacement="-") == "a-b-c"
+
+    def test_path_alias(self):
+        # Тот же результат, что и sanitize_filename с дефолтом
+        assert sanitize_path("a<b>c") == "a_b_c"
+
+
+class TestEnsureDirFolder:
+    def test_creates(self, tmp_path):
+        d = ensure_dir(tmp_path / "deep" / "nested")
+        assert d.exists()
+
+    def test_existing(self, tmp_path):
+        assert ensure_dir(tmp_path) == tmp_path
+
+    def test_folder_alias(self, tmp_path):
+        f = ensure_folder(tmp_path / "x" / "y")
+        assert f.exists()
+        assert f == tmp_path / "x" / "y"
+
+
+class TestReadWrite:
+    def test_utf8_roundtrip(self, tmp_path):
+        f = tmp_path / "t.txt"
+        write_text_file(f, "hello")
+        assert read_text_file(f) == "hello"
+
+    def test_cp1251_fallback(self, tmp_path):
+        f = tmp_path / "cp.txt"
+        f.write_bytes("тест".encode("cp1251"))
+        assert read_text_file(f) == "тест"
+
+    def test_missing(self, tmp_path):
+        with pytest.raises(FileNotFoundError):
+            read_text_file(tmp_path / "nope")
+
+
+class TestProgressBar:
+    def test_format(self):
+        s = progress_bar(5, 10, width=10)
+        assert s.startswith("[")
+        assert "5/10" in s
+
+
+class TestValidatePdf:
+    def test_non_pdf_returns_false(self, tmp_path):
+        f = tmp_path / "a.txt"
+        f.write_text("not a pdf")
+        assert validate_pdf(f) is False
+
+    def test_missing(self, tmp_path):
+        assert validate_pdf(tmp_path / "nope") is False
+
+
+class TestGetFileInfo:
+    def test_basic(self, tmp_path):
+        f = tmp_path / "a.TXT"
+        f.write_text("hi")
+        info = get_file_info(f)
+        assert info["name"] == "a.TXT"
+        assert info["size"] == 2
+        assert info["extension"] == ".txt"
+
+
+class TestListFiles:
+    def test_with_extension(self, tmp_path):
+        (tmp_path / "a.txt").write_text("x")
+        (tmp_path / "b.md").write_text("y")
+        (tmp_path / "c.txt").write_text("z")
+        files = list_files(tmp_path, extensions=[".txt"])
+        assert {f["name"] for f in files} == {"a.txt", "c.txt"}
+
+    def test_recursive(self, tmp_path):
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        (tmp_path / "a.txt").write_text("x")
+        (sub / "b.txt").write_text("y")
+        # non-recursive: только прямое содержимое
+        files = list_files(tmp_path)
+        assert {f["name"] for f in files} == {"a.txt"}
+        # recursive: всё дерево
+        files = list_files(tmp_path, recursive=True)
+        assert {f["name"] for f in files} == {"a.txt", "b.txt"}
+
+
+class TestCreateZipArchive:
+    def test_zip(self, tmp_path):
+        a = tmp_path / "a.txt"
+        b = tmp_path / "b.txt"
+        a.write_text("A")
+        b.write_text("B")
+        out = tmp_path / "out.zip"
+        create_zip_archive([a, b], out)
+        assert out.is_file()
+        with zipfile.ZipFile(out) as zf:
+            assert set(zf.namelist()) == {"a.txt", "b.txt"}
+
+
+class TestLegacyImports:
+    """Старые имена функций продолжают работать через re-export."""
+
+    def test_core_file_utils(self):
+        from textalchemy.core import file_utils
+        # Функции — это те же объекты, что и в core.io
+        assert file_utils.sanitize_filename is sanitize_filename
+        assert file_utils.ensure_dir is ensure_dir
+        assert file_utils.read_text_file is read_text_file
+        assert file_utils.write_text_file is write_text_file
+        assert file_utils.find_duplicates is find_duplicates_by_paths
+        # compute_file_hash — обёртка из core.hashing
+        from textalchemy.core.hashing import compute_file_hash
+        assert file_utils.compute_file_hash is compute_file_hash
+
+    def test_organize_utils(self):
+        from textalchemy.organize import utils
+        assert utils.calculate_file_hash is compute_hash
+        assert utils.sanitize_path is sanitize_path
+        assert utils.ensure_folder is ensure_folder
+        assert utils.find_duplicates is find_duplicates_in_folder
+        assert utils.create_zip_archive is create_zip_archive
+        assert utils.get_file_info is get_file_info
+        assert utils.list_files is list_files
+        assert utils.progress_bar is progress_bar
+        assert utils.validate_pdf is validate_pdf
+        # get_file_content — обёртка
+        assert callable(utils.get_file_content)
