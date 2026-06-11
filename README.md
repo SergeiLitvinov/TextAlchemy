@@ -2,18 +2,18 @@
 
 **Универсальный инструментарий обработки научно-учебных документов.**
 
-Объединяет четыре подсистемы в единый CLI и веб-интерфейс:
+Объединяет подсистемы в единый конвейер (pipeline) и CLI:
 
 ```
 ┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
 │   EXTRACT   │    │   CONVERT    │    │   ORGANIZE   │    │   GENERATE   │
 │  DOCX→TEX   │    │   PDF→DOCX   │    │ Библ.→Файлы  │    │  Шаблоны→Doc │
-│  DOCX→LaTeX │    │              │    │  ГОСТ-ренейм │    │              │
+│  DOCX→LaTeX │    │  PPTX→HTML   │    │  ГОСТ-ренейм │    │              │
 └─────────────┘    └──────────────┘    └──────────────┘    └──────────────┘
-                        ┌──────────────┐
-                        │  RECOGNIZE   │
-                        │  OCR / Layout│
-                        └──────────────┘
+                         ┌──────────────┐
+                         │  RECOGNIZE   │
+                         │  OCR / Layout│
+                         └──────────────┘
 ```
 
 ## Быстрый старт
@@ -21,10 +21,75 @@
 ```bash
 git clone <repo>
 cd TextAlchemy
-uv sync              # установка зависимостей
-textalchemy --help   # справка
-textalchemy web      # веб-интерфейс на http://127.0.0.1:8000
+uv sync --all-extras       # установка зависимостей
+textalchemy --help         # справка
+textalchemy web            # веб-интерфейс на http://127.0.0.1:8000
+textalchemy run --list     # список операций pipeline
 ```
+
+## Pipeline (новое)
+
+Конвейер — это последовательность атомарных операций, описанная в YAML/TOML/JSON.
+Каждая операция — функция с декоратором `@operation("id")` в одном из модулей
+`pipeline/`. Контекст (`ctx`) передаёт значения между шагами.
+
+```yaml
+# demo.yaml
+steps:
+  - op: ingest.file                  # открыть файл
+    output: doc
+    params: {path: input.txt}
+
+  - op: extract.text                 # Document → Text
+    input: doc
+    output: text
+
+  - op: render.latex                 # Text → LaTeX
+    input: text
+    output: tex
+    params: {title: "Demo"}
+
+output: tex
+```
+
+```bash
+$ textalchemy run demo.yaml
+  [OK] ingest.file -> doc
+  [OK] extract.text -> text
+  [OK] render.latex -> tex
+Final: \documentclass[12pt,a4paper]{article}...
+```
+
+Полный список операций:
+
+| Op | Вход | Выход | Описание |
+|---|---|---|---|
+| `ingest.file` | path | `Document` | Открыть файл, посчитать SHA-256 |
+| `extract.text` | `Document` | `Text` | Универсальный ридер (PDF/DOCX/TXT/DjVu) |
+| `match.bibliography` | `Text`, `Document`, BibItem[] | `Match` | Сопоставить документ со списком записей |
+| `name.from_match` | `Match` | str | Сгенерировать имя файла по BibItem |
+| `render.latex` | `Text` | str | Text → LaTeX (статья, с преамблой) |
+| `render.latex.pandoc` | `Text` | str | Text → LaTeX через pandoc |
+| `render.docx` | `Text` | Path | Text → DOCX |
+| `render.bibtex` | BibItem[] | str | BibItem[] → BibTeX |
+| `render.gost` | BibItem[] | str | BibItem[] → ГОСТ Р 7.0.100 |
+| `render.markdown` | BibItem[] | str | BibItem[] → Markdown |
+| `render.json` | BibItem[] | str | BibItem[] → JSON |
+
+### Контракт операций
+
+- Все параметры **keyword-only** (`*, text: Text, title: str = ""`).
+- Имя входного параметра задаётся в `@operation(..., input_param="text")` —
+  runner подставляет туда значение из поля `input:` шага.
+- `params: {x: $y}` — ссылка на `ctx["y"]` (через `$`-префикс).
+- `params: {x: "{title}"}` — `str.format(**ctx)`.
+- Поля верхнего уровня YAML (вне `steps:`) — начальный контекст.
+
+### PDF-извлечение
+
+`extract.text` для PDF использует цепочку движков: `pdfplumber → pypdf → pymupdf`.
+Первый успешно вернувший непустой результат используется; предупреждения от
+предыдущих движков сохраняются в `Text.warnings`.
 
 ## Команды CLI
 
@@ -32,6 +97,7 @@ textalchemy web      # веб-интерфейс на http://127.0.0.1:8000
 |---------|----------|--------|
 | `textalchemy extract` | Извлечение текста/LaTeX из DOCX | `textalchemy extract file.docx --format latex` |
 | `textalchemy convert` | Пакетная конвертация PDF→DOCX | `textalchemy convert -i ./pdfs -o ./docs` |
+| `textalchemy pptx2html` | PPTX → автономный HTML | `textalchemy pptx2html -i deck.pptx -o ./out` |
 | `textalchemy match` | Сопоставить и переименовать PDF | `textalchemy match -s ./literature -b bib.txt` |
 | `textalchemy gost` | Форматирование в ГОСТ Р 7.0.100 | `textalchemy gost -i bib.txt -o gost.txt` |
 | `textalchemy stats` | Статистика библиотеки | `textalchemy stats -s ./literature -b bib.txt` |
@@ -40,11 +106,11 @@ textalchemy web      # веб-интерфейс на http://127.0.0.1:8000
 | `textalchemy init` | Создать конфиг | `textalchemy init -o config.json` |
 | `textalchemy generate` | Генерация документов из шаблонов | `textalchemy generate report.docx output.docx -p title="Отчёт"` |
 | `textalchemy recognize` | OCR распознавание | `textalchemy recognize scan.png --lang rus+eng` |
+| `textalchemy run` | Запуск pipeline из YAML/TOML | `textalchemy run pipeline.yaml` |
+| `textalchemy run --list` | Список зарегистрированных операций | — |
 | `textalchemy web` | Запуск веб-интерфейса | `textalchemy web --port 8080` |
 
 ## Веб-интерфейс
-
-Доступные страницы:
 
 | URL | Описание |
 |-----|----------|
@@ -63,15 +129,30 @@ textalchemy web      # веб-интерфейс на http://127.0.0.1:8000
 
 ```
 src/textalchemy/
-├── core/          # Общие утилиты, конфиг, исключения
-├── extract/       # Извлечение содержимого DOCX → текст/LaTeX
-├── convert/       # Конвертация PDF → DOCX (pdf2docx, PyMuPDF, LibreOffice)
-├── organize/      # Парсинг библиографии, fuzzy matching, ренейм, ГОСТ
-├── generate/      # Генерация документов из шаблонов
-├── recognize/     # OCR (Tesseract/EasyOCR + stub), layout, классификация
-├── cli/           # Обработчики CLI-команд
-└── web/           # Веб-интерфейс (FastAPI + Jinja2)
+├── core/              # базовые типы (Document, Text, Match, Signal)
+│                      # + реестр операций @operation("id")
+├── formats/           # парсеры форматов: pdf, docx, txt (djvu)
+├── pipeline/          # стадии конвейера
+│   ├── ingest.py      # @operation("ingest.file")
+│   ├── extract.py     # @operation("extract.text")
+│   ├── match.py       # @operation("match.bibliography")
+│   ├── name.py        # @operation("name.from_match")
+│   ├── render.py      # @operation("render.*")
+│   ├── signals.py     # автор/title/год/doi сигналы для матчинга
+│   └── runner.py      # YAML/TOML/JSON → последовательность операций
+├── convert/           # PDF→DOCX (3 бэкенда) + PPTX→HTML
+├── extract/           # legacy: docx→text/latex
+├── organize/          # legacy: bibparser, match, gost
+├── recognize/         # OCR / layout / classifier
+├── generate/          # шаблоны документов
+├── web/               # FastAPI + Jinja2
+├── cli/               # обработчики CLI
+└── __main__.py        # argparse + dispatch
 ```
+
+**Принцип:** горизонтальные подсистемы остались, но конвейерная логика
+вынесена в `pipeline/` и `core/registry.py`. Каждая операция —
+изолированная, тестируемая единица с явным контрактом входа/выхода.
 
 ## Установка
 
@@ -87,8 +168,9 @@ pip install -e ".[ocr,web,dev]"      # полная (OCR + веб + разраб
 ```bash
 uv sync --all-extras
 uv run ruff check        # линтинг
-uv run pytest tests/     # тесты (106 шт.)
+uv run pytest tests/     # все тесты (309 шт.)
 uv run pytest --cov=textalchemy  # coverage
+uv run textalchemy run --list    # зарегистрированные операции
 ```
 
 ## Лицензия
