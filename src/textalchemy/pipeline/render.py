@@ -24,11 +24,33 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize_items(items: Sequence[Any]) -> list[BibItem]:
-    """Принять ``[BibItem, ...]`` или ``[dict, ...]`` — вернуть ``[BibItem, ...]``."""
+    """Принять ``[BibItem, ...]`` или ``[dict, ...]`` или любые duck-typed BibItem — вернуть ``[BibItem, ...]``.
+
+    Поддерживает ``BibItem`` как из ``core.types``, так и из legacy
+    ``organize.bibliography`` (duck-typed: достаточно иметь поля ``authors``/``title``/...).
+    """
     out: list[BibItem] = []
     for it in items:
         if isinstance(it, BibItem):
             out.append(it)
+        elif hasattr(it, "authors") and hasattr(it, "title"):
+            # duck-typed BibItem из organize.bibliography
+            out.append(BibItem(
+                index=getattr(it, "index", len(out) + 1),
+                raw_text=getattr(it, "raw_text", ""),
+                authors=list(getattr(it, "authors", []) or []),
+                title=getattr(it, "title", "") or "",
+                year=getattr(it, "year", None),
+                doc_type=getattr(it, "doc_type", "unknown"),
+                source=getattr(it, "source", ""),
+                pages=getattr(it, "pages", ""),
+                doi=getattr(it, "doi", ""),
+                isbn=getattr(it, "isbn", ""),
+                url=getattr(it, "url", ""),
+                journal=getattr(it, "journal", ""),
+                publisher=getattr(it, "publisher", ""),
+                city=getattr(it, "city", ""),
+            ))
         elif isinstance(it, dict):
             kwargs = {k: v for k, v in it.items() if k in BibItem.__dataclass_fields__}
             kwargs.setdefault("index", len(out) + 1)

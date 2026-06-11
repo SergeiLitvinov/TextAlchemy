@@ -3,7 +3,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("textalchemy")
@@ -41,7 +41,7 @@ def _setup_parser():
     p = sub.add_parser("convert", help="Конвертация PDF в DOCX")
     p.add_argument("-i", "--input", required=True)
     p.add_argument("-o", "--output")
-    p.add_argument("--tool", choices=["pdf2docx", "pymupdf", "libreoffice"], default="pdf2docx")
+    p.add_argument("--tool", choices=["pdf2docx", "pymupdf", "libreoffice", "fanout"], default="fanout")
     p.add_argument("--dry-run", action="store_true")
 
     p = sub.add_parser("pptx2html", help="Конвертация .pptx в автономный HTML-просмотрщик")
@@ -213,22 +213,13 @@ def _cmd_pptx2html(args: argparse.Namespace) -> int:
 
 
 def _cmd_match(args: argparse.Namespace) -> int:
-    import shutil
+    """Сопоставить файлы с библиографией через pipeline.
 
-    from textalchemy.organize import (
-        BibliographyParser,
-        build_filename,
-        get_file_content,
-        load_manual_matches,
-        match_file_to_bibliography,
-        progress_bar,
-    )
-    from textalchemy.organize.filename import DocType
-
-    source_dir = Path(args.source)
-    output_dir = Path(args.output)
-    if not args.dry_run:
-        output_dir.mkdir(parents=True, exist_ok=True)
+    Использует ``match.files`` (pipeline). Внутри — extract.text + match.bibliography + name.from_match.
+    """
+    from textalchemy.organize import load_manual_matches
+    from textalchemy.pipeline.bibliography import parse_bibliography
+    from textalchemy.pipeline.match_files import match_files
 
     bib_path = args.bibliography
     if not bib_path:
@@ -238,56 +229,73 @@ def _cmd_match(args: argparse.Namespace) -> int:
             return 1
         bib_path = str(candidates[0])
 
-    items = BibliographyParser.parse_file(bib_path)
+    items = parse_bibliography(path=bib_path)
     manual = load_manual_matches()
     print(f"Loaded {len(items)} entries, {len(manual)} manual matches")
 
-    ext_map = {".pdf", ".docx", ".djvu", ".txt"}
-    files = [f for f in source_dir.rglob("*") if f.is_file() and f.suffix.lower() in ext_map]
-    if not files:
-        print("No files found")
-        return 0
+    source_dir = Path(args.source)
+    if not source_dir.is_dir():
+        print(f"Error: {args.source} is not a directory")
+        return 1
 
     if args.dry_run:
-        print(f"Found {len(files)} files, {len(items)} bibliography entries")
+        ext_map = {".pdf", ".docx", ".djvu", ".txt"}
+        n = sum(1 for f in source_dir.rglob("*") if f.is_file() and f.suffix.lower() in ext_map)
+        print(f"Found {n} files, {len(items)} bibliography entries")
         return 0
 
-    results: dict[str, Any] = {"matched": [], "unmatched": [], "errors": []}
-    for i, file in enumerate(files):
-        print(f"\r   {progress_bar(i, len(files))}", end="")
-        try:
-            content = get_file_content(file)
-            idx, _, score = match_file_to_bibliography(content, file.name, items, args.threshold, manual)
-            if idx >= 0:
-                item = items[idx]
-                dt = DocType.from_str(item.doc_type)
-                new_name = build_filename(idx + 1, item.authors, item.title, dt, ext=file.suffix.lower())
-                shutil.copy2(file, output_dir / new_name)
-                results["matched"].append({"original": file.name, "new": new_name, "score": round(score, 2)})
-            else:
-                results["unmatched"].append({"file": file.name})
-        except Exception as e:
-            results["errors"].append({"file": file.name, "error": str(e)})
+    output_dir = Path(args.output) if not args.dry_run else None
+    matches = match_files(
+        source=source_dir,
+        items=items,
+        threshold=args.threshold,
+        manual=manual,
+        output_dir=output_dir,
+        copy=not args.dry_run,
+    )
 
-    print(f"\n\nMatched: {len(results['matched'])}, Unmatched: {len(results['unmatched'])}, Errors: {len(results['errors'])}")
+    matched = [m for m in matches if m.matched]
+    unmatched = [m for m in matches if not m.matched]
+    print(f"\nMatched: {len(matched)}, Unmatched: {len(unmatched)}")
+
     if args.json:
-        report_path = "matching_report.json"
-        Path(report_path).write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"Report saved: {report_path}")
+        report = {
+            "matched": [
+                {
+                    "original": m.document.path.name,
+                    "new": (output_dir / m.document.path.name if output_dir else m.document.path.name),
+                    "score": round(m.score, 2),
+                    "signals": [
+                        {"name": s.name, "score": s.score, "weight": s.weight}
+                        for s in m.signals if s.score > 0
+                    ],
+                }
+                for m in matched
+            ],
+            "unmatched": [m.document.path.name for m in unmatched],
+        }
+        Path("matching_report.json").write_text(
+            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8",
+        )
+        print("Report saved: matching_report.json")
     return 0
 
 
 def _cmd_gost(args: argparse.Namespace) -> int:
-    from textalchemy.organize import BibliographyParser, GostFormatter
-    items = BibliographyParser.parse_file(args.input)
-    result = GostFormatter().format_bibliography(items)
+    """Библиография → ГОСТ через pipeline: bibliography.parse → render.gost."""
+    from textalchemy.pipeline.bibliography import parse_bibliography
+    from textalchemy.pipeline.render import render_gost
+
+    items = parse_bibliography(path=args.input)
+    result = render_gost(items=items)
     Path(args.output).write_text(result, encoding="utf-8")
     print(f"Saved: {args.output} ({len(items)} entries)")
     return 0
 
 
 def _cmd_stats(args: argparse.Namespace) -> int:
-    from textalchemy.organize import BibliographyParser
+    """Статистика библиотеки (без изменений — не извлекает документы, проходит по FS)."""
+    from textalchemy.organize.bibliography import BibliographyParser
     source = Path(args.source)
     output = Path(args.output)
     bib_items = []
@@ -306,21 +314,24 @@ def _cmd_stats(args: argparse.Namespace) -> int:
 
 
 def _cmd_export(args: argparse.Namespace) -> int:
-    from textalchemy.organize import BibliographyParser
-    items = BibliographyParser.parse_file(args.input)
-    out = args.output
-    if args.format == "json":
-        data = BibliographyParser.to_json(items)
-        out = out or "bibliography.json"
-        Path(out).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    elif args.format == "markdown":
-        md = BibliographyParser.to_markdown(items)
-        out = out or "bibliography.md"
-        Path(out).write_text(md, encoding="utf-8")
-    elif args.format == "gost":
-        gost = BibliographyParser.to_gost(items)
-        out = out or "bibliography_gost.txt"
-        Path(out).write_text(gost, encoding="utf-8")
+    """Экспорт библиографии через pipeline: bibliography.parse → render.*."""
+    from textalchemy.pipeline.bibliography import parse_bibliography
+    from textalchemy.pipeline.render import render_gost, render_json, render_markdown
+
+    items = parse_bibliography(path=args.input)
+    fmt = args.format
+    if fmt == "json":
+        out = args.output or "bibliography.json"
+        Path(out).write_text(render_json(items=items), encoding="utf-8")
+    elif fmt == "markdown":
+        out = args.output or "bibliography.md"
+        Path(out).write_text(render_markdown(items=items), encoding="utf-8")
+    elif fmt == "gost":
+        out = args.output or "bibliography_gost.txt"
+        Path(out).write_text(render_gost(items=items), encoding="utf-8")
+    else:
+        print(f"Unknown format: {fmt}", file=sys.stderr)
+        return 1
     print(f"Exported: {out}")
     return 0
 
@@ -362,6 +373,7 @@ def _cmd_recognize(args: argparse.Namespace) -> int:
 
 
 def _cmd_bibtex(args: argparse.Namespace) -> int:
+    """Генерация .bib через pipeline: извлечь имена из PDF (legacy) или парсить bib-файл."""
     from textalchemy.organize.bibtex import generate_bib
     bib = generate_bib(args.source, args.output)
     count = bib.count("@misc{")

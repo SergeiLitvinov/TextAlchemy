@@ -5,11 +5,16 @@
 выполнятся при первом обращении к пакету.
 """
 from textalchemy.pipeline import (
+    bibliography,  # noqa: F401
     extract,  # noqa: F401
     ingest,  # noqa: F401
     match,  # noqa: F401
+    match_files,  # noqa: F401
     name,  # noqa: F401
     render,  # noqa: F401
 )
 
-__all__ = ["extract", "ingest", "match", "name", "render", "runner"]
+__all__ = [
+    "bibliography", "extract", "ingest", "match", "match_files",
+    "name", "render", "runner",
+]
