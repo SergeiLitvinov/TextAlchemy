@@ -18,14 +18,15 @@ from textalchemy.core.types import BibItem, Document, Match, Text
     "match.bibliography",
     input_type="Text",
     output_type="Match",
+    input_param="text",
     description="Сопоставить документ со списком BibItem по сигналам.",
     tags=["match"],
 )
 def match_bibliography(
+    *,
     text: Text,
     document: Document,
     items: list[BibItem],
-    *,
     threshold: float = 0.30,
     manual: Optional[dict[str, int]] = None,
     weights: Optional[dict[str, float]] = None,

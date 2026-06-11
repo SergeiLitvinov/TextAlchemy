@@ -13,10 +13,11 @@ from textalchemy.core.types import DocFormat, Document, Text
     "extract.text",
     input_type="Document",
     output_type="Text",
+    input_param="doc",
     description="Document → Text (универсальный ридер по формату).",
     tags=["extract"],
 )
-def extract_text(doc: Document) -> Text:
+def extract_text(*, doc: Document) -> Text:
     if doc.format == DocFormat.PDF:
         from textalchemy.formats.pdf import read_pdf
         return read_pdf(str(doc.path))

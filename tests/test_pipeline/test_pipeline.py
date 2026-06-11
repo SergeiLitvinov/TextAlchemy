@@ -29,7 +29,7 @@ def test_match_registers():
 def test_ingest_txt(tmp_path):
     f = tmp_path / "a.txt"
     f.write_text("hello world", encoding="utf-8")
-    doc = ingest_file(f)
+    doc = ingest_file(path=f)
     assert doc.format == DocFormat.TXT
     assert doc.size == len("hello world")
     assert len(doc.sha256) == 64
@@ -37,14 +37,14 @@ def test_ingest_txt(tmp_path):
 
 def test_ingest_missing(tmp_path):
     with pytest.raises(FileNotFoundError):
-        ingest_file(tmp_path / "nope.txt")
+        ingest_file(path=tmp_path / "nope.txt")
 
 
 def test_extract_txt(tmp_path):
     f = tmp_path / "a.txt"
     f.write_text("hello", encoding="utf-8")
-    doc = ingest_file(f)
-    text = extract_text(doc)
+    doc = ingest_file(path=f)
+    text = extract_text(doc=doc)
     assert text.plain == "hello"
     assert text.source_format == DocFormat.TXT
 
@@ -61,8 +61,8 @@ def test_extract_docx(tmp_path):
     table.cell(1, 1).text = "B2"
     d.save(str(f))
 
-    doc = ingest_file(f)
-    text = extract_text(doc)
+    doc = ingest_file(path=f)
+    text = extract_text(doc=doc)
     assert "first paragraph" in text.plain
     assert "second paragraph" in text.plain
     assert len(text.tables) == 1
@@ -85,8 +85,8 @@ def test_extract_pdf_chain(tmp_path):
     doc.save(str(f))
     doc.close()
 
-    d = ingest_file(f)
-    text = extract_text(d)
+    d = ingest_file(path=f)
+    text = extract_text(doc=d)
     # Цепочка: pdfplumber → pypdf → pymupdf. Любой движок должен справиться.
     assert "Hello" in text.plain or text.warnings, text.warnings
     assert text.pages >= 1
@@ -115,7 +115,7 @@ def test_match_picks_correct_item():
               authors=["Иванов"], year=2020, doi="10.1109/abc.2020"),
         _item(index=3, title="Another Paper", authors=["Petrov"]),
     ]
-    m = match_bibliography(text, doc, items)
+    m = match_bibliography(text=text, document=doc, items=items)
     assert m.matched
     assert m.item is not None
     assert m.item.index == 2
@@ -128,7 +128,7 @@ def test_match_below_threshold():
     doc = Document(path=f, format=DocFormat.PDF, size=0, sha256="")
     text = Text(plain="random unrelated content xyz123")
     items = [_item(index=1, title="Ferroresonance In Power Grids", authors=["Иванов"])]
-    m = match_bibliography(text, doc, items, threshold=0.30)
+    m = match_bibliography(text=text, document=doc, items=items, threshold=0.30)
     assert m.matched is False
     assert m.item is None
     # item всё равно сохраняется как «лучший кандидат», но matched=False
@@ -145,7 +145,7 @@ def test_match_manual_override():
         _item(index=1, title="Title A", authors=["A"]),
         _item(index=2, title="Title B", authors=["B"]),
     ]
-    m = match_bibliography(text, doc, items, manual={"foo": 1})
+    m = match_bibliography(text=text, document=doc, items=items, manual={"foo": 1})
     assert m.matched
     assert m.item.index == 1
     assert any(s.name == "manual" for s in m.signals)

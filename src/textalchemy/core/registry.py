@@ -23,6 +23,7 @@ class OperationSpec:
     func: Callable[..., Any]
     input_type: Optional[str] = None
     output_type: Optional[str] = None
+    input_param: str = "input"
     description: str = ""
     tags: list[str] = field(default_factory=list)
     params: dict[str, Any] = field(default_factory=dict)
@@ -36,6 +37,7 @@ def operation(
     *,
     input_type: Optional[str] = None,
     output_type: Optional[str] = None,
+    input_param: str = "input",
     description: str = "",
     tags: Optional[list[str]] = None,
     **defaults: Any,
@@ -56,6 +58,7 @@ def operation(
             func=func,
             input_type=input_type,
             output_type=output_type,
+            input_param=input_param,
             description=description or (doc.splitlines()[0] if doc else ""),
             tags=list(tags or []),
             params=dict(defaults),

@@ -8,6 +8,14 @@ from typing import Any, Optional
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("textalchemy")
 
+# Гарантируем UTF-8 для stdout/stderr на Windows (cp1251 иначе не вывозит '→').
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 
 def _eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
@@ -87,6 +95,12 @@ def _setup_parser():
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--host", type=str, default="127.0.0.1")
 
+    p = sub.add_parser("run", help="Запуск конвейера по YAML/TOML-файлу")
+    p.add_argument("pipeline", nargs="?", default=None,
+                   help="Путь к .yaml/.yml/.toml/.json (не нужен с --list)")
+    p.add_argument("--json", action="store_true", help="Вывести результат как JSON")
+    p.add_argument("--list", action="store_true", help="Показать доступные операции и выйти")
+
     return parser
 
 
@@ -127,6 +141,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return _cmd_init(args)
             case "web":
                 return _cmd_web(args)
+            case "run":
+                return _cmd_run(args)
             case _:
                 parser.print_help()
                 return 1
@@ -370,6 +386,44 @@ def _cmd_web(args) -> int:
     print(f"Starting TextAlchemy web at http://{args.host}:{args.port}")
     uvicorn.run(app, host=args.host, port=args.port)
     return 0
+
+
+def _cmd_run(args: argparse.Namespace) -> int:
+    from textalchemy.core.registry import all_operations
+    from textalchemy.pipeline.runner import run_pipeline
+
+    if args.list:
+        print("Available operations:")
+        for s in all_operations():
+            print(f"  {s.id:30s}  {s.description}")
+        return 0
+
+    if not args.pipeline:
+        print("Error: pipeline path required (or use --list)", file=sys.stderr)
+        return 1
+
+    result = run_pipeline(args.pipeline)
+    if args.json:
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+    else:
+        for sr in result.steps:
+            mark = "OK" if not sr.error else "FAIL"
+            print(f"  [{mark}] {sr.op} -> {sr.name}")
+            if sr.error:
+                print(f"         {sr.error}")
+        if result.ok:
+            print(f"Final: {_repr(result.final)}")
+        else:
+            print(f"Error: {result.error}")
+    return 0 if result.ok else 1
+
+
+def _repr(v: object) -> str:
+    if v is None:
+        return "None"
+    if isinstance(v, str):
+        return v[:120] + ("…" if len(v) > 120 else "")
+    return str(v)
 
 
 if __name__ == "__main__":
