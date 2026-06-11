@@ -1,4 +1,4 @@
-from textalchemy.core.config import Config, MatchingConfig, NamingConfig, ReportConfig
+"""Базовые типы и утилиты ядра."""
 from textalchemy.core.exceptions import (
     ConfigError,
     ConvertError,
@@ -8,26 +8,32 @@ from textalchemy.core.exceptions import (
     RecognizeError,
     TextAlchemyError,
 )
-from textalchemy.core.file_utils import (
-    compute_file_hash,
-    ensure_dir,
-    find_duplicates,
-    read_text_file,
-    sanitize_filename,
-    write_text_file,
+from textalchemy.core.hashing import compute_file_hash
+from textalchemy.core.types import (
+    BibItem,
+    Block,
+    BlockType,
+    DocFormat,
+    Document,
+    Match,
+    OperationResult,
+    Signal,
+    Table,
+    Text,
 )
 
 __all__ = [
-    "Config",
-    "NamingConfig",
-    "MatchingConfig",
-    "ReportConfig",
-    "sanitize_filename",
+    "DocFormat",
+    "BlockType",
+    "Document",
+    "Block",
+    "Table",
+    "Text",
+    "BibItem",
+    "Signal",
+    "Match",
+    "OperationResult",
     "compute_file_hash",
-    "find_duplicates",
-    "ensure_dir",
-    "read_text_file",
-    "write_text_file",
     "TextAlchemyError",
     "ConfigError",
     "ExtractError",

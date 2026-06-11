@@ -121,21 +121,22 @@ class OcrEngine:
         except ImportError:
             raise RecognizeError("pymupdf (fitz) required for PDF OCR")
 
+        import tempfile
+
         doc = fitz.open(str(pdf_path))
         results: list[OcrResult] = []
 
-        for page_num in range(len(doc)):
-            page = doc[page_num]
-            pix = page.get_pixmap(dpi=dpi)
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        with tempfile.TemporaryDirectory(prefix="textalchemy_ocr_") as tmpdir:
+            tmp = Path(tmpdir)
+            for page_num in range(len(doc)):
+                page = doc[page_num]
+                pix = page.get_pixmap(dpi=dpi)
+                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
 
-            temp_img = Path(f"__ocr_page_{page_num}.png")
-            img.save(temp_img)
-            try:
+                temp_img = tmp / f"page_{page_num}.png"
+                img.save(temp_img)
                 result = self.recognize(temp_img)
                 result.pages = len(doc)
                 results.append(result)
-            finally:
-                temp_img.unlink(missing_ok=True)
 
         return results
