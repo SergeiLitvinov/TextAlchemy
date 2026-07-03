@@ -20,6 +20,7 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
   - `bibliography.py` — `bibliography.parse` (path → BibItem[]), `bibliography.smart_parse` (text → BibItem[]).
   - `name.py` — `name.from_match`: `Match` → filename.
   - `render.py` — `render.latex`, `render.latex.pandoc`, `render.docx`, `render.bibtex`, `render.gost`, `render.markdown`, `render.json`.
+  - `render_html.py` — `render.html.pptx`: `Document` (.pptx) → `ConversionResult` (HTML viewer).
   - `runner.py` — YAML/TOML/JSON pipeline runner.
 - `tests/` — pytest. Subpackage `tests/pipeline/` and `tests/convert/` mirror the source. Flat: `test_cli.py`, `test_web.py`, `test_database.py`.
 - `reference/` — legacy `.doc` and README drafts; not built into the package.

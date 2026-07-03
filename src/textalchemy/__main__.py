@@ -78,11 +78,18 @@ def _setup_parser():
     p.add_argument("--list", action="store_true")
     p.add_argument("--templates-dir", type=str)
 
-    p = sub.add_parser("recognize", help="OCR распознавание")
-    p.add_argument("input", type=str)
-    p.add_argument("--lang", default="rus+eng")
-    p.add_argument("--output", type=str)
-    p.add_argument("--backend", choices=["auto", "tesseract", "easyocr"], default="auto")
+    p = sub.add_parser("recognize", help="OCR распознавание (печатный/рукописный текст)")
+    p.add_argument("input", type=str, help="Путь к PDF или изображению")
+    p.add_argument("--lang", default="rus+eng", help="Языки через + (rus+eng)")
+    p.add_argument("--output", type=str, help="Выходной файл (.docx/.tex/.txt)")
+    p.add_argument("--backend", choices=["auto", "tesseract", "easyocr", "paddle"], default="auto",
+                   help="OCR движок")
+    p.add_argument("--gpu", action="store_true", help="Использовать GPU (если доступен CUDA)")
+    p.add_argument("--mode", choices=["printed", "handwriting"], default="printed",
+                   help="Тип текста: printed (печатный) или handwriting (рукописный)")
+    p.add_argument("--scale", type=int, default=3, help="Масштаб рендеринга PDF (2-6)")
+    p.add_argument("--output-format", choices=["txt", "docx", "tex"], default="txt",
+                   help="Формат выходного файла (требуется --output)")
 
     p = sub.add_parser("bibtex", help="Генерация .bib из PDF")
     p.add_argument("-s", "--source", default="./literature_files")
@@ -202,9 +209,12 @@ def _cmd_convert(args: argparse.Namespace) -> int:
 
 
 def _cmd_pptx2html(args: argparse.Namespace) -> int:
-    from textalchemy.convert.pptx_to_html import PptxToHtmlConverter
-    converter = PptxToHtmlConverter(copy_assets=not args.no_assets)
-    result = converter.convert(args.input, args.output)
+    """PPTX → HTML через pipeline-операцию ``render.html.pptx``."""
+    from textalchemy.pipeline.ingest import ingest_file
+    from textalchemy.pipeline.render_html import render_html_pptx
+
+    doc = ingest_file(path=args.input)
+    result = render_html_pptx(doc=doc, output_dir=args.output, copy_assets=not args.no_assets)
     if result.success:
         print(f"OK: {result.output_path}")
         return 0
@@ -358,15 +368,72 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
 
 def _cmd_recognize(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"Error: file not found: {args.input}", file=sys.stderr)
+        return 1
+
     from textalchemy.recognize import OcrEngine
-    engine = OcrEngine(languages=args.lang.split("+"))
+    engine = OcrEngine(languages=args.lang.split("+"), use_gpu=args.gpu)
+
     if not engine.is_available:
-        text = f"[STUB] OCR for: {args.input}\n[STUB] Backend: {engine.backend_name}\n[STUB] Install pytesseract or easyocr"
+        print(f"[STUB] OCR for: {args.input}")
+        print(f"[STUB] Backend: {engine.backend_name}")
+        print("[STUB] Install pytesseract, easyocr or paddleocr")
+        return 1
+
+    ext = input_path.suffix.lower()
+    handwriting = args.mode == "handwriting"
+
+    if ext == ".pdf":
+        page_results = engine.recognize_pdf(
+            args.input,
+            scale=args.scale,
+            handwriting=handwriting,
+        )
+        text = "\n\n".join(r.text for r in page_results)
     else:
-        text = engine.recognize(args.input).text
+        result = engine.recognize(args.input, handwriting=handwriting)
+        text = result.text
+
     if args.output:
-        Path(args.output).write_text(text, encoding="utf-8")
-        print(f"Saved: {args.output}")
+        out_path = Path(args.output)
+        fmt = out_path.suffix.lower().lstrip(".") or args.output_format
+        if fmt == "docx":
+            from docx import Document as DocxDocument
+            docx = DocxDocument()
+            for paragraph in text.split("\n\n"):
+                if paragraph.strip():
+                    docx.add_paragraph(paragraph.strip())
+            docx.save(str(out_path))
+        elif fmt == "tex":
+            def escape_latex(s: str) -> str:
+                replacements = {
+                    "&": r"\&", "%": r"\%", "$": r"\$",
+                    "#": r"\#", "_": r"\_", "{": r"\{",
+                    "}": r"\}", "~": r"\textasciitilde{}",
+                    "^": r"\textasciicircum{}", "\\": r"\textbackslash{}",
+                }
+                for ch, repl in replacements.items():
+                    s = s.replace(ch, repl)
+                return s
+            latex = (
+                "\\documentclass[12pt,a4paper]{article}\n"
+                "\\usepackage[T2A]{fontenc}\n"
+                "\\usepackage[utf8]{inputenc}\n"
+                "\\usepackage[russian]{babel}\n"
+                "\\usepackage{geometry}\n"
+                "\\geometry{top=2cm,bottom=2cm,left=2cm,right=2cm}\n\n"
+                "\\begin{document}\n\n"
+                f"{escape_latex(text)}\n\n"
+                "\\end{document}\n"
+            )
+            out_path.write_text(latex, encoding="utf-8")
+        else:
+            out_path.write_text(text, encoding="utf-8")
+        print(f"Saved: {out_path}")
     else:
         print(text)
     return 0

@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
@@ -14,8 +15,9 @@ class OcrResult:
 
 
 class OcrEngine:
-    def __init__(self, languages: Optional[List[str]] = None):
+    def __init__(self, languages: Optional[List[str]] = None, use_gpu: bool = False):
         self.languages = languages or ["rus", "eng"]
+        self.use_gpu = use_gpu
         self._backend: Optional[str] = None
         self._available = False
         self._detect_backend()
@@ -38,6 +40,14 @@ class OcrEngine:
         except ImportError:
             pass
 
+        try:
+            import paddleocr  # noqa: F401
+            self._backend = "paddle"
+            self._available = True
+            return
+        except ImportError:
+            pass
+
         self._backend = None
         self._available = False
 
@@ -49,7 +59,7 @@ class OcrEngine:
     def backend_name(self) -> Optional[str]:
         return self._backend
 
-    def recognize(self, image_path: str | Path) -> OcrResult:
+    def recognize(self, image_path: str | Path, handwriting: bool = False) -> OcrResult:
         image_path = Path(image_path)
         if not image_path.exists():
             raise RecognizeError(f"Image not found: {image_path}")
@@ -66,7 +76,9 @@ class OcrEngine:
             if self._backend == "tesseract":
                 return self._recognize_tesseract(image_path)
             elif self._backend == "easyocr":
-                return self._recognize_easyocr(image_path)
+                return self._recognize_easyocr(image_path, handwriting)
+            elif self._backend == "paddle":
+                return self._recognize_paddle(image_path)
         except Exception as e:
             raise RecognizeError(f"OCR failed: {e}") from e
 
@@ -91,11 +103,25 @@ class OcrEngine:
             pages=1,
         )
 
-    def _recognize_easyocr(self, image_path: Path) -> OcrResult:
+    def _recognize_easyocr(self, image_path: Path, handwriting: bool = False) -> OcrResult:
         import easyocr
 
-        reader = easyocr.Reader(self.languages, gpu=False)
-        results = reader.readtext(str(image_path))
+        reader = easyocr.Reader(self.languages, gpu=self.use_gpu)
+
+        if handwriting:
+            results = reader.readtext(
+                str(image_path),
+                detail=1,
+                paragraph=True,
+                min_size=10,
+                text_threshold=0.5,
+                low_text=0.4,
+                link_threshold=0.2,
+                canvas_size=2560,
+                mag_ratio=1.0,
+            )
+        else:
+            results = reader.readtext(str(image_path))
 
         text_parts: list[str] = []
         confs: list[float] = []
@@ -110,32 +136,82 @@ class OcrEngine:
             pages=1,
         )
 
-    def recognize_pdf(self, pdf_path: str | Path, dpi: int = 300) -> List[OcrResult]:
+    def _recognize_paddle(self, image_path: Path) -> OcrResult:
+        from paddleocr import PaddleOCR
+
+        lang = "ru" if "ru" in self.languages else "en"
+
+        os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
+
+        ocr = PaddleOCR(
+            lang=lang,
+            text_det_thresh=0.3,
+            text_det_box_thresh=0.5,
+            text_recognition_batch_size=8,
+            use_textline_orientation=True,
+        )
+
+        result = ocr.predict(str(image_path))
+
+        lines: list[str] = []
+        if result and result[0]:
+            for item in result[0]:
+                if item and "text" in item:
+                    lines.append(item["text"])
+
+        return OcrResult(
+            text="\n".join(lines),
+            confidence=0.0,
+            language=",".join(self.languages),
+            pages=1,
+        )
+
+    def recognize_pdf(self, pdf_path: str | Path, dpi: int = 300, scale: Optional[int] = None,
+                      handwriting: bool = False, save_images: bool = False) -> List[OcrResult]:
         pdf_path = Path(pdf_path)
         if not pdf_path.exists():
             raise RecognizeError(f"PDF not found: {pdf_path}")
 
         try:
             import fitz
-            from PIL import Image
         except ImportError:
             raise RecognizeError("pymupdf (fitz) required for PDF OCR")
 
         import tempfile
 
         doc = fitz.open(str(pdf_path))
+
+        if scale:
+            scale = max(2, min(6, scale))
+        else:
+            scale = 3
+
         results: list[OcrResult] = []
 
         with tempfile.TemporaryDirectory(prefix="textalchemy_ocr_") as tmpdir:
             tmp = Path(tmpdir)
             for page_num in range(len(doc)):
                 page = doc[page_num]
-                pix = page.get_pixmap(dpi=dpi)
-                img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                mat = fitz.Matrix(scale, scale)
+                pix = page.get_pixmap(matrix=mat)
 
-                temp_img = tmp / f"page_{page_num}.png"
-                img.save(temp_img)
-                result = self.recognize(temp_img)
+                if save_images:
+                    from PIL import Image
+                    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                    save_path = Path(f"page_{page_num + 1}.png")
+                    img.save(save_path)
+                    result = self.recognize(save_path, handwriting=handwriting)
+                else:
+                    import numpy as np
+                    image_np = np.frombuffer(pix.samples, dtype=np.uint8)
+                    image_np = image_np.reshape((pix.height, pix.width, pix.n))
+
+                    temp_img = tmp / f"page_{page_num}.png"
+                    from PIL import Image
+                    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                    img.save(temp_img)
+                    result = self.recognize(temp_img, handwriting=handwriting)
+
                 result.pages = len(doc)
                 results.append(result)
 

@@ -71,6 +71,7 @@ Final: \documentclass[12pt,a4paper]{article}...
 | `bibliography.parse` | path | BibItem[] | Распарсить файл библиографии |
 | `bibliography.smart_parse` | text | BibItem[] | Auto-detect формата библиографии |
 | `name.from_match` | `Match` | str | Сгенерировать имя файла по BibItem |
+| `render.html.pptx` | `Document` (.pptx) | `ConversionResult` | PPTX → автономный HTML-просмотрщик |
 | `render.latex` | `Text` | str | Text → LaTeX (статья, с преамблой) |
 | `render.latex.pandoc` | `Text` | str | Text → LaTeX через pandoc |
 | `render.docx` | `Text` | Path | Text → DOCX |

@@ -205,14 +205,13 @@ def test_cli_generate_list(capsys):
 
 def test_cli_recognize_no_file(capsys):
     ret = main(["recognize", "nonexistent.pdf"])
-    assert ret == 0
+    assert ret == 1
 
 
 def test_cli_recognize_with_output(tmp_path):
     out = tmp_path / "out.txt"
     ret = main(["recognize", "nonexistent.pdf", "--output", str(out)])
-    assert ret == 0
-    assert out.exists()
+    assert ret == 1
 
 
 # ── bibtex ─────────────────────────────────────────
