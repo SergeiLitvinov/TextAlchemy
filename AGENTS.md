@@ -8,7 +8,11 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
 - `src/textalchemy/convert/` — converters; each implements `BaseConverter` from `base.py` and returns `ConversionResult`.
   - `pdf_to_docx.py` — PDF → DOCX (`pdf2docx`, `pymupdf`, `libreoffice`).
   - `pptx_to_html/` — PPTX → self-contained HTML viewer (MathML via MathJax). Public API: `PptxToHtmlConverter`, `convert` (see `converter.py:84`). Shipped assets in `pptx_to_html/assets/{css,js}/` are copied to output by default.
-- `src/textalchemy/{extract,organize,generate,recognize,web}/` — other subsystems.
+- `src/textalchemy/recognize/` — OCR subsystem:
+  - `ocr.py` — `OcrEngine` поддерживает три бэкенда: Tesseract, EasyOCR, PaddleOCR. Автоопределение доступного. Поддержка `handwriting` (рукописный текст) и `use_gpu`. Метод `recognize_pdf()` конвертит PDF → изображения через PyMuPDF с масштабированием.
+  - `classifier.py` — `DocumentClassifier` по ключевым словам (статья/диссертация/монография и т.д.).
+  - `layout.py` — `LayoutAnalyzer` базовый анализ областей на изображении (текст/таблица/колонтитул).
+- `src/textalchemy/{extract,organize,generate,web}/` — other subsystems.
 - `src/textalchemy/core/` — base types (`Document`, `Text`, `Match`, `Signal`, `BibItem`) and the operation registry (`@operation`).
 - `src/textalchemy/formats/` — atomic format readers: `pdf` (chain `pdfplumber → pypdf → pymupdf`), `docx`, `txt`/`djvu`.
 - `src/textalchemy/pipeline/` — pipeline stages as `@operation`s:
@@ -36,6 +40,7 @@ Always run via `uv` so the lockfile-resolved env is used.
 - Single test: `uv run pytest tests/test_pipeline/test_runner.py::test_run_chained_ingest_extract -v`
 - Pipeline run: `uv run textalchemy run pipeline.yaml` (or `textalchemy run --list`)
 - Web UI: `uv run textalchemy web` (defaults 127.0.0.1:8000)
+- OCR: `uv run textalchemy recognize input.pdf --backend paddle --gpu --mode handwriting --output result.docx`
 - CLI entry: `textalchemy = textalchemy.__main__:main` (see `pyproject.toml`)
 
 Equivalent `make` targets exist in the `Makefile` (`make install|test|lint|format|coverage|web`).
@@ -112,6 +117,7 @@ Run `textalchemy run --list` to see all registered operations.
 - `argparse` with no subcommand returns `1` and prints help; tests assert this.
 - `match` and `stats` default to `./literature_files` and `./renamed` and may pick up a bibliography file from CWD if `-b` is omitted — pass explicit paths in CI.
 - `pyproject.toml` does not declare a `[project.optional-dependencies]` entry for `pptx`; `python-pptx` and `lxml` are in core `dependencies`.
+- OCR optional dependencies (`[project.optional-dependencies] ocr`) include `pytesseract`, `easyocr`, `paddleocr`, `paddlepaddle`. Install full with `uv sync --all-extras`. PaddleOCR requires torch/PaddlePaddle (heavy).
 - `MANIFEST.in` is required for sdist builds: the package ships non-Python assets under `src/textalchemy/**/{assets,templates,static,lua-filters}/`.
 - No typecheck or pre-commit is wired into local commands beyond `ruff`; pre-commit is configured (`.pre-commit-config.yaml`) but optional.
 - On Windows, `__main__.py` reconfigures stdout/stderr to UTF-8 (so `→` in op descriptions doesn't blow up `charmap`). Don't remove this.
