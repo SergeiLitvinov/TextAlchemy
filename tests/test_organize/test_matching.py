@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import pytest
 
@@ -11,7 +10,6 @@ from textalchemy.organize.matching import (
     load_manual_matches,
     match_file_to_bibliography,
 )
-
 
 # ── load_manual_matches ────────────────────────────
 

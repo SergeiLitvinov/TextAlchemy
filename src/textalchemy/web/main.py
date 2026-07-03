@@ -1,5 +1,4 @@
 import json
-import shutil
 import uuid
 from pathlib import Path
 from typing import Any
@@ -186,30 +185,15 @@ async def convert_page(request: Request):
     return templates.TemplateResponse(request, "convert.html")
 
 
-@app.get("/organize", response_class=HTMLResponse)
-async def organize_page(request: Request):
-    bib = _load_bib()
-    cfg = _load_config()
-    return templates.TemplateResponse(request, "organize.html", {
-        "bib_items": bib,
-        "config": cfg,
-    })
+@app.get("/pipeline", response_class=HTMLResponse)
+async def pipeline_page(request: Request):
+    return templates.TemplateResponse(request, "organize.html")
 
 
 @app.get("/bibliography", response_class=HTMLResponse)
 async def bibliography_page(request: Request):
     bib = _load_bib()
     return templates.TemplateResponse(request, "bibliography.html", {"bib_items": bib})
-
-
-@app.get("/rename", response_class=HTMLResponse)
-async def rename_page(request: Request):
-    bib = _load_bib()
-    cfg = _load_config()
-    return templates.TemplateResponse(request, "rename.html", {
-        "bib_items": bib,
-        "config": cfg,
-    })
 
 
 @app.get("/matching", response_class=HTMLResponse)
@@ -353,7 +337,8 @@ async def api_import_bib(file: UploadFile = File(...)):
     import tempfile
 
     from textalchemy.organize import BibliographyParser
-    tmp = Path(tempfile.mkdtemp()) / file.filename
+    fname = file.filename or "import.json"
+    tmp = Path(tempfile.mkdtemp()) / fname
     tmp.write_bytes(await file.read())
     try:
         items = BibliographyParser.parse_file(str(tmp))
@@ -369,6 +354,37 @@ async def api_import_bib(file: UploadFile = File(...)):
         tmp.unlink(missing_ok=True)
 
 
+# ── API: smart-parse ────────────────────────────────────────────────────────
+@app.post("/api/bibliography/smart-parse")
+async def api_smart_parse(text: str = Form(...)):
+    from textalchemy.pipeline.bibliography import smart_parse_bibliography
+    items = smart_parse_bibliography(text=text)
+    return {"success": True, "items": [{"index": i.index, "authors": i.authors, "title": i.title, "year": i.year} for i in items]}
+
+
+# ── API: pipeline ───────────────────────────────────────────────────────────
+@app.post("/api/pipeline/run")
+async def api_pipeline_run(spec: str = Form(...)):
+    import yaml
+
+    from textalchemy.pipeline.runner import run_pipeline
+    try:
+        pipeline_def = json.loads(spec)
+    except json.JSONDecodeError:
+        pipeline_def = yaml.safe_load(spec)
+    result = run_pipeline(pipeline_def)
+    return {"success": True, "result": result.to_dict()}
+
+
+# ── API: operations ─────────────────────────────────────────────────────────
+@app.get("/api/operations")
+async def api_operations():
+    from textalchemy.core.registry import all_operations
+    return [{"id": op.id, "input_type": op.input_type, "output_type": op.output_type,
+             "input_param": op.input_param, "description": op.description, "tags": op.tags}
+            for op in all_operations()]
+
+
 # ── API: matching ────────────────────────────────────────────────────────────
 @app.post("/api/match/run")
 async def api_run_matching(
@@ -378,43 +394,35 @@ async def api_run_matching(
     bibliography_file: str = Form(""),
     dry_run: bool = Form(False),
 ):
-    from textalchemy.organize import (
-        BibliographyParser,
-        build_filename,
-        get_file_content,
-        match_file_to_bibliography,
-    )
-
-    src = Path(source_dir)
-    out = Path(output_dir)
-    if not dry_run:
-        out.mkdir(parents=True, exist_ok=True)
+    from textalchemy.pipeline.match_files import match_files
 
     if bibliography_file:
-        items = BibliographyParser.parse_file(bibliography_file)
+        from textalchemy.pipeline.bibliography import parse_bibliography
+        items = parse_bibliography(path=bibliography_file)
     else:
         items = db.all_items()
 
-    ext_map = {".pdf", ".docx", ".djvu", ".txt"}
-    files = sorted(f for f in src.rglob("*") if f.is_file() and f.suffix.lower() in ext_map)
+    matches = match_files(
+        source=source_dir,
+        items=items,
+        threshold=threshold,
+        output_dir=output_dir if not dry_run else None,
+        copy=not dry_run,
+    )
 
-    results: dict[str, Any] = {"matched": [], "unmatched": [], "errors": [], "total": len(files)}
-    for file in files:
-        try:
-            content = get_file_content(file)
-            idx, _, score = match_file_to_bibliography(content, file.name, items, threshold, {})
-            if idx >= 0:
-                item = items[idx]
-                from textalchemy.organize.filename import DocType
-                dt_obj = DocType.from_str(item.doc_type)
-                new_name = build_filename(idx + 1, item.authors, item.title, dt_obj, ext=file.suffix.lower())
-                if not dry_run:
-                    shutil.copy2(file, out / new_name)
-                results["matched"].append({"original": file.name, "new": new_name, "score": round(score, 2)})
-            else:
-                results["unmatched"].append({"file": file.name})
-        except Exception as e:
-            results["errors"].append({"file": file.name, "error": str(e)})
+    results: dict[str, Any] = {"matched": [], "unmatched": [], "errors": [], "total": len(matches)}
+    for m in matches:
+        entry = {"file": m.document.path.name}
+        if m.matched and m.item is not None:
+            from textalchemy.pipeline.name import name_from_match
+            new_name = name_from_match(match=m, ext=m.document.path.suffix.lower()) or m.document.path.name
+            results["matched"].append({
+                "original": m.document.path.name,
+                "new": new_name,
+                "score": round(m.score, 2) if m.score else 0,
+            })
+        else:
+            results["unmatched"].append(entry)
 
     _ensure_data()
     _matching_path().write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -453,21 +461,26 @@ async def api_update_config(cfg: str = Form(...)):
 # ── API: export ──────────────────────────────────────────────────────────────
 @app.get("/api/export/{fmt}")
 async def api_export(fmt: str):
-    from textalchemy.organize import BibliographyParser
+    from textalchemy.pipeline.render import render_bibtex, render_gost, render_json, render_markdown
+
     items = db.all_items()
+
     if fmt == "json":
-        data = BibliographyParser.to_json(items)
-        content = json.dumps(data, ensure_ascii=False, indent=2)
+        content = render_json(items=items)
         media_type = "application/json"
         filename = "bibliography.json"
     elif fmt == "markdown":
-        content = BibliographyParser.to_markdown(items)
+        content = render_markdown(items=items)
         media_type = "text/markdown"
         filename = "bibliography.md"
     elif fmt == "gost":
-        content = BibliographyParser.to_gost(items)
+        content = render_gost(items=items)
         media_type = "text/plain; charset=utf-8"
         filename = "bibliography_gost.txt"
+    elif fmt == "bibtex":
+        content = render_bibtex(items=items)
+        media_type = "application/x-bibtex"
+        filename = "bibliography.bib"
     elif fmt == "ris":
         lines = []
         for it in items:
@@ -503,23 +516,6 @@ async def api_export(fmt: str):
         content = buf.getvalue()
         media_type = "text/csv"
         filename = "bibliography.csv"
-    elif fmt == "bibtex":
-        lines = []
-        for i, it in enumerate(items):
-            key = f"ref{i+1}"
-            au = it.authors if hasattr(it, "authors") else []
-            title = it.title if hasattr(it, "title") else ""
-            year = str(it.year) if hasattr(it, "year") and it.year else "n.d."
-            lines.append(f"@misc{{{key},")
-            if au:
-                lines.append(f"  author = {{{' and '.join(au)}}},")
-            lines.append(f"  title = {{{title}}},")
-            lines.append(f"  year = {{{year}}}")
-            lines.append("}")
-            lines.append("")
-        content = "\n".join(lines)
-        media_type = "application/x-bibtex"
-        filename = "bibliography.bib"
     else:
         raise HTTPException(status_code=400, detail="Unsupported format")
     return Response(content=content, media_type=media_type,
@@ -533,40 +529,40 @@ async def api_preview_rename(
     threshold: float = Form(0.30),
     bibliography_file: str = Form(""),
 ):
-    from textalchemy.organize import (
-        BibliographyParser,
-        build_filename,
-        get_file_content,
-        match_file_to_bibliography,
-    )
-    from textalchemy.organize.filename import DocType
+    from textalchemy.pipeline.match_files import match_files
+    from textalchemy.pipeline.name import name_from_match
 
-    src = Path(source_dir)
     if bibliography_file:
-        items = BibliographyParser.parse_file(bibliography_file)
+        from textalchemy.pipeline.bibliography import parse_bibliography
+        items = parse_bibliography(path=bibliography_file)
     else:
         items = db.all_items()
 
-    ext_map = {".pdf", ".docx", ".djvu", ".txt"}
-    files = sorted(f for f in src.rglob("*") if f.is_file() and f.suffix.lower() in ext_map)
+    matches = match_files(
+        source=source_dir,
+        items=items,
+        threshold=threshold,
+        output_dir=None,
+        copy=False,
+    )
 
     preview = []
-    for file in files:
-        try:
-            content = get_file_content(file)
-            idx, _, score = match_file_to_bibliography(content, file.name, items, threshold, {})
-            dt_obj = DocType.from_str(items[idx].doc_type) if idx >= 0 else DocType.UNKNOWN
-            new_name = build_filename(idx + 1, items[idx].authors if idx >= 0 else [],
-                                      items[idx].title if idx >= 0 else file.stem,
-                                      dt_obj, ext=file.suffix.lower()) if idx >= 0 else file.name
+    for m in matches:
+        if m.matched and m.item is not None:
+            new_name = name_from_match(match=m, ext=m.document.path.suffix.lower()) or m.document.path.name
             preview.append({
-                "original": file.name,
+                "original": m.document.path.name,
                 "new": new_name,
-                "match": idx >= 0,
-                "score": round(score, 2) if idx >= 0 else 0,
+                "match": True,
+                "score": round(m.score, 2) if m.score else 0,
             })
-        except Exception as e:
-            preview.append({"original": file.name, "new": file.name, "match": False, "score": 0, "error": str(e)})
+        else:
+            preview.append({
+                "original": m.document.path.name,
+                "new": m.document.path.name,
+                "match": False,
+                "score": 0,
+            })
 
     return {"preview": preview, "total": len(preview), "matched": sum(1 for p in preview if p["match"])}
 
@@ -599,16 +595,20 @@ async def api_stats():
 
 # ── API: extract ─────────────────────────────────────────────────────────────
 @app.post("/api/extract/text")
-async def api_extract_text(file: UploadFile = File(...)):
+async def api_extract_text(file: UploadFile = File(...), fmt: str = Form("auto")):
     import os
     import tempfile
 
-    from textalchemy.extract import extract_text
-    tmp = Path(tempfile.mkdtemp()) / file.filename
+    from textalchemy.pipeline.extract import extract_text
+    from textalchemy.pipeline.ingest import ingest_file
+
+    fname = file.filename or "extracted.txt"
+    tmp = Path(tempfile.mkdtemp()) / fname
     tmp.write_bytes(await file.read())
     try:
-        text = extract_text(tmp)
-        return {"success": True, "text": text, "filename": file.filename}
+        doc = ingest_file(path=tmp)
+        text = extract_text(doc=doc)
+        return {"success": True, "text": text.plain, "filename": file.filename}
     except Exception as e:
         return {"success": False, "error": str(e)}
     finally:
@@ -624,7 +624,8 @@ async def api_extract_latex(
     import tempfile
 
     from textalchemy.extract import docx_to_latex
-    tmp = Path(tempfile.mkdtemp()) / file.filename
+    fname = file.filename or "document.docx"
+    tmp = Path(tempfile.mkdtemp()) / fname
     tmp.write_bytes(await file.read())
     out = tmp.with_suffix(".tex")
     try:
@@ -645,18 +646,45 @@ async def api_extract_latex(
 _tasks: dict[str, dict[str, Any]] = {}
 
 
-def _run_convert(task_id: str, pdf_path: Path, docx_path: Path, tool: str):
-    from textalchemy.convert.pdf_to_docx import create_converter
-    try:
-        converter = create_converter(tool)
-        result = converter.convert(pdf_path, docx_path)
-        if result.success:
-            content = docx_path.read_bytes()
+def _run_convert(task_id: str, src_path: Path, out_path: Path, tool: str, fmt: str):
+    import shutil
+    import tempfile
+
+    if fmt == "pptx":
+        try:
+            from textalchemy.convert.pptx_to_html import convert as pptx_to_html
+            out_dir = Path(tempfile.mkdtemp())
+            pptx_to_html(src_path, out_dir)
+            # zip the output directory
+            zip_path = out_path.with_suffix(".zip")
+            shutil.make_archive(str(zip_path.with_suffix("")), "zip", out_dir)
+            content = zip_path.read_bytes()
             import base64
             _tasks[task_id] = {
                 "status": "done",
                 "content": base64.b64encode(content).decode(),
-                "filename": docx_path.name,
+                "filename": src_path.stem + ".zip",
+                "error": None,
+            }
+            shutil.rmtree(out_dir, ignore_errors=True)
+            zip_path.unlink(missing_ok=True)
+        except Exception as e:
+            _tasks[task_id] = {"status": "error", "error": str(e)}
+        finally:
+            src_path.unlink(missing_ok=True)
+        return
+
+    from textalchemy.convert.pdf_to_docx import create_converter
+    try:
+        converter = create_converter(tool)
+        result = converter.convert(src_path, out_path)
+        if result.success:
+            content = out_path.read_bytes()
+            import base64
+            _tasks[task_id] = {
+                "status": "done",
+                "content": base64.b64encode(content).decode(),
+                "filename": out_path.name,
                 "error": None,
             }
         else:
@@ -664,23 +692,28 @@ def _run_convert(task_id: str, pdf_path: Path, docx_path: Path, tool: str):
     except Exception as e:
         _tasks[task_id] = {"status": "error", "error": str(e)}
     finally:
-        pdf_path.unlink(missing_ok=True)
-        docx_path.unlink(missing_ok=True)
+        src_path.unlink(missing_ok=True)
+        out_path.unlink(missing_ok=True)
 
 
 # ── API: convert ─────────────────────────────────────────────────────────────
 @app.post("/api/convert")
-async def api_convert(background_tasks: BackgroundTasks, file: UploadFile = File(...), tool: str = Form("pdf2docx")):
+async def api_convert(background_tasks: BackgroundTasks, file: UploadFile = File(...), tool: str = Form("fanout"), fmt: str = Form("pdf")):
     import tempfile
 
     task_id = str(uuid.uuid4())
     tmp_dir = Path(tempfile.mkdtemp())
-    tmp_pdf = tmp_dir / file.filename
-    tmp_docx = tmp_pdf.with_suffix(".docx")
-    tmp_pdf.write_bytes(await file.read())
+    fname = file.filename or f"document.{fmt}"
+    src = tmp_dir / fname
+    src.write_bytes(await file.read())
+
+    if fmt == "pptx":
+        out = tmp_dir / (src.stem + ".zip")
+    else:
+        out = tmp_dir / (src.stem + ".docx")
 
     _tasks[task_id] = {"status": "running", "error": None}
-    background_tasks.add_task(_run_convert, task_id, tmp_pdf, tmp_docx, tool)
+    background_tasks.add_task(_run_convert, task_id, src, out, tool, fmt)
     return {"success": True, "task_id": task_id, "status": "/api/convert/status/" + task_id}
 
 
@@ -692,10 +725,15 @@ async def api_convert_status(task_id: str):
     if task["status"] == "done":
         import base64
         content = base64.b64decode(task["content"])
+        fname = task["filename"]
+        if fname.endswith(".zip"):
+            media_type = "application/zip"
+        else:
+            media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         return Response(
             content=content,
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            headers={"Content-Disposition": f"attachment; filename={task['filename']}"},
+            media_type=media_type,
+            headers={"Content-Disposition": f"attachment; filename={fname}"},
         )
     return {"status": task["status"], "error": task.get("error")}
 
@@ -707,7 +745,8 @@ async def api_recognize(file: UploadFile = File(...)):
     import tempfile
 
     from textalchemy.recognize import OcrEngine
-    tmp = Path(tempfile.mkdtemp()) / file.filename
+    fname = file.filename or "document.pdf"
+    tmp = Path(tempfile.mkdtemp()) / fname
     tmp.write_bytes(await file.read())
     try:
         engine = OcrEngine()

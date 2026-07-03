@@ -8,33 +8,44 @@
 </head>
 <body>
     <div class="header">
-        <h1>⚗️ TextAlchemy</h1>
+        <h1>TextAlchemy</h1>
         <nav>
             <a href="/">Главная</a>
             <a href="/extract">Извлечь</a>
             <a href="/convert" class="active">Конверт</a>
-            <a href="/organize">Органайз</a>
+            <a href="/bibliography">Библиография</a>
+            <a href="/matching">Сопоставление</a>
+            <a href="/pipeline">Pipeline</a>
             <a href="/recognize">Распознать</a>
-            <a href="/generate">Сгенерить</a>
+            <a href="/export">Экспорт</a>
         </nav>
     </div>
     <div class="container">
         <div class="card">
-            <h2>Конвертация PDF → DOCX</h2>
+            <h2>Конвертация</h2>
             <div class="form-row">
                 <div class="form-group">
-                    <label>Инструмент конвертации</label>
+                    <label>Формат на входе</label>
+                    <select id="input-fmt">
+                        <option value="pdf">PDF → DOCX</option>
+                        <option value="pptx">PPTX → HTML (zip)</option>
+                    </select>
+                </div>
+                <div class="form-group" id="tool-group">
+                    <label>Инструмент конвертации (PDF)</label>
                     <select id="tool">
+                        <option value="fanout">FanOut (все движки)</option>
                         <option value="pdf2docx">pdf2docx</option>
                         <option value="pymupdf">PyMuPDF</option>
+                        <option value="libreoffice">LibreOffice</option>
                     </select>
                 </div>
             </div>
             <div class="file-drop" id="dropZone" style="margin-top:1rem;">
                 <div style="font-size:3rem;margin-bottom:0.5rem;">📄</div>
-                <strong>Перетащите PDF файл сюда</strong>
+                <strong id="drop-label">Перетащите PDF файл сюда</strong>
                 <div class="hint">или нажмите для выбора файла</div>
-                <input type="file" id="fileInput" accept=".pdf">
+                <input type="file" id="fileInput">
             </div>
         </div>
         <div class="card">
@@ -46,6 +57,16 @@
         const fileInput = document.getElementById('fileInput');
         const statusBar = document.getElementById('status');
         const toolSelect = document.getElementById('tool');
+        const fmtSelect = document.getElementById('input-fmt');
+        const toolGroup = document.getElementById('tool-group');
+        const dropLabel = document.getElementById('drop-label');
+
+        fmtSelect.addEventListener('change', () => {
+            const isPdf = fmtSelect.value === 'pdf';
+            toolGroup.style.display = isPdf ? '' : 'none';
+            dropLabel.textContent = isPdf ? 'Перетащите PDF файл сюда' : 'Перетащите PPTX файл сюда';
+            fileInput.accept = isPdf ? '.pdf' : '.pptx';
+        });
 
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -54,25 +75,57 @@
         fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
 
         async function handleFile(file) {
-            if (!file.name.endsWith('.pdf')) { showStatus('Пожалуйста, выберите PDF файл', 'error'); return; }
-            showStatus('Конвертация...', 'info');
+            const isPdf = fmtSelect.value === 'pdf';
+            const ext = isPdf ? '.pdf' : '.pptx';
+            if (!file.name.toLowerCase().endsWith(ext)) {
+                showStatus(`Пожалуйста, выберите ${ext.toUpperCase()} файл`, 'error');
+                return;
+            }
+            showStatus(isPdf ? 'Конвертация PDF в DOCX...' : 'Конвертация PPTX в HTML...', 'info');
             const form = new FormData();
             form.append('file', file);
             form.append('tool', toolSelect.value);
+            form.append('fmt', fmtSelect.value);
             try {
                 const res = await fetch('/api/convert', { method: 'POST', body: form });
-                if (res.ok) {
+                const data = await res.json();
+                if (data.success) {
+                    const taskUrl = data.status;
+                    pollTask(taskUrl);
+                } else {
+                    showStatus(`Ошибка: ${data.error}`, 'error');
+                }
+            } catch (e) {
+                showStatus(`Ошибка сети: ${e.message}`, 'error');
+            }
+        }
+
+        async function pollTask(url) {
+            try {
+                const res = await fetch(url);
+                if (res.headers.get('Content-Type')?.includes('application/json')) {
+                    const data = await res.json();
+                    if (data.status === 'done') {
+                        // redirect to download
+                        window.location.href = url;
+                    } else if (data.status === 'error') {
+                        showStatus(`Ошибка: ${data.error}`, 'error');
+                    } else {
+                        showStatus('Конвертация...', 'info');
+                        setTimeout(() => pollTask(url), 1000);
+                    }
+                } else {
+                    // binary download
                     const blob = await res.blob();
-                    const url = URL.createObjectURL(blob);
+                    const disposition = res.headers.get('Content-Disposition') || '';
+                    const match = disposition.match(/filename="?(.+?)"?$/);
+                    const fname = match ? match[1] : 'converted';
                     const a = document.createElement('a');
-                    a.href = url;
-                    a.download = file.name.replace('.pdf', '.docx');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = fname;
                     a.click();
                     URL.revokeObjectURL(url);
-                    showStatus('Готово! DOCX файл загружен.', 'success');
-                } else {
-                    const data = await res.json();
-                    showStatus(`Ошибка: ${data.error}`, 'error');
+                    showStatus('Готово! Файл загружен.', 'success');
                 }
             } catch (e) {
                 showStatus(`Ошибка сети: ${e.message}`, 'error');

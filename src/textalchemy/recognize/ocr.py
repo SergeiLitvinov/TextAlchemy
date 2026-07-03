@@ -131,7 +131,7 @@ class OcrEngine:
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 pix = page.get_pixmap(dpi=dpi)
-                img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
                 temp_img = tmp / f"page_{page_num}.png"
                 img.save(temp_img)

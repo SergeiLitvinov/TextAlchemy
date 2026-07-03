@@ -8,19 +8,17 @@
 </head>
 <body>
     <div class="header">
-        <h1>⚗️ TextAlchemy</h1>
+        <h1>TextAlchemy</h1>
         <button class="theme-toggle" onclick="toggleTheme()">🌓</button>
-        <nav>
+                <nav>
             <a href="/" class="active">Главная</a>
-            <a href="/bibliography">Библиография</a>
-            <a href="/matching">Сопоставление</a>
-            <a href="/rename">Реймен</a>
-            <a href="/reports">Отчёты</a>
-            <a href="/export">Экспорт</a>
             <a href="/extract">Извлечь</a>
             <a href="/convert">Конверт</a>
+            <a href="/bibliography">Библиография</a>
+            <a href="/matching">Сопоставление</a>
+            <a href="/pipeline">Pipeline</a>
             <a href="/recognize">Распознать</a>
-            <a href="/generate">Сгенерить</a>
+            <a href="/export">Экспорт</a>
         </nav>
     </div>
     <div class="container">
@@ -50,12 +48,7 @@
             <a href="/matching" class="module-card">
                 <span class="icon">🔗</span>
                 <h3>Сопоставление</h3>
-                <p>Fuzzy-матчинг файлов с библиографией</p>
-            </a>
-            <a href="/rename" class="module-card">
-                <span class="icon">✏️</span>
-                <h3>Реймен</h3>
-                <p>Предпросмотр и переименование файлов</p>
+                <p>Fuzzy-матчинг файлов с библиографией + переименование</p>
             </a>
             <a href="/reports" class="module-card">
                 <span class="icon">📊</span>
@@ -66,6 +59,11 @@
                 <span class="icon">💾</span>
                 <h3>Экспорт</h3>
                 <p>JSON, Markdown, ГОСТ</p>
+            </a>
+            <a href="/pipeline" class="module-card">
+                <span class="icon">⚡</span>
+                <h3>Pipeline</h3>
+                <p>Запуск YAML/JSON пайплайнов</p>
             </a>
             <a href="/recognize" class="module-card">
                 <span class="icon">👁️</span>

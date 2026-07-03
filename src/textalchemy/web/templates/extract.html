@@ -8,24 +8,38 @@
 </head>
 <body>
     <div class="header">
-        <h1>⚗️ TextAlchemy</h1>
+        <h1>TextAlchemy</h1>
         <nav>
             <a href="/">Главная</a>
             <a href="/extract" class="active">Извлечь</a>
             <a href="/convert">Конверт</a>
-            <a href="/organize">Органайз</a>
+            <a href="/bibliography">Библиография</a>
+            <a href="/matching">Сопоставление</a>
+            <a href="/pipeline">Pipeline</a>
             <a href="/recognize">Распознать</a>
-            <a href="/generate">Сгенерить</a>
+            <a href="/export">Экспорт</a>
         </nav>
     </div>
     <div class="container">
         <div class="card">
-            <h2>Извлечение текста из DOCX</h2>
+            <h2>Извлечение текста</h2>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Формат файла</label>
+                    <select id="input-fmt">
+                        <option value="auto">Автоопределение</option>
+                        <option value="pdf">PDF</option>
+                        <option value="docx">DOCX</option>
+                        <option value="txt">TXT</option>
+                        <option value="djvu">DJVU</option>
+                    </select>
+                </div>
+            </div>
             <div class="file-drop" id="dropZone">
                 <div style="font-size:3rem;margin-bottom:0.5rem;">📄</div>
-                <strong>Перетащите DOCX файл сюда</strong>
+                <strong>Перетащите файл сюда</strong>
                 <div class="hint">или нажмите для выбора файла</div>
-                <input type="file" id="fileInput" accept=".docx">
+                <input type="file" id="fileInput">
             </div>
         </div>
         <div class="card">
@@ -39,6 +53,7 @@
         const fileInput = document.getElementById('fileInput');
         const resultArea = document.getElementById('result');
         const statusBar = document.getElementById('status');
+        const fmtSelect = document.getElementById('input-fmt');
 
         dropZone.addEventListener('click', () => fileInput.click());
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
@@ -47,10 +62,10 @@
         fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
 
         async function handleFile(file) {
-            if (!file.name.endsWith('.docx')) { showStatus('Пожалуйста, выберите DOCX файл', 'error'); return; }
             showStatus('Загрузка...', 'info');
             const form = new FormData();
             form.append('file', file);
+            form.append('fmt', fmtSelect.value);
             try {
                 const res = await fetch('/api/extract/text', { method: 'POST', body: form });
                 const data = await res.json();

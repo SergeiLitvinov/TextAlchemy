@@ -60,7 +60,7 @@ class LayoutAnalyzer:
             edge_arr = np.array(edges)
             edge_density = np.mean(edge_arr > 128)
 
-            has_table = edge_density > 0.15 and edge_density < 0.4
+            has_table = bool(edge_density > 0.15 and edge_density < 0.4)
         except ImportError:
             has_table = False
 

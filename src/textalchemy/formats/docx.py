@@ -29,8 +29,8 @@ def read_docx(path: Union[str, Path], *, include_tables: bool = True) -> Text:
             plain.append(t)
 
     if include_tables:
-        for t in doc.tables:
-            rows = [[cell.text for cell in row.cells] for row in t.rows]
+        for tbl in doc.tables:
+            rows = [[cell.text for cell in row.cells] for row in tbl.rows]
             tables.append(Table(rows=rows))
             for row in rows:
                 plain.append(" | ".join(row))

@@ -33,22 +33,22 @@ class BibRecord(Base):  # type: ignore[valid-type,misc]
 
     def to_bibitem(self) -> BibItem:
         raw = self.raw_text or ""
-        authors = json.loads(self.authors) if self.authors else []
+        authors = json.loads(str(self.authors)) if self.authors else []
         return BibItem(
-            index=self.id,
-            raw_text=raw,
+            index=int(self.id),  # type: ignore[arg-type]
+            raw_text=str(raw),
             authors=authors,
-            title=self.title or "",
-            year=self.year,
-            doc_type=self.doc_type or "unknown",
-            source=self.source or "",
-            pages=self.pages or "",
-            doi=self.doi or "",
-            isbn=self.isbn or "",
-            url=self.url or "",
-            journal=self.journal or "",
-            publisher=self.publisher or "",
-            city=self.city or "",
+            title=str(self.title or ""),
+            year=self.year,  # type: ignore[arg-type]
+            doc_type=str(self.doc_type or "unknown"),
+            source=str(self.source or ""),
+            pages=str(self.pages or ""),
+            doi=str(self.doi or ""),
+            isbn=str(self.isbn or ""),
+            url=str(self.url or ""),
+            journal=str(self.journal or ""),
+            publisher=str(self.publisher or ""),
+            city=str(self.city or ""),
         )
 
     @classmethod
@@ -102,7 +102,7 @@ class Database:
         with self.session() as sess:
             sess.add(rec)
             sess.flush()
-            item.index = rec.id
+            item.index = int(rec.id)  # type: ignore[arg-type]
             sess.commit()
         return item
 
@@ -111,17 +111,17 @@ class Database:
             rec = sess.query(BibRecord).filter_by(id=item_id).first()
             if not rec:
                 return False
-            rec.authors = json.dumps(item.authors, ensure_ascii=False)
-            rec.title = item.title
-            rec.year = item.year
-            rec.doc_type = item.doc_type
-            rec.source = item.source
-            rec.pages = item.pages
-            rec.doi = item.doi
-            rec.isbn = item.isbn
-            rec.url = item.url or ""
-            rec.raw_text = item.raw_text
-            rec.updated_at = datetime.now().isoformat()
+            rec.authors = json.dumps(item.authors, ensure_ascii=False)  # type: ignore[assignment]
+            rec.title = item.title  # type: ignore[assignment]
+            rec.year = item.year  # type: ignore[assignment]
+            rec.doc_type = item.doc_type  # type: ignore[assignment]
+            rec.source = item.source  # type: ignore[assignment]
+            rec.pages = item.pages  # type: ignore[assignment]
+            rec.doi = item.doi  # type: ignore[assignment]
+            rec.isbn = item.isbn  # type: ignore[assignment]
+            rec.url = item.url or ""  # type: ignore[assignment]
+            rec.raw_text = item.raw_text  # type: ignore[assignment]
+            rec.updated_at = datetime.now().isoformat()  # type: ignore[assignment]
             sess.commit()
         return True
 

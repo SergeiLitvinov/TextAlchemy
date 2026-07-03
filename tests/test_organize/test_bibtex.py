@@ -1,5 +1,4 @@
-from pathlib import Path
-from textalchemy.organize.bibtex import generate_bib, sanitize_key, extract_year, make_bibtex_entry
+from textalchemy.organize.bibtex import extract_year, generate_bib, make_bibtex_entry, sanitize_key
 
 
 def test_sanitize_key():

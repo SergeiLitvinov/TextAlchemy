@@ -11,8 +11,8 @@ logger = logging.getLogger("textalchemy")
 # Гарантируем UTF-8 для stdout/stderr на Windows (cp1251 иначе не вывозит '→').
 if hasattr(sys.stdout, "reconfigure"):
     try:
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
+        sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        sys.stderr.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     except Exception:
         pass
 

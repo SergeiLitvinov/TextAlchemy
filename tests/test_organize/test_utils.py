@@ -1,8 +1,16 @@
 from pathlib import Path
+
 from textalchemy.organize.utils import (
-    progress_bar, calculate_file_hash, find_duplicates, validate_pdf,
-    get_file_info, list_files, create_zip_archive, sanitize_path,
-    ensure_folder, get_file_content,
+    calculate_file_hash,
+    create_zip_archive,
+    ensure_folder,
+    find_duplicates,
+    get_file_content,
+    get_file_info,
+    list_files,
+    progress_bar,
+    sanitize_path,
+    validate_pdf,
 )
 
 

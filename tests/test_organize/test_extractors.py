@@ -1,7 +1,6 @@
-from pathlib import Path
-from textalchemy.organize.extractors.pdf import read_pdf, get_pdf_info
 from textalchemy.organize.extractors.docx import read_docx
-from textalchemy.organize.extractors.txt import read_txt, read_djvu
+from textalchemy.organize.extractors.pdf import get_pdf_info, read_pdf
+from textalchemy.organize.extractors.txt import read_djvu, read_txt
 
 
 def test_read_pdf_no_file():

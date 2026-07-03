@@ -4,18 +4,8 @@ Usage: uv run python scripts/convert.py <pptx_path> <output_dir>
 """
 from __future__ import annotations
 
-import io
-import os
 import re
-import shutil
-import sys
-import zipfile
-from copy import deepcopy
-from pathlib import Path
 from typing import Optional
-
-from lxml import etree
-from PIL import Image
 
 # ----------------------------------------------------------------------------
 # Namespaces
@@ -36,7 +26,7 @@ A = "{%s}" % NS["a"]
 P = "{%s}" % NS["p"]
 R = "{%s}" % NS["r"]
 V = "{%s}" % NS["v"]
-O = "{%s}" % NS["o"]
+OFFICE_NS = "{%s}" % NS["o"]
 
 
 def qn(t: str) -> str:
@@ -134,9 +124,9 @@ def apply_lum(r, g, b, lm_val=1.0, lo_val=0.0, shd_val=1.0, tint_val=0.0):
     """Apply PowerPoint lumMod/lumOff/shade/tint to an RGB triple (0-1 floats)."""
     # lumMod multiplies L, lumOff adds to L after multiplication
     if lm_val != 1.0 or lo_val != 0.0:
-        h, l, s = rgb_to_hls(r, g, b)
-        l = max(0.0, min(1.0, l * lm_val + lo_val))
-        r, g, b = hls_to_rgb(h, l, s)
+        h, lightness, s = rgb_to_hls(r, g, b)
+        lightness = max(0.0, min(1.0, lightness * lm_val + lo_val))
+        r, g, b = hls_to_rgb(h, lightness, s)
     # shade: multiply by shd_val (typically in [0..1])
     if shd_val != 1.0:
         r *= shd_val
@@ -153,12 +143,12 @@ def apply_lum(r, g, b, lm_val=1.0, lo_val=0.0, shd_val=1.0, tint_val=0.0):
 def rgb_to_hls(r, g, b):
     mx = max(r, g, b)
     mn = min(r, g, b)
-    l = (mx + mn) / 2
+    lightness = (mx + mn) / 2
     if mx == mn:
         h = s = 0.0
     else:
         d = mx - mn
-        s = d / (2 - mx - mn) if l > 0.5 else d / (mx + mn)
+        s = d / (2 - mx - mn) if lightness > 0.5 else d / (mx + mn)
         if mx == r:
             h = (g - b) / d + (6 if g < b else 0)
         elif mx == g:
@@ -166,14 +156,14 @@ def rgb_to_hls(r, g, b):
         else:
             h = (r - g) / d + 4
         h /= 6
-    return h, l, s
+    return h, lightness, s
 
 
-def hls_to_rgb(h, l, s):
+def hls_to_rgb(h, lightness, s):
     if s == 0:
-        return l, l, l
-    q = l * (1 + s) if l < 0.5 else l + s - l * s
-    p = 2 * l - q
+        return lightness, lightness, lightness
+    q = lightness * (1 + s) if lightness < 0.5 else lightness + s - lightness * s
+    p = 2 * lightness - q
     return _hue_to_rgb(p, q, h + 1 / 3), _hue_to_rgb(p, q, h), _hue_to_rgb(p, q, h - 1 / 3)
 
 
@@ -213,7 +203,7 @@ def safe_id(s: str) -> str:
 # Reference: ECMA-376, DrawingML preset shape definitions.
 PRST_GEOMETRY = {
     "rect": ("M0,0 L1,0 L1,1 L0,1 Z", False),
-    "roundRect": ("M0.05,0 L0.95,0 A0.05,0.05 0 0 1 1,0.05 L1,0.95 A0.05,0.05 0 0 1 0.95,1 L0.05,1 A0.05,0.05 0 0 1 0,0.95 L0,0.05 A0.05,0.05 0 0 1 0.05,0 Z", False),
+    "roundRect": ("M0.05,0 L0.95,0 A0.05,0.05 0 0 1 1,0.05 L1,0.95 A0.05,0.05 0 0 1 0.95,1 L0.05,1 A0.05,0.05 0 0 1 0,0.95 L0,0.05 A0.05,0.05 0 0 1 0.05,0 Z", False),  # noqa: E501
     "ellipse": ("M0.5,0 A0.5,0.5 0 1 0 0.5,1 A0.5,0.5 0 1 0 0.5,0 Z", False),
     "oval": ("M0.5,0 A0.5,0.5 0 1 0 0.5,1 A0.5,0.5 0 1 0 0.5,0 Z", False),
     "triangle": ("M0.5,0 L1,1 L0,1 Z", False),
@@ -225,21 +215,21 @@ PRST_GEOMETRY = {
     "hexagon": ("M0.25,0 L0.75,0 L1,0.5 L0.75,1 L0.25,1 L0,0.5 Z", False),
     "octagon": ("M0.3,0 L0.7,0 L1,0.3 L1,0.7 L0.7,1 L0.3,1 L0,0.7 L0,0.3 Z", False),
     "star5": ("M0.5,0 L0.61,0.35 L0.98,0.35 L0.69,0.6 L0.79,0.95 L0.5,0.75 L0.21,0.95 L0.31,0.6 L0.02,0.35 L0.39,0.35 Z", False),
-    "star6": ("M0.5,0 L0.62,0.2 L0.88,0.1 L0.88,0.4 L1,0.6 L0.78,0.7 L0.75,0.95 L0.5,0.85 L0.25,0.95 L0.22,0.7 L0,0.6 L0.12,0.4 L0.12,0.1 L0.38,0.2 Z", False),
+    "star6": ("M0.5,0 L0.62,0.2 L0.88,0.1 L0.88,0.4 L1,0.6 L0.78,0.7 L0.75,0.95 L0.5,0.85 L0.25,0.95 L0.22,0.7 L0,0.6 L0.12,0.4 L0.12,0.1 L0.38,0.2 Z", False),  # noqa: E501
     "rightArrow": ("M0,0.3 L0.7,0.3 L0.7,0 L1,0.5 L0.7,1 L0.7,0.7 L0,0.7 Z", False),
     "leftArrow": ("M1,0.3 L0.3,0.3 L0.3,0 L0,0.5 L0.3,1 L0.3,0.7 L1,0.7 Z", False),
     "upArrow": ("M0.3,1 L0.3,0.3 L0,0.3 L0.5,0 L1,0.3 L0.7,0.3 L0.7,1 Z", False),
     "downArrow": ("M0.3,0 L0.3,0.7 L0,0.7 L0.5,1 L1,0.7 L0.7,0.7 L0.7,0 Z", False),
     "leftRightArrow": ("M0,0.5 L0.2,0.3 L0.2,0.4 L0.8,0.4 L0.8,0.3 L1,0.5 L0.8,0.7 L0.8,0.6 L0.2,0.6 L0.2,0.7 Z", False),
-    "curvedRightArrow": ("M0,0.5 L0.15,0.35 L0.15,0.45 L0.7,0.45 A0.3,0.3 0 1 1 0.4,0.45 L0.55,0.6 L0.2,0.75 A0.5,0.5 0 1 0 0.7,0.25 L0.85,0.4 L0.85,0.5 L0.7,0.65 Z", False),
+    "curvedRightArrow": ("M0,0.5 L0.15,0.35 L0.15,0.45 L0.7,0.45 A0.3,0.3 0 1 1 0.4,0.45 L0.55,0.6 L0.2,0.75 A0.5,0.5 0 1 0 0.7,0.25 L0.85,0.4 L0.85,0.5 L0.7,0.65 Z", False),  # noqa: E501
     "callout1": ("M0,0 L1,0 L1,0.7 L0.4,0.7 L0.2,1 L0.2,0.7 L0,0.7 Z", False),
     "callout2": ("M0,0 L1,0 L1,0.7 L0.6,0.7 L0.55,1 L0.4,0.7 L0,0.7 Z", False),
-    "cloud": ("M0.2,0.5 A0.2,0.25 0 0 1 0.5,0.4 A0.2,0.2 0 0 1 0.85,0.45 A0.15,0.15 0 0 1 0.85,0.75 A0.2,0.2 0 0 1 0.5,0.85 A0.2,0.2 0 0 1 0.15,0.7 A0.15,0.15 0 0 1 0.2,0.5 Z", False),
+    "cloud": ("M0.2,0.5 A0.2,0.25 0 0 1 0.5,0.4 A0.2,0.2 0 0 1 0.85,0.45 A0.15,0.15 0 0 1 0.85,0.75 A0.2,0.2 0 0 1 0.5,0.85 A0.2,0.2 0 0 1 0.15,0.7 A0.15,0.15 0 0 1 0.2,0.5 Z", False),  # noqa: E501
     "heart": ("M0.5,1 L0,0.4 A0.3,0.3 0 0 1 0.5,0.2 A0.3,0.3 0 0 1 1,0.4 Z", False),
     "lightningBolt": ("M0.6,0 L0.2,0.5 L0.4,0.5 L0.3,1 L0.8,0.45 L0.55,0.45 L0.7,0 Z", False),
-    "sun": ("M0.5,0.3 A0.2,0.2 0 1 0 0.5,0.7 A0.2,0.2 0 1 0 0.5,0.3 Z M0.5,0 L0.5,0.15 M0.5,0.85 L0.5,1 M0,0.5 L0.15,0.5 M0.85,0.5 L1,0.5 M0.15,0.15 L0.25,0.25 M0.75,0.75 L0.85,0.85 M0.85,0.15 L0.75,0.25 M0.25,0.75 L0.15,0.85", False),
+    "sun": ("M0.5,0.3 A0.2,0.2 0 1 0 0.5,0.7 A0.2,0.2 0 1 0 0.5,0.3 Z M0.5,0 L0.5,0.15 M0.5,0.85 L0.5,1 M0,0.5 L0.15,0.5 M0.85,0.5 L1,0.5 M0.15,0.15 L0.25,0.25 M0.75,0.75 L0.85,0.85 M0.85,0.15 L0.75,0.25 M0.25,0.75 L0.15,0.85", False),  # noqa: E501
     "moon": ("M0.7,0.1 A0.4,0.4 0 1 0 0.7,0.9 A0.3,0.3 0 1 1 0.7,0.1 Z", False),
-    "smileyFace": ("M0.5,0.25 A0.3,0.3 0 1 0 0.5,0.85 A0.3,0.3 0 1 0 0.5,0.25 Z M0.4,0.5 A0.04,0.04 0 1 0 0.4,0.58 A0.04,0.04 0 1 0 0.4,0.5 Z M0.6,0.5 A0.04,0.04 0 1 0 0.6,0.58 A0.04,0.04 0 1 0 0.6,0.5 Z M0.3,0.7 Q0.5,0.85 0.7,0.7", False),
+    "smileyFace": ("M0.5,0.25 A0.3,0.3 0 1 0 0.5,0.85 A0.3,0.3 0 1 0 0.5,0.25 Z M0.4,0.5 A0.04,0.04 0 1 0 0.4,0.58 A0.04,0.04 0 1 0 0.4,0.5 Z M0.6,0.5 A0.04,0.04 0 1 0 0.6,0.58 A0.04,0.04 0 1 0 0.6,0.5 Z M0.3,0.7 Q0.5,0.85 0.7,0.7", False),  # noqa: E501
     "noSmoking": ("M0.2,0.4 L0.8,0.4 L0.8,0.6 L0.2,0.6 Z M0.7,0.1 L0.7,0.3 L0.5,0.3 L0.5,0.4 M0.2,0.2 L0.8,0.8", False),
     "arc": ("M0,0.5 A0.5,0.5 0 0 1 1,0.5", True),  # path-only
     "line": ("M0,0.5 L1,0.5", True),  # we'll handle lines specially
@@ -258,7 +248,7 @@ PRST_GEOMETRY = {
     "flowchartTerminator": ("M0,0 L1,0 A0.5,0.5 0 0 1 1,1 L0,1 A0.5,0.5 0 0 1 0,0 Z", False),
     "flowchartDocument": ("M0,0 L1,0 L1,0.85 A0.3,0.15 0 0 1 0.7,1 L0,1 Z", False),
     "flowchartPredefinedProcess": ("M0,0 L1,0 L1,1 L0,1 Z M0.1,0 L0.1,1 M0.9,0 L0.9,1", False),
-    "flowchartStoredData": ("M0,0.1 L1,0 L1,0.9 L0,1 Z M0,0.1 A0.05,0.05 0 0 1 0,0.2 Z M1,0 A0.05,0.05 0 0 1 1,0.1 Z M1,0.9 A0.05,0.05 0 0 1 1,0.95 Z M0,0.95 A0.05,0.05 0 0 1 0,1 Z", False),
+    "flowchartStoredData": ("M0,0.1 L1,0 L1,0.9 L0,1 Z M0,0.1 A0.05,0.05 0 0 1 0,0.2 Z M1,0 A0.05,0.05 0 0 1 1,0.1 Z M1,0.9 A0.05,0.05 0 0 1 1,0.95 Z M0,0.95 A0.05,0.05 0 0 1 0,1 Z", False),  # noqa: E501
     "flowchartConnector": ("M0,0.5 L0.4,0.5 L0.4,1 L1,1", True),
 }
 

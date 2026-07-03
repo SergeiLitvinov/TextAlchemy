@@ -9,8 +9,6 @@ Output is Presentation MathML suitable for MathJax.
 from __future__ import annotations
 
 import re
-import xml.etree.ElementTree as ET
-from typing import Optional
 
 from lxml import etree
 
@@ -38,7 +36,7 @@ def _is_digit(s: str) -> bool:
 
 
 def _is_operator_char(s: str) -> bool:
-    return all(c in _OP_CHARS for c in s) and s.strip()
+    return bool(s.strip()) and all(c in _OP_CHARS for c in s)
 
 
 def _classify_text(text: str) -> str:
@@ -94,8 +92,8 @@ def convert_omml(omml_xml) -> str:
                     break
         if omath is None:
             return ""
-        MATH_NS = "http://www.w3.org/1998/Math/MathML"
-        math = etree.Element("{%s}math" % MATH_NS, nsmap={None: MATH_NS})
+        math_ns = MATH_NS_URI
+        math = etree.Element("{%s}math" % math_ns, nsmap={None: math_ns})
         math.set("display", "block")
         convert_math_elem(omath, math)
         return etree.tostring(math, encoding="unicode")
@@ -331,14 +329,14 @@ def extract_math_from_paragraph(p_elem) -> list[dict]:
     For paragraphs that have no math at all, returns [{"type": "text", "runs": [...], "pPr": ...}].
     """
     ns = {"a": A_NS, "m": M_NS}
-    blocks = []
-    current_text_runs = []
-    current_pPr = p_elem.find("a:pPr", ns)
+    blocks: list[dict[str, object]] = []
+    current_text_runs: list[etree._Element] = []
+    current_p_pr = p_elem.find("a:pPr", ns)
     for ch in p_elem:
         local = etree.QName(ch).localname
         if local == "oMath":
             if current_text_runs:
-                blocks.append({"type": "text", "runs": current_text_runs, "pPr": current_pPr})
+                blocks.append({"type": "text", "runs": current_text_runs, "pPr": current_p_pr})
                 current_text_runs = []
             omml = etree.tostring(ch, encoding="unicode")
             blocks.append({"type": "math", "omml": omml})
@@ -348,12 +346,11 @@ def extract_math_from_paragraph(p_elem) -> list[dict]:
             pass
         # other elements: skip
     if current_text_runs:
-        blocks.append({"type": "text", "runs": current_text_runs, "pPr": current_pPr})
+        blocks.append({"type": "text", "runs": current_text_runs, "pPr": current_p_pr})
     if not blocks:
-        blocks = [{"type": "text", "runs": [], "pPr": current_pPr}]
+        blocks = [{"type": "text", "runs": [], "pPr": current_p_pr}]
     return blocks
 
 
 def has_math(p_elem) -> bool:
-    ns = {"a": A_NS, "m": M_NS}
     return p_elem.find(".//{%s}oMath" % M_NS) is not None

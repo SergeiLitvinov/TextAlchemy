@@ -24,7 +24,7 @@ def test_convert_page():
 
 
 def test_organize_page():
-    resp = client.get("/organize")
+    resp = client.get("/pipeline")
     assert resp.status_code == 200
 
 
@@ -34,7 +34,7 @@ def test_bibliography_page():
 
 
 def test_rename_page():
-    resp = client.get("/rename")
+    resp = client.get("/matching")
     assert resp.status_code == 200
 
 

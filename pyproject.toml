@@ -75,6 +75,9 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
 
+[tool.ruff.lint.per-file-ignores]
+"src/textalchemy/convert/pptx_to_html/*" = ["N801", "N802", "N803", "N806", "W293", "E501"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = false

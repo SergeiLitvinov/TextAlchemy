@@ -6,22 +6,13 @@
 from __future__ import annotations
 
 from textalchemy.convert.pptx_to_html import PptxToHtmlConverter, convert
-from textalchemy.convert.pptx_to_html._renderer import (
-    convert_pptx,
-    render_slide,
-    extract_resources,
-    extract_title,
-)
 from textalchemy.convert.pptx_to_html._omml import (
-    convert_omml,
-    has_math,
     M_NS,
     MATH_NS_URI,
+    has_math,
 )
 from textalchemy.convert.pptx_to_html._pptx_lib import (
-    A, NS, O, P, R, V, EMU_PER_INCH,
-    PRST_GEOMETRY, THEME_COLORS,
-    color_to_hex, emu_to_in, qn, size_to_pt,
+    EMU_PER_INCH,
 )
 
 

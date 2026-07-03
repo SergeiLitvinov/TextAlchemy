@@ -10,6 +10,26 @@ from typing import Union
 
 from textalchemy.core.registry import operation
 from textalchemy.core.types import BibItem
+from textalchemy.organize.bibliography import BibItem as LegacyBibItem
+
+
+def _to_core(legacy: LegacyBibItem) -> BibItem:
+    return BibItem(
+        index=legacy.index,
+        raw_text=legacy.raw_text,
+        authors=list(legacy.authors),
+        title=legacy.title,
+        year=legacy.year,
+        doc_type=legacy.doc_type,
+        source=legacy.source,
+        pages=legacy.pages,
+        doi=legacy.doi,
+        isbn=legacy.isbn,
+        url=legacy.url,
+        journal=legacy.journal,
+        publisher=legacy.publisher,
+        city=legacy.city,
+    )
 
 
 @operation(
@@ -26,7 +46,7 @@ def parse_bibliography(*, path: Union[str, Path]) -> list[BibItem]:
     p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(p)
-    return list(BibliographyParser.parse_file(str(p)))
+    return [_to_core(b) for b in BibliographyParser.parse_file(str(p))]
 
 
 @operation(
@@ -40,7 +60,7 @@ def parse_bibliography(*, path: Union[str, Path]) -> list[BibItem]:
 def smart_parse_bibliography(*, text: str) -> list[BibItem]:
     from textalchemy.organize.bibliography import smart_parse
 
-    return list(smart_parse(text))
+    return [_to_core(b) for b in smart_parse(text)]
 
 
 __all__ = ["parse_bibliography", "smart_parse_bibliography"]

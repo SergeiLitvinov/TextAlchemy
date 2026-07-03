@@ -8,24 +8,84 @@
 </head>
 <body>
     <div class="header">
-        <h1>⚗️ TextAlchemy</h1>
-        <nav>
+        <h1>TextAlchemy</h1>
+                <nav>
             <a href="/">Главная</a>
             <a href="/extract">Извлечь</a>
             <a href="/convert">Конверт</a>
-            <a href="/organize">Органайз</a>
+            <a href="/bibliography">Библиография</a>
+            <a href="/matching">Сопоставление</a>
+            <a href="/pipeline">Pipeline</a>
             <a href="/recognize">Распознать</a>
-            <a href="/generate" class="active">Сгенерить</a>
+            <a href="/export" class="active">Экспорт</a>
         </nav>
     </div>
     <div class="container">
         <div class="card">
-            <h2>⚙️ Генерация документов</h2>
-            <p>Создание документов из шаблонов DOCX с подстановкой параметров.</p>
-            <div style="color: var(--text-muted); font-size: 0.875rem; margin-top: 0.5rem;">
-                Функция доступна через CLI: <code>textalchemy generate &lt;template&gt; &lt;output&gt; -p key=value</code>
+            <h2>Generate Document</h2>
+            <p>Create documents from templates with parameter substitution.</p>
+            <form id="generate-form">
+                <div class="form-group">
+                    <label for="template">Template:</label>
+                    <select id="template" required>
+                        <option value="">-- select template --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="output">Output filename:</label>
+                    <input type="text" id="output" value="output.docx" required>
+                </div>
+                <div class="form-group">
+                    <label for="params">Parameters (JSON):</label>
+                    <textarea id="params" rows="6" style="width:100%;font-family:monospace;font-size:13px;">{"title": "My Document", "author": "Author Name"}</textarea>
+                </div>
+                <button type="submit" class="btn">Generate</button>
+            </form>
+            <div id="generate-result" style="margin-top:1rem;display:none;">
+                <pre id="generate-output" style="background:var(--bg-secondary);padding:1rem;border-radius:4px;"></pre>
             </div>
         </div>
     </div>
+
+    <script>
+        async function loadTemplates() {
+            try {
+                const res = await fetch('/api/generate/templates');
+                const templates = await res.json();
+                const sel = document.getElementById('template');
+                templates.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.name;
+                    opt.textContent = t.name + (t.description ? ' — ' + t.description : '');
+                    sel.appendChild(opt);
+                });
+            } catch (e) {
+                console.warn('Failed to load templates:', e);
+            }
+        }
+        loadTemplates();
+
+        document.getElementById('generate-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const template = document.getElementById('template').value;
+            const output = document.getElementById('output').value;
+            const params = document.getElementById('params').value;
+            const resEl = document.getElementById('generate-result');
+            const outEl = document.getElementById('generate-output');
+            resEl.style.display = 'block';
+            outEl.textContent = 'Generating...';
+            try {
+                const res = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: new URLSearchParams({template, output, params}),
+                });
+                const data = await res.json();
+                outEl.textContent = JSON.stringify(data, null, 2);
+            } catch (e) {
+                outEl.textContent = 'Error: ' + e.message;
+            }
+        });
+    </script>
 </body>
 </html>

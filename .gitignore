@@ -39,6 +39,7 @@ htmlcov/
 /out.txt
 /bibliography.json
 /test_bib.txt
+/renamed/
 
 # Large binaries
 *.pdf

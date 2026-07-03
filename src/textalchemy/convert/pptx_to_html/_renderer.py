@@ -7,29 +7,32 @@
 """
 from __future__ import annotations
 
-import base64
 import io
-import os
-import re
-import shutil
 import zipfile
-from copy import deepcopy
 from pathlib import Path
 from typing import Optional
 
 from PIL import Image
 from pptx import Presentation
-from pptx.util import Emu
 
-from ._pptx_lib import (  # noqa: F401
-    A, NS, O, P, R, V, EMU_PER_INCH,
-    PRST_GEOMETRY, THEME_COLORS,
-    apply_lum, color_to_hex, emu_to_in, fmt, hls_to_rgb, pos_style,
-    qn, rgb_to_hls, safe_id, size_to_pt,
-)
 from ._omml import (  # noqa: F401
-    M_NS as OMML_NS, convert_omml, has_math as omml_has_math,
-    extract_math_from_paragraph,
+    M_NS as OMML_NS,
+)
+from ._omml import (
+    convert_omml,
+)
+from ._omml import (
+    has_math as omml_has_math,
+)
+from ._pptx_lib import (
+    EMU_PER_INCH,
+    PRST_GEOMETRY,
+    color_to_hex,
+    emu_to_in,
+    fmt,
+    qn,
+    safe_id,
+    size_to_pt,
 )
 
 
@@ -250,19 +253,19 @@ def render_shape_svg(sp_elem, width_in, height_in, xfrm_pos, fill_info, line_inf
         # pptx: xfrm/off is the line's start, xfrm/ext is the (dx,dy) to the end.
         # flips/rotation come from the xfrm.
         if isinstance(xfrm_pos, tuple) and len(xfrm_pos) == 5:
-            l, t, w_in, h_in, rot_deg = xfrm_pos
+            _left, _t, _w_in, _h_in, _rot_deg = xfrm_pos
         else:
-            l, t, w_in, h_in, rot_deg = 0, 0, width_in, height_in, 0
-        spPr = sp_elem.find(qn("p:spPr"))
-        xfrm = spPr.find(qn("a:xfrm")) if spPr is not None else None
+            _left, _t, _w_in, _h_in, _rot_deg = 0, 0, width_in, height_in, 0
+        sp_pr = sp_elem.find(qn("p:spPr"))
+        xfrm = sp_pr.find(qn("a:xfrm")) if sp_pr is not None else None
         if xfrm is not None:
             cx = int(xfrm.find(qn("a:ext")).get("cx", 0))
             cy = int(xfrm.find(qn("a:ext")).get("cy", 0))
             # Compute line endpoints in 0..100 viewBox
             # cx,cy are the offset to the end relative to off
             # The bounding box width/height in EMU
-            box_cx = abs(cx) or 1
-            box_cy = abs(cy) or 1
+            _box_cx = abs(cx) or 1
+            _box_cy = abs(cy) or 1
             # Normalize endpoints to bbox in 0..100
             if cx == 0 and cy != 0:
                 # vertical line
@@ -333,7 +336,7 @@ def render_custgeom(cust, width_in, height_in, fill_info, line_info):
     for pathl in cust.findall(qn("a:pathLst") + "/" + qn("a:path")):
         d = ""
         w = int(pathl.get("w", 0))
-        h = int(pathl.get("h", 0))
+        _h = int(pathl.get("h", 0))
         # w/h give the path's intrinsic size; we map to 0..1 in viewBox
         # Note: pptx path commands use absolute EMU-like values; we'll scale
         # by 1/max(w, h) to fit the viewBox.
@@ -421,7 +424,7 @@ def render_text_body(txBody_elem, placeholder_type=None) -> str:
     bodyPr = txBody_elem.find(qn("a:bodyPr"))
     # anchor
     anchor = "top"
-    wrap = "square"
+    _wrap = "square"
     if bodyPr is not None:
         a = bodyPr.get("anchor")
         if a == "ctr":
@@ -430,9 +433,9 @@ def render_text_body(txBody_elem, placeholder_type=None) -> str:
             anchor = "bottom"
         wt = bodyPr.get("wrap")
         if wt == "none":
-            wrap = "none"
+            _wrap = "none"
         elif wt == "square":
-            wrap = "square"
+            _wrap = "square"
     lIns = int(bodyPr.get("lIns", 91440)) / 914400.0 if bodyPr is not None else 0.1
     tIns = int(bodyPr.get("tIns", 45720)) / 914400.0 if bodyPr is not None else 0.05
     rIns = int(bodyPr.get("rIns", 91440)) / 914400.0 if bodyPr is not None else 0.1
@@ -452,7 +455,7 @@ def render_text_body(txBody_elem, placeholder_type=None) -> str:
 def render_paragraph(p) -> str:
     pPr = p.find(qn("a:pPr"))
     align = "left"
-    indent_l = 0.0
+    _indent_l = 0.0
     indent_first = 0.0
     bullet_char = None
     bullet_color = None
@@ -484,7 +487,6 @@ def render_paragraph(p) -> str:
             bullet_char = "•"  # fallback; ideally render number style
 
     # If the paragraph contains OMML, render it as a math paragraph
-    from lxml import etree
     has_m = omml_has_math(p)
     if has_m:
         return render_paragraph_with_math(p, align, marL, indent_first, bullet_char, bullet_color, bullet_font)
@@ -839,14 +841,21 @@ def render_grpSp(grp, media_index, slide_rels, slide=None) -> str:
     chOff = xfrm.find(qn("a:chOff"))
     chExt = xfrm.find(qn("a:chExt"))
     rot = float(xfrm.get("rot", 0)) / 60000.0
-    gx = int(off.get("x", 0)); gy = int(off.get("y", 0))
-    gcx = int(ext.get("cx", 1)); gcy = int(ext.get("cy", 1))
-    cox = int(chOff.get("x", 0)); coy = int(chOff.get("y", 0))
-    ccx = int(chExt.get("cx", 1)); ccy = int(chExt.get("cy", 1))
-    sx = gcx / ccx; sy = gcy / ccy
+    gx = int(off.get("x", 0))
+    gy = int(off.get("y", 0))
+    gcx = int(ext.get("cx", 1))
+    gcy = int(ext.get("cy", 1))
+    cox = int(chOff.get("x", 0))
+    coy = int(chOff.get("y", 0))
+    ccx = int(chExt.get("cx", 1))
+    ccy = int(chExt.get("cy", 1))
+    sx = gcx / ccx
+    sy = gcy / ccy
     # Group positioning in CSS
-    left = emu_to_in(gx); top = emu_to_in(gy)
-    w = emu_to_in(gcx); h = emu_to_in(gcy)
+    left = emu_to_in(gx)
+    top = emu_to_in(gy)
+    w = emu_to_in(gcx)
+    h = emu_to_in(gcy)
     pos = f"position:absolute;left:{fmt(left)}in;top:{fmt(top)}in;width:{fmt(w)}in;height:{fmt(h)}in;"
     if rot:
         pos += f"transform:rotate({rot:.2f}deg);"
@@ -862,8 +871,10 @@ def render_grpSp(grp, media_index, slide_rels, slide=None) -> str:
                 off_ch = xfrm_ch.find(qn("a:off"))
                 ext_ch = xfrm_ch.find(qn("a:ext"))
                 if off_ch is not None and ext_ch is not None:
-                    cx = int(off_ch.get("x", 0)); cy = int(off_ch.get("y", 0))
-                    cwx = int(ext_ch.get("cx", 0)); cwy = int(ext_ch.get("cy", 0))
+                    cx = int(off_ch.get("x", 0))
+                    cy = int(off_ch.get("y", 0))
+                    cwx = int(ext_ch.get("cx", 0))
+                    cwy = int(ext_ch.get("cy", 0))
                     # Map to group local coords
                     new_x = (cx - cox) * sx
                     new_y = (cy - coy) * sy
@@ -883,8 +894,10 @@ def render_grpSp(grp, media_index, slide_rels, slide=None) -> str:
                 off_ch = xfrm_ch.find(qn("a:off"))
                 ext_ch = xfrm_ch.find(qn("a:ext"))
                 if off_ch is not None and ext_ch is not None:
-                    cx = int(off_ch.get("x", 0)); cy = int(off_ch.get("y", 0))
-                    cwx = int(ext_ch.get("cx", 0)); cwy = int(ext_ch.get("cy", 0))
+                    cx = int(off_ch.get("x", 0))
+                    cy = int(off_ch.get("y", 0))
+                    cwx = int(ext_ch.get("cx", 0))
+                    cwy = int(ext_ch.get("cy", 0))
                     new_x = (cx - cox) * sx
                     new_y = (cy - coy) * sy
                     new_w = cwx * sx
@@ -1059,8 +1072,11 @@ def convert_pptx(pptx_path: str | Path, out_dir: str | Path) -> None:
     print(f"Extracted {len(media_index)} media files")
 
     prs = Presentation(str(pptx))
-    sw_in = prs.slide_width / EMU_PER_INCH
-    sh_in = prs.slide_height / EMU_PER_INCH
+    sw = prs.slide_width
+    sh = prs.slide_height
+    assert sw is not None and sh is not None
+    sw_in = sw / EMU_PER_INCH
+    sh_in = sh / EMU_PER_INCH
     print(f"Slide size: {sw_in:.2f} x {sh_in:.2f} in")
 
     slides_html = []
