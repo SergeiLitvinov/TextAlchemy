@@ -1,6 +1,8 @@
 import re
 from pathlib import Path
 
+from textalchemy.formats.pdf import get_pdf_info
+
 
 def sanitize_key(name: str) -> str:
     key = re.sub(r'[^a-zA-Z0-9]', '', Path(name).stem[:30])
@@ -40,10 +42,9 @@ def generate_bib(source_dir: str | Path, output: str | Path | None = None) -> st
 
     for pdf in pdfs:
         try:
-            from textalchemy.organize.extractors.pdf import get_pdf_info
             info = get_pdf_info(str(pdf))
             entries.append(make_bibtex_entry(pdf.name, info))
-        except Exception:
+        except (OSError, KeyError):
             entries.append(make_bibtex_entry(pdf.name, {}))
 
     bib = '\n\n'.join(entries)

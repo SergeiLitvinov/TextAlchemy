@@ -10,6 +10,7 @@ from textalchemy.pipeline.render import (
     render_latex,
     render_markdown,
 )
+from textalchemy.pipeline.render import render_latex_pandoc  # noqa: F401 - tested below
 
 
 def _text() -> Text:
@@ -56,6 +57,24 @@ class TestRenderLatex:
         t = Text(blocks=[Block(type=BlockType.HEADING, text="H", level=2)])
         out = render_latex(text=t)
         assert r"\subsection{H}" in out
+
+
+class TestRenderLatexPandoc:
+    def test_fallback_no_pandoc(self):
+        """Без pandoc — fallback на render.latex."""
+        out = render_latex_pandoc(text=_text())
+        assert r"\documentclass" in out
+        assert r"\begin{document}" in out
+
+    def test_fallback_no_input_path(self):
+        """Без input_path — fallback на render.latex."""
+        out = render_latex_pandoc(text=_text(), input_path=None)
+        assert r"\documentclass" in out
+
+    def test_fallback_nonexistent_pandoc(self):
+        """С input_path но без pandoc — fallback."""
+        out = render_latex_pandoc(text=_text(), input_path="nonexistent.docx")
+        assert r"\documentclass" in out
 
 
 class TestRenderDocx:
@@ -122,6 +141,7 @@ class TestRenderRegistry:
 
         ids = {s.id for s in all_operations()}
         assert "render.latex" in ids
+        assert "render.latex.pandoc" in ids
         assert "render.docx" in ids
         assert "render.bibtex" in ids
         assert "render.gost" in ids

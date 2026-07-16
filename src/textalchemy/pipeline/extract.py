@@ -30,6 +30,9 @@ def extract_text(*, doc: Document) -> Text:
     if doc.format == DocFormat.DJVU:
         from textalchemy.formats.txt import read_djvu
         return read_djvu(doc.path)
+    if doc.format == DocFormat.EPUB:
+        from textalchemy.formats.epub import read_epub
+        return read_epub(doc.path)
     return Text(
         source_format=doc.format,
         engine="none",

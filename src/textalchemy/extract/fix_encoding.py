@@ -32,15 +32,19 @@ def fix_encoding(file_path: str | Path, output_path: str | Path | None = None) -
         except UnicodeEncodeError:
             issues.append(f"Position {i}: U+{ord(ch):04X}")
 
+    replaced = 0
     for old, new in REPLACEMENTS.items():
-        text = text.replace(old, new)
+        count = text.count(old)
+        if count:
+            replaced += count
+            text = text.replace(old, new)
 
     if output_path:
         output_path = Path(output_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(text, encoding="utf-8")
 
-    summary = f"Replaced {sum(text.count(v) for v in REPLACEMENTS.values() if len(v) > 1)} characters"
+    summary = f"Replaced {replaced} characters"
     if issues:
         summary += f"\nFound {len(issues)} non-encodable characters:\n" + "\n".join(issues[:20])
 

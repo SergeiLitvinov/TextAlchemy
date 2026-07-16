@@ -4,7 +4,7 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
 
 ## Layout
 
-- `src/textalchemy/__main__.py` — all CLI parsing and command dispatch (`argparse` + `match`).
+- `src/textalchemy/__main__.py` — CLI entry: `_setup_parser()` + `main()` dispatch (`argparse` + `match`). Handlers live in `src/textalchemy/cli/` (12 modules: `convert_cmd.py`, `extract_cmd.py`, `match_cmd.py`, `bibliography_cmd.py`, `generate_cmd.py`, `recognize_cmd.py`, `bibtex_cmd.py`, `init_cmd.py`, `web_cmd.py`, `run_cmd.py`).
 - `src/textalchemy/convert/` — converters; each implements `BaseConverter` from `base.py` and returns `ConversionResult`.
   - `pdf_to_docx.py` — PDF → DOCX (`pdf2docx`, `pymupdf`, `libreoffice`).
   - `pptx_to_html/` — PPTX → self-contained HTML viewer (MathML via MathJax). Public API: `PptxToHtmlConverter`, `convert` (see `converter.py:84`). Shipped assets in `pptx_to_html/assets/{css,js}/` are copied to output by default.
@@ -38,7 +38,8 @@ Always run via `uv` so the lockfile-resolved env is used.
 - Format: `uv run ruff check --fix && uv run ruff format`
 - Test: `uv run pytest tests/ -v --tb=short` (or `--cov=textalchemy` for coverage)
 - Single test: `uv run pytest tests/test_pipeline/test_runner.py::test_run_chained_ingest_extract -v`
-- Pipeline run: `uv run textalchemy run pipeline.yaml` (or `textalchemy run --list`)
+- Pipeline run: `uv run textalchemy run pipeline.yaml` (or `textalchemy run --list`, `--json` for JSON output)
+- Most commands support `--json` for structured machine-readable output (`extract`, `convert`, `pptx2html`, `gost`, `stats`, `generate`, `bibtex`, `recognize`, `match`, `run`)
 - Web UI: `uv run textalchemy web` (defaults 127.0.0.1:8000)
 - OCR: `uv run textalchemy recognize input.pdf --backend paddle --gpu --mode handwriting --output result.docx`
 - CLI entry: `textalchemy = textalchemy.__main__:main` (see `pyproject.toml`)
@@ -89,8 +90,10 @@ Run `textalchemy run --list` to see all registered operations.
 ## Adding a new CLI subcommand
 
 1. Add a parser in `_setup_parser()` and a `case` arm in `main()` in `src/textalchemy/__main__.py`.
-2. Implement `_cmd_<name>(args)` in the same file; import subsystem functions lazily inside the handler (pattern used throughout the file).
-3. Add tests in `tests/test_cli.py` following the existing style (use `main([...])` directly, not the installed `textalchemy` script).
+2. Implement `cmd_<name>(args)` in a new module under `src/textalchemy/cli/` (named `<name>_cmd.py`).
+3. Re-export from `src/textalchemy/cli/__init__.py` and import in `__main__.py`.
+4. If the command supports `--json`, add the flag to the parser and check `args.json` in the handler.
+5. Add tests in `tests/test_cli.py` following the existing style (use `main([...])` directly, not the installed `textalchemy` script).
 
 ## Adding a new pipeline operation
 

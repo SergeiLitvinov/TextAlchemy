@@ -38,6 +38,14 @@ class DocType(enum.Enum):
         }
         return m.get((s or "").lower(), cls.UNKNOWN)
 
+    def label_ru(self) -> str:
+        return {
+            "article": "статья", "book": "книга", "dissertation": "диссертация",
+            "monograph": "монография", "conference": "конференция",
+            "collection": "сборник", "report": "отчёт", "standard": "стандарт",
+            "patent": "патент", "abstract": "автореферат", "unknown": "документ",
+        }.get(self.value, "документ")
+
     def short_rus(self) -> str:
         return {
             "article": "статья", "book": "книга", "dissertation": "дисс",
@@ -74,6 +82,30 @@ _KEEP_RU = {"в", "на", "с", "со", "от", "из", "у", "к", "о", "об"
 _KEEP_EN = {"the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or",
             "with", "from", "by", "is", "it", "as", "its", "are", "was", "but",
             "not", "nor", "per"}
+
+
+def transliterate(text: str) -> str:
+    mapping = {
+        "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo",
+        "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
+        "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
+        "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch",
+        "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+    }
+    return "".join(mapping.get(c, c) for c in text.lower())
+
+
+def normalize_filename(text: str, max_len: int = 50) -> str:
+    if not text:
+        return ""
+    text = re.sub(r"[^\w\s\-а-яА-ЯёЁA-Za-z]", "", text)
+    text = re.sub(r"[\s\-]+", "_", text)
+    text = re.sub(r"_+", "_", text)
+    if len(text) > max_len:
+        text = text[:max_len].rstrip("_")
+        if len(text) > max_len - 3:
+            text = text[: max_len - 3] + "..."
+    return text.lower().strip("_")
 
 
 def _is_cyr(word: str) -> bool:
@@ -165,6 +197,7 @@ def build_filename(
     include_type: bool = True,
     ext: str = ".pdf",
     separator: str = "_",
+    transliterate_title: bool = False,
 ) -> str:
     """Сгенерировать имя файла по ``BibItem``."""
     required = {"index", "type", "authors", "title"}
@@ -175,6 +208,10 @@ def build_filename(
 
     authors_str = format_authors(item.authors or [], max_authors)
     title_str = abbreviate_title(item.title, max_title_len)
+
+    if transliterate_title:
+        title_str = transliterate(title_str)
+
     type_str = DocType.from_str(item.doc_type).short_rus() if include_type else ""
 
     if not include_type:
@@ -217,4 +254,6 @@ __all__ = [
     "format_authors",
     "build_filename",
     "name_from_match",
+    "transliterate",
+    "normalize_filename",
 ]

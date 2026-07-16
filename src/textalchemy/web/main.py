@@ -1,3 +1,4 @@
+import importlib.metadata
 import json
 import uuid
 from pathlib import Path
@@ -12,13 +13,15 @@ from jinja2 import Environment, FileSystemLoader
 from textalchemy.core.database import Database
 from textalchemy.organize.bibliography import BibItem
 
+_VERSION = importlib.metadata.version("textalchemy")
+
 app = FastAPI(
     title="TextAlchemy",
     description="Универсальный инструментарий обработки научно-учебных документов.\n\n"
     "Модули: extract (DOCX→текст/LaTeX), convert (PDF→DOCX), organize (библиография + ренейм + ГОСТ), "
     "recognize (OCR), generate (шаблоны).\n\n"
     "Все API-эндпоинты доступны под /api/. Веб-интерфейс — статические HTML-страницы.",
-    version=__import__("textalchemy").__version__,
+    version=_VERSION,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
@@ -37,11 +40,13 @@ db = Database(db_path=data_dir / "library.db")
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 def _safe_path(user_path: str) -> Path:
-    p = Path(user_path)
-    if ".." in p.parts:
-        p = Path.cwd() / p
-        p = p.resolve()
-    return p.resolve()
+    p = Path(user_path).resolve()
+    allowed = Path.cwd().resolve()
+    try:
+        p.relative_to(allowed)
+    except ValueError:
+        p = allowed / p.name
+    return p
 
 
 def _bibitem_to_dict(item: BibItem) -> dict[str, Any]:
@@ -244,7 +249,7 @@ async def export_page(request: Request):
 async def api_info():
     return {
         "name": "TextAlchemy",
-        "version": __import__("textalchemy").__version__,
+        "version": _VERSION,
         "modules": ["extract", "convert", "organize", "generate", "recognize"],
     }
 

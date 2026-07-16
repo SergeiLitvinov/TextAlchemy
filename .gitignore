@@ -39,6 +39,10 @@ build/
 
 # Generated artifacts
 matching_report.json
+test_config.json
+
+# Tool cache
+.textalchemy/
 
 # OS
 .DS_Store

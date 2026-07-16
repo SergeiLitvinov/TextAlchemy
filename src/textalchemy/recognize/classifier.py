@@ -23,12 +23,12 @@ class DocumentClassifier:
     ]
 
     def __init__(self, model_path: Optional[str] = None):
-        self.model_path = Path(model_path) if model_path else None
-        self._model = None
+        if model_path:
+            raise NotImplementedError("ML model loading is not implemented; classifier uses keyword matching")
 
     @property
     def is_available(self) -> bool:
-        return self._model is not None
+        return True
 
     def classify(self, text: str) -> ClassificationResult:
         if not text.strip():
@@ -71,7 +71,7 @@ class DocumentClassifier:
             text = file_path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             text = file_path.read_text(encoding="cp1251")
-        except Exception:
+        except (LookupError, OSError):
             text = ""
 
         return self.classify(text)

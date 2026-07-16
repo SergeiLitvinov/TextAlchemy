@@ -18,6 +18,7 @@ class DocFormat(str, Enum):
     PPTX = "pptx"
     TXT = "txt"
     DJVU = "djvu"
+    EPUB = "epub"
     BIB = "bib"      # библиография как plain text
     UNKNOWN = "unknown"
 
@@ -67,6 +68,7 @@ _EXT_FORMAT = {
     ".pptx": DocFormat.PPTX,
     ".txt": DocFormat.TXT,
     ".djvu": DocFormat.DJVU,
+    ".epub": DocFormat.EPUB,
     ".bib": DocFormat.BIB,
 }
 
@@ -116,12 +118,12 @@ class Text:
         return bool(self.plain or self.blocks or self.tables)
 
 
-@dataclass(frozen=True)
+@dataclass
 class BibItem:
-    """Запись библиографии. Совместимо со старым ``organize.bibliography.BibItem``."""
+    """Запись библиографии. Единый класс для всего приложения."""
 
-    index: int
-    raw_text: str
+    index: int = 0
+    raw_text: str = ""
     authors: list[str] = field(default_factory=list)
     title: str = ""
     year: Optional[int] = None

@@ -24,7 +24,6 @@ from textalchemy.organize.utils import (
     create_zip_archive,
     ensure_folder,
     find_duplicates,
-    get_file_content,
     get_file_info,
     list_files,
     progress_bar,
@@ -43,5 +42,5 @@ __all__ = [
     "generate_bib",
     "progress_bar", "calculate_file_hash", "find_duplicates", "validate_pdf",
     "get_file_info", "list_files", "create_zip_archive", "sanitize_path",
-    "ensure_folder", "get_file_content",
+    "ensure_folder",
 ]

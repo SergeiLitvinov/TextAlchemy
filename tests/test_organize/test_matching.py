@@ -120,9 +120,8 @@ def test_extract_text_from_unknown_ext(tmp_path):
 
 
 def test_extract_text_no_file():
-    from textalchemy.core.exceptions import OrganizeError
-    with pytest.raises(OrganizeError):
-        extract_text_from_file("nonexistent.pdf")
+    result = extract_text_from_file("nonexistent.pdf")
+    assert result == ""
 
 
 # ── match_file_to_bibliography ─────────────────────

@@ -17,6 +17,7 @@ import logging
 from pathlib import Path
 from typing import Any, Sequence, Union
 
+from textalchemy.core.latex import escape_latex as _escape_latex
 from textalchemy.core.registry import operation
 from textalchemy.core.types import BibItem, Text
 
@@ -59,25 +60,6 @@ def _normalize_items(items: Sequence[Any]) -> list[BibItem]:
         else:
             raise TypeError(f"unsupported item type: {type(it)}")
     return out
-
-
-_LATEX_SPECIAL = {
-    "\\": r"\textbackslash{}",
-    "{": r"\{", "}": r"\}",
-    "$": r"\$", "&": r"\&", "#": r"\#",
-    "^": r"\^{}", "_": r"\_",
-    "~": r"\textasciitilde{}",
-    "%": r"\%",
-    "[": r"\[", "]": r"\]",
-}
-
-
-def _escape_latex(text: str) -> str:
-    if not text:
-        return ""
-    for c, repl in _LATEX_SPECIAL.items():
-        text = text.replace(c, repl)
-    return text.replace("…", r"\dots{}")
 
 
 _PREAMBLE = (
@@ -153,10 +135,10 @@ def render_latex_pandoc(*, text: Text, input_path: Union[str, Path, None] = None
 
     if not shutil.which("pandoc"):
         logger.warning("pandoc не найден, fallback на render.latex")
-        return render_latex(text)
+        return render_latex(text=text)
 
     if input_path is None:
-        return render_latex(text)
+        return render_latex(text=text)
 
     with tempfile.NamedTemporaryFile(suffix=".tex", delete=False, mode="w", encoding="utf-8") as f:
         out = Path(f.name)
@@ -170,7 +152,7 @@ def render_latex_pandoc(*, text: Text, input_path: Union[str, Path, None] = None
         return out.read_text(encoding="utf-8")
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
         logger.warning("pandoc failed: %s, fallback на render.latex", e)
-        return render_latex(text)
+        return render_latex(text=text)
     finally:
         out.unlink(missing_ok=True)
 

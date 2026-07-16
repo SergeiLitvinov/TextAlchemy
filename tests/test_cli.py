@@ -105,11 +105,29 @@ def test_cli_convert_dry_run(tmp_path):
     assert ret == 0
 
 
+def test_cli_convert_dry_run_json(tmp_path):
+    src = tmp_path / "pdfs"
+    src.mkdir()
+    ret = main(["convert", "-i", str(src), "--dry-run", "--json"])
+    assert ret == 0
+
+
 # ── stats ──────────────────────────────────────────
 
 def test_cli_stats(capsys):
     ret = main(["stats"])
     assert ret == 0
+
+
+def test_cli_stats_json(capsys):
+    ret = main(["stats", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert "total" in data
+    assert "matched" in data
+    assert "unmatched" in data
+    assert "bibliography" in data
 
 
 def test_cli_stats_with_bibliography(tmp_path):
@@ -159,6 +177,18 @@ def test_cli_gost(tmp_path):
     assert out.exists()
 
 
+def test_cli_gost_json(tmp_path, capsys):
+    bib = tmp_path / "input.txt"
+    bib.write_text("1. Author A. Title.", encoding="utf-8")
+    out = tmp_path / "out.txt"
+    ret = main(["gost", "-i", str(bib), "-o", str(out), "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert data["entries"] == 1
+    assert data["output"] == str(out)
+
+
 # ── match ──────────────────────────────────────────
 
 def test_cli_match_dry_run(tmp_path):
@@ -201,11 +231,27 @@ def test_cli_generate_list(capsys):
     assert ret == 0
 
 
+def test_cli_generate_list_json(capsys):
+    ret = main(["generate", "--list", "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert isinstance(data, list)
+
+
 # ── recognize ──────────────────────────────────────
 
 def test_cli_recognize_no_file(capsys):
     ret = main(["recognize", "nonexistent.pdf"])
     assert ret == 1
+
+
+def test_cli_recognize_json(capsys):
+    ret = main(["recognize", "nonexistent.pdf", "--json"])
+    assert ret == 1
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert "error" in data
 
 
 def test_cli_recognize_with_output(tmp_path):
@@ -225,9 +271,44 @@ def test_cli_bibtex(tmp_path):
     assert out.exists()
 
 
+def test_cli_bibtex_json(tmp_path, capsys):
+    src = tmp_path / "literature_files"
+    src.mkdir()
+    out = tmp_path / "out.bib"
+    ret = main(["bibtex", "-s", str(src), "-o", str(out), "--json"])
+    assert ret == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert "source" in data
+    assert "output" in data
+    assert "entries" in data
+
+
 # ── unknown command ────────────────────────────────
 
 def test_cli_unknown_command():
     with pytest.raises(SystemExit) as exc:
         main(["nonexistent"])
     assert exc.value.code == 2
+
+
+# ── completion ──────────────────────────────────────
+
+def test_cli_completion_bash():
+    ret = main(["completion", "bash"])
+    assert ret == 0
+
+
+def test_cli_completion_zsh():
+    ret = main(["completion", "zsh"])
+    assert ret == 0
+
+
+def test_cli_completion_fish():
+    ret = main(["completion", "fish"])
+    assert ret == 0
+
+
+def test_cli_completion_invalid_shell():
+    with pytest.raises(SystemExit):
+        main(["completion", "invalid"])

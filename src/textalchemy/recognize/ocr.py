@@ -15,39 +15,52 @@ class OcrResult:
 
 
 class OcrEngine:
-    def __init__(self, languages: Optional[List[str]] = None, use_gpu: bool = False):
+    _BACKENDS = ["tesseract", "easyocr", "paddle"]
+
+    def __init__(self, languages: Optional[List[str]] = None, use_gpu: bool = False,
+                 backend: str = "auto"):
         self.languages = languages or ["rus", "eng"]
         self.use_gpu = use_gpu
         self._backend: Optional[str] = None
         self._available = False
-        self._detect_backend()
+        self._init_backend(backend)
 
-    def _detect_backend(self):
+    def _check_tesseract(self) -> bool:
         try:
             import pytesseract
             pytesseract.get_tesseract_version()
-            self._backend = "tesseract"
-            self._available = True
-            return
-        except (ImportError, Exception):
-            pass
+            return True
+        except (ImportError, OSError):
+            return False
 
+    def _check_easyocr(self) -> bool:
         try:
             import easyocr  # noqa: F401
-            self._backend = "easyocr"
-            self._available = True
-            return
+            return True
         except ImportError:
-            pass
+            return False
 
+    def _check_paddle(self) -> bool:
         try:
             import paddleocr  # noqa: F401
-            self._backend = "paddle"
-            self._available = True
-            return
+            return True
         except ImportError:
-            pass
+            return False
 
+    def _init_backend(self, backend: str):
+        if backend == "auto":
+            for name in self._BACKENDS:
+                check = getattr(self, f"_check_{name}")
+                if check():
+                    self._backend = name
+                    self._available = True
+                    return
+        elif backend in self._BACKENDS:
+            check = getattr(self, f"_check_{backend}")
+            if check():
+                self._backend = backend
+                self._available = True
+                return
         self._backend = None
         self._available = False
 
@@ -195,22 +208,15 @@ class OcrEngine:
                 mat = fitz.Matrix(scale, scale)
                 pix = page.get_pixmap(matrix=mat)
 
-                if save_images:
-                    from PIL import Image
-                    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-                    save_path = Path(f"page_{page_num + 1}.png")
-                    img.save(save_path)
-                    result = self.recognize(save_path, handwriting=handwriting)
-                else:
-                    import numpy as np
-                    image_np = np.frombuffer(pix.samples, dtype=np.uint8)
-                    image_np = image_np.reshape((pix.height, pix.width, pix.n))
+                from PIL import Image
+                img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
-                    temp_img = tmp / f"page_{page_num}.png"
-                    from PIL import Image
-                    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-                    img.save(temp_img)
-                    result = self.recognize(temp_img, handwriting=handwriting)
+                if save_images:
+                    save_path = Path.cwd() / f"page_{page_num + 1}.png"
+                else:
+                    save_path = tmp / f"page_{page_num}.png"
+                img.save(save_path)
+                result = self.recognize(save_path, handwriting=handwriting)
 
                 result.pages = len(doc)
                 results.append(result)

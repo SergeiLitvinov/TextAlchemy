@@ -5,18 +5,7 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from textalchemy.core.exceptions import ExtractError
-
-
-def clean_text(text: str) -> str:
-    replacements = {
-        "\\": "\\textbackslash{}", "{": "\\{", "}": "\\}", "$": "\\$",
-        "&": "\\&", "#": "\\#", "^": "\\^{}", "_": "\\_{}",
-        "~": "\\textasciitilde{}", "%": "\\%", "[": "\\[", "]": "\\]",
-    }
-    for char, repl in replacements.items():
-        text = text.replace(char, repl)
-    text = text.replace("…", "\\dots{}")
-    return text
+from textalchemy.core.latex import escape_latex as clean_text
 
 
 def _get_paragraph_style(paragraph):

@@ -102,6 +102,26 @@ def test_pymupdf_scan_page_uses_image(tmp_path):
         assert media  # хотя бы одна картинка
 
 
+def test_create_converter_default():
+    from textalchemy.convert.pdf_to_docx import Pdf2DocxConverter
+    conv = create_converter("pdf2docx")
+    assert isinstance(conv, Pdf2DocxConverter)
+
+
+def test_create_converter_pymupdf():
+    from textalchemy.convert.pdf_to_docx import PyMuPdfConverter
+    conv = create_converter("pymupdf")
+    assert isinstance(conv, PyMuPdfConverter)
+
+
 def test_create_converter_unknown():
     with pytest.raises(Exception):
         create_converter("nonexistent_engine")
+
+
+def test_convert_nonexistent():
+    from textalchemy.convert.pdf_to_docx import Pdf2DocxConverter
+    conv = Pdf2DocxConverter()
+    result = conv.convert("nonexistent.pdf", "out.docx")
+    assert not result.success
+    assert "not found" in (result.error or "").lower()

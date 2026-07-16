@@ -124,4 +124,20 @@ def read_pdf(path: str) -> Text:
     )
 
 
-__all__ = ["read_pdf"]
+def get_pdf_info(path: str) -> dict:
+    """Извлечь метаданные PDF (title, author, subject) через pypdf."""
+    info = {"title": "", "author": "", "subject": ""}
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(path)
+        meta = reader.metadata
+        if meta:
+            info["title"] = getattr(meta, "title", "") or ""
+            info["author"] = getattr(meta, "author", "") or ""
+            info["subject"] = getattr(meta, "subject", "") or ""
+    except Exception:  # noqa: BLE001
+        pass
+    return info
+
+
+__all__ = ["read_pdf", "get_pdf_info"]

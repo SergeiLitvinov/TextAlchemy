@@ -1,26 +1,8 @@
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
-
-@dataclass
-class BibItem:
-    index: int = 0
-    raw_text: str = ""
-    authors: List[str] = field(default_factory=list)
-    title: str = ""
-    year: Optional[int] = None
-    doc_type: str = "unknown"
-    source: str = ""
-    pages: str = ""
-    doi: str = ""
-    isbn: str = ""
-    url: str = ""
-    journal: str = ""
-    publisher: str = ""
-    city: str = ""
-
+from textalchemy.core.types import BibItem  # noqa: F401
 
 # ── Форматы библиографии ──────────────────────────
 
