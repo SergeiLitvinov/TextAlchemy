@@ -1,7 +1,5 @@
 import json
 
-import pytest
-
 from textalchemy.organize.bibliography import BibItem
 from textalchemy.organize.matching import (
     extract_keywords_from_content,

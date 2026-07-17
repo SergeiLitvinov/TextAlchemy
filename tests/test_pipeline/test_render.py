@@ -8,9 +8,9 @@ from textalchemy.pipeline.render import (
     render_gost,
     render_json,
     render_latex,
+    render_latex_pandoc,  # noqa: F401 - tested below
     render_markdown,
 )
-from textalchemy.pipeline.render import render_latex_pandoc  # noqa: F401 - tested below
 
 
 def _text() -> Text:

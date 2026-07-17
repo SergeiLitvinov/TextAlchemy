@@ -1,36 +1,36 @@
 from textalchemy.organize.bibliography import (
     BibItem,
     BibliographyParser,
+    _extract_authors,
     _extract_doc_type,
+    _extract_title,
     detect_format,
-    extract_authors,
-    extract_title,
     smart_parse,
 )
 
 
 def test_extract_authors_simple():
-    authors = extract_authors("Ivanov I.I. Title of work")
+    authors = _extract_authors("Ivanov I.I. Title of work")
     assert len(authors) > 0
 
 
 def test_extract_authors_multiple():
-    authors = extract_authors("Ivanov I.I., Petrov P.P. Title")
+    authors = _extract_authors("Ivanov I.I., Petrov P.P. Title")
     assert len(authors) >= 1
 
 
 def test_extract_authors_empty():
-    authors = extract_authors("No author here")
+    authors = _extract_authors("No author here")
     assert authors == []
 
 
 def test_extract_title_simple():
-    title = extract_title("Ivanov I.I. Research on something")
+    title = _extract_title("Ivanov I.I. Research on something")
     assert title is not None
 
 
 def test_extract_title_empty():
-    title = extract_title("")
+    title = _extract_title("")
     assert title is None or title == ""
 
 

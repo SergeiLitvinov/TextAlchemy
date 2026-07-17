@@ -14,9 +14,11 @@ _LATEX_SPECIAL = {
 def escape_latex(text: str) -> str:
     if not text:
         return ""
-    for c, repl in _LATEX_SPECIAL.items():
-        text = text.replace(c, repl)
-    return text.replace("…", r"\dots{}")
+    out = []
+    for ch in text:
+        out.append(_LATEX_SPECIAL.get(ch, ch))
+    result = "".join(out)
+    return result.replace("…", r"\dots{}")
 
 
 __all__ = ["escape_latex"]
