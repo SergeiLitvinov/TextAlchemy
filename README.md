@@ -63,9 +63,10 @@ Final: \documentclass[12pt,a4paper]{article}...
 Полный список операций:
 
 | Op | Вход | Выход | Описание |
-|---|---|---|---|
+|---|---|---|---|---|
 | `ingest.file` | path | `Document` | Открыть файл, посчитать SHA-256 |
 | `extract.text` | `Document` | `Text` | Универсальный ридер (PDF/DOCX/TXT/DjVu) |
+| `extract.emails` | `Document` | `list[str]` | Извлечение email: текстовый слой PDF + OCR |
 | `match.bibliography` | `Text`, `Document`, BibItem[] | `Match` | Сопоставить документ со списком записей |
 | `match.files` | path, BibItem[] | Match[] | Батч-матчинг директории; копирует в `output_dir` |
 | `bibliography.parse` | path | BibItem[] | Распарсить файл библиографии |
@@ -78,6 +79,9 @@ Final: \documentclass[12pt,a4paper]{article}...
 | `render.gost` | BibItem[] | str | BibItem[] → ГОСТ Р 7.0.100 |
 | `render.markdown` | BibItem[] | str | BibItem[] → Markdown |
 | `render.json` | BibItem[] | str | BibItem[] → JSON |
+| `render.emails.docx` | `list[str]` | Path | Email → Word-документ |
+| `render.emails.txt` | `list[str]` | Path | Email → текстовый файл |
+| `render.emails.debug` | `str` | Path | Отладочный текст распознавания → TXT |
 
 ### Контракт операций
 
@@ -93,6 +97,18 @@ Final: \documentclass[12pt,a4paper]{article}...
 `extract.text` для PDF использует цепочку движков: `pdfplumber → pypdf → pymupdf`.
 Первый успешно вернувший непустой результат используется; предупреждения от
 предыдущих движков сохраняются в `Text.warnings`.
+
+### Извлечение email
+
+`extract.emails` использует двухуровневый подход:
+1. **Текстовый слой PDF** — если на странице >50 символов текста, email ищутся regex без OCR.
+2. **OCR (Tesseract)** — для страниц без текстового слоя: OpenCV-предобработка (grayscale → medianBlur → adaptiveThreshold → morphology) + Tesseract через subprocess с таймаутом.
+
+Результат можно сохранить в DOCX (`render.emails.docx`), TXT (`render.emails.txt`) или отладочный файл (`render.emails.debug`).
+
+```bash
+textalchemy emails scan.pdf -o result.docx --output-txt result.txt --debug
+```
 
 ## Команды CLI
 
@@ -111,6 +127,7 @@ Final: \documentclass[12pt,a4paper]{article}...
 | `textalchemy recognize` | OCR распознавание | `textalchemy recognize scan.png --lang rus+eng` |
 | `textalchemy run` | Запуск pipeline из YAML/TOML | `textalchemy run pipeline.yaml` |
 | `textalchemy run --list` | Список зарегистрированных операций | — |
+| `textalchemy emails` | Извлечение email из PDF/DOCX/TXT + сохранение | `textalchemy emails in.pdf -o result.docx --debug` |
 | `textalchemy web` | Запуск веб-интерфейса | `textalchemy web --port 8080` |
 
 ## Веб-интерфейс
@@ -138,6 +155,7 @@ src/textalchemy/
 ├── pipeline/          # стадии конвейера
 │   ├── ingest.py      # @operation("ingest.file")
 │   ├── extract.py     # @operation("extract.text")
+│   ├── emails_op.py   # @operation("extract.emails", "render.emails.*")
 │   ├── match.py       # @operation("match.bibliography")
 │   ├── match_files.py # @operation("match.files") — батч-матчинг
 │   ├── bibliography.py# @operation("bibliography.parse/smart_parse")
@@ -148,7 +166,7 @@ src/textalchemy/
 ├── convert/           # PDF→DOCX (3 бэкенда + FanOut) + PPTX→HTML
 ├── extract/           # legacy: docx→text/latex
 ├── organize/          # legacy: bibparser, match, gost
-├── recognize/         # OCR / layout / classifier
+├── recognize/         # OCR / layout / classifier / emails
 ├── generate/          # шаблоны документов
 ├── web/               # FastAPI + Jinja2
 ├── cli/               # обработчики CLI
@@ -173,7 +191,7 @@ pip install -e ".[ocr,web,dev]"      # полная (OCR + веб + разраб
 ```bash
 uv sync --all-extras
 uv run ruff check        # линтинг
-uv run pytest tests/     # все тесты (309 шт.)
+uv run pytest tests/     # все тесты (427 шт.)
 uv run pytest --cov=textalchemy  # coverage
 uv run textalchemy run --list    # зарегистрированные операции
 ```

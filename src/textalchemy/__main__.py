@@ -26,8 +26,7 @@ def _setup_parser():
         prog="textalchemy",
         description="TextAlchemy — универсальный инструментарий обработки документов",
     )
-    parser.add_argument("--version", action="version",
-                        version=f"TextAlchemy {__import__('textalchemy').__version__}")
+    parser.add_argument("--version", action="version", version=f"TextAlchemy {__import__('textalchemy').__version__}")
     parser.add_argument("-c", "--config", help="Путь к конфигурационному файлу JSON")
 
     sub = parser.add_subparsers(dest="command", help="Команды")
@@ -91,13 +90,26 @@ def _setup_parser():
     p = sub.add_parser("init", help="Создать конфигурационный файл")
     p.add_argument("-o", "--output", default="config.json")
 
+    p = sub.add_parser("emails", help="Извлечение email из PDF/документов с поддержкой OCR")
+    p.add_argument("input", type=str, help="Входной PDF/DOCX/TXT файл")
+    p.add_argument("-o", "--output", default="emails_result.docx", help="Выходной файл DOCX (по умолчанию: emails_result.docx)")
+    p.add_argument("--output-txt", type=str, help="Дополнительно сохранить как TXT")
+    p.add_argument("--debug", type=str, default="debug_recognized_text.txt", help="Файл для отладочного текста")
+    p.add_argument("--lang", default="rus+eng", help="Языки OCR (по умолчанию: rus+eng)")
+    p.add_argument("--dpi", type=int, default=150, help="DPI для рендеринга страниц (по умолчанию: 150)")
+    p.add_argument(
+        "--rotate", type=int, default=0, choices=[0, 90, 180, 270], help="Повернуть страницы на угол (0, 90, 180, 270)"
+    )
+    p.add_argument("--psm", type=int, default=6, choices=list(range(14)), help="PSM режим Tesseract (по умолчанию: 6)")
+    p.add_argument("--timeout", type=int, default=30, help="Таймаут OCR в секундах на страницу (по умолчанию: 30)")
+    p.add_argument("--no-ocr", action="store_true", help="Отключить OCR (только текстовый слой)")
+
     p = sub.add_parser("web", help="Запуск веб-интерфейса")
     p.add_argument("--port", type=int, default=8000)
     p.add_argument("--host", type=str, default="127.0.0.1")
 
     p = sub.add_parser("run", help="Запуск конвейера по YAML/TOML-файлу")
-    p.add_argument("pipeline", nargs="?", default=None,
-                   help="Путь к .yaml/.yml/.toml/.json (не нужен с --list)")
+    p.add_argument("pipeline", nargs="?", default=None, help="Путь к .yaml/.yml/.toml/.json (не нужен с --list)")
     p.add_argument("--json", action="store_true", help="Вывести результат как JSON")
     p.add_argument("--list", action="store_true", help="Показать доступные операции и выйти")
 
@@ -139,6 +151,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return _cmd_bibtex(args)
             case "init":
                 return _cmd_init(args)
+            case "emails":
+                return _cmd_emails(args)
             case "web":
                 return _cmd_web(args)
             case "run":
@@ -154,6 +168,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
 def _cmd_extract(args: argparse.Namespace) -> int:
     from textalchemy.extract import docx_to_latex, docx_to_latex_pandoc, extract_text
+
     if args.format == "latex":
         result = docx_to_latex(args.input, args.output, args.doc_type)
     elif args.format == "pandoc":
@@ -171,6 +186,7 @@ def _cmd_convert(args: argparse.Namespace) -> int:
     from tqdm import tqdm
 
     from textalchemy.convert import create_converter
+
     input_dir = Path(args.input)
     if not input_dir.is_dir():
         print(f"Error: {args.input} is not a directory")
@@ -203,6 +219,7 @@ def _cmd_convert(args: argparse.Namespace) -> int:
 
 def _cmd_pptx2html(args: argparse.Namespace) -> int:
     from textalchemy.convert.pptx_to_html import PptxToHtmlConverter
+
     converter = PptxToHtmlConverter(copy_assets=not args.no_assets)
     result = converter.convert(args.input, args.output)
     if result.success:
@@ -265,17 +282,15 @@ def _cmd_match(args: argparse.Namespace) -> int:
                     "original": m.document.path.name,
                     "new": (output_dir / m.document.path.name if output_dir else m.document.path.name),
                     "score": round(m.score, 2),
-                    "signals": [
-                        {"name": s.name, "score": s.score, "weight": s.weight}
-                        for s in m.signals if s.score > 0
-                    ],
+                    "signals": [{"name": s.name, "score": s.score, "weight": s.weight} for s in m.signals if s.score > 0],
                 }
                 for m in matched
             ],
             "unmatched": [m.document.path.name for m in unmatched],
         }
         Path("matching_report.json").write_text(
-            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8",
+            json.dumps(report, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
         print("Report saved: matching_report.json")
     return 0
@@ -296,6 +311,7 @@ def _cmd_gost(args: argparse.Namespace) -> int:
 def _cmd_stats(args: argparse.Namespace) -> int:
     """Статистика библиотеки (без изменений — не извлекает документы, проходит по FS)."""
     from textalchemy.organize.bibliography import BibliographyParser
+
     source = Path(args.source)
     output = Path(args.output)
     bib_items = []
@@ -338,6 +354,7 @@ def _cmd_export(args: argparse.Namespace) -> int:
 
 def _cmd_generate(args: argparse.Namespace) -> int:
     from textalchemy.generate import generate_document, list_templates
+
     if args.list:
         templates = list_templates(args.templates_dir)
         if not templates:
@@ -359,6 +376,7 @@ def _cmd_generate(args: argparse.Namespace) -> int:
 
 def _cmd_recognize(args: argparse.Namespace) -> int:
     from textalchemy.recognize import OcrEngine
+
     engine = OcrEngine(languages=args.lang.split("+"))
     if not engine.is_available:
         text = f"[STUB] OCR for: {args.input}\n[STUB] Backend: {engine.backend_name}\n[STUB] Install pytesseract or easyocr"
@@ -372,9 +390,87 @@ def _cmd_recognize(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_emails(args: argparse.Namespace) -> int:
+    """Извлечение email из PDF/документов с поддержкой OCR (ocr-batch функционал)."""
+    from textalchemy.pipeline.emails_op import (
+        extract_emails,
+        render_emails_debug,
+        render_emails_docx,
+        render_emails_txt,
+    )
+    from textalchemy.pipeline.ingest import ingest_file
+
+    input_path = args.input
+    doc = ingest_file(path=input_path)
+
+    emails = extract_emails(
+        doc=doc,
+        langs=args.lang,
+        dpi=args.dpi,
+        timeout=args.timeout,
+        psm=args.psm,
+        rotation=args.rotate,
+        use_ocr=not args.no_ocr,
+    )
+
+    print(f"Найдено email: {len(emails)}")
+
+    docx_path = render_emails_docx(
+        emails=emails,
+        output_path=args.output,
+        source_name=input_path,
+    )
+    print(f"DOCX: {docx_path}")
+
+    if args.output_txt:
+        txt_path = render_emails_txt(
+            emails=emails,
+            output_path=args.output_txt,
+            source_name=input_path,
+        )
+        print(f"TXT: {txt_path}")
+
+    if args.debug:
+        from textalchemy.extract.emails import extract_emails_from_document
+
+        result = extract_emails_from_document(
+            doc,
+            langs=args.lang,
+            dpi=args.dpi,
+            timeout=args.timeout,
+            psm=args.psm,
+            rotation=args.rotate,
+            use_ocr=not args.no_ocr,
+        )
+        full_text_parts: list[str] = []
+
+        try:
+            import fitz
+
+            pdf_doc = fitz.open(input_path)
+            for page in pdf_doc:
+                full_text_parts.append(page.get_text() or "")
+            pdf_doc.close()
+        except Exception:
+            full_text_parts.append(doc.path.read_text(encoding="utf-8", errors="ignore"))
+
+        render_emails_debug(
+            full_text="\n".join(full_text_parts),
+            output_path=args.debug,
+            pdf_name=Path(input_path).name,
+            total_pages=result.total_pages,
+            text_pages=result.text_pages,
+            ocr_pages=result.ocr_pages,
+        )
+        print(f"Debug: {args.debug}")
+
+    return 0
+
+
 def _cmd_bibtex(args: argparse.Namespace) -> int:
     """Генерация .bib через pipeline: извлечь имена из PDF (legacy) или парсить bib-файл."""
     from textalchemy.organize.bibtex import generate_bib
+
     bib = generate_bib(args.source, args.output)
     count = bib.count("@misc{")
     print(f"Generated {count} BibTeX entries")
@@ -385,6 +481,7 @@ def _cmd_bibtex(args: argparse.Namespace) -> int:
 
 def _cmd_init(args: argparse.Namespace) -> int:
     from textalchemy.core.config import generate_default_config
+
     config = generate_default_config()
     config.save(args.output)
     print(f"Config saved: {args.output}")
@@ -395,6 +492,7 @@ def _cmd_web(args) -> int:
     import uvicorn
 
     from textalchemy.web import app
+
     print(f"Starting TextAlchemy web at http://{args.host}:{args.port}")
     uvicorn.run(app, host=args.host, port=args.port)
     return 0

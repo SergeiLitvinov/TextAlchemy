@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy import Column, Integer, String, Text, create_engine
 from sqlalchemy.orm import Session, declarative_base
 
-from textalchemy.organize.bibliography import BibItem, BibliographyParser
+from textalchemy.core.types import BibItem
 
 Base = declarative_base()
 
@@ -82,6 +82,8 @@ class Database:
         return Session(self.engine)
 
     def import_from_json(self, json_path: str | Path) -> int:
+        from textalchemy.organize.bibliography import BibliographyParser
+
         items = BibliographyParser.parse_file(str(json_path))
         count = 0
         with self.session() as sess:

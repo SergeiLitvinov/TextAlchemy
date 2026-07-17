@@ -26,6 +26,7 @@ Pipeline-файл — это список шагов::
 Поддерживает ``inputs``/``params`` через ``str.format(**ctx)`` — позволяет
 передавать между шагами не только значения, но и форматированные строки.
 """
+
 from __future__ import annotations
 
 import logging
@@ -35,14 +36,10 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from textalchemy.core.registry import get
-from textalchemy.pipeline import extract as _extract_op  # noqa: F401
-from textalchemy.pipeline import ingest as _ingest_op  # noqa: F401
-from textalchemy.pipeline import match as _match_op  # noqa: F401
-from textalchemy.pipeline import name as _name_op  # noqa: F401
-from textalchemy.pipeline import render as _render_op  # noqa: F401
 
 try:
     import yaml  # type: ignore[import-not-found]
+
     _HAS_YAML = True
 except ImportError:
     _HAS_YAML = False
@@ -74,10 +71,7 @@ class RunResult:
             "ok": self.ok,
             "error": self.error,
             "final": _safe(self.final),
-            "steps": [
-                {"name": s.name, "op": s.op, "error": s.error, "warnings": s.warnings}
-                for s in self.steps
-            ],
+            "steps": [{"name": s.name, "op": s.op, "error": s.error, "warnings": s.warnings} for s in self.steps],
         }
 
 
@@ -130,6 +124,7 @@ def load_pipeline(path: Union[str, Path]) -> dict:
         return tomllib.loads(text)
     if suffix == ".json":
         import json
+
         return json.loads(text)
     # по расширению не угадали — пробуем YAML, потом TOML
     if _HAS_YAML:

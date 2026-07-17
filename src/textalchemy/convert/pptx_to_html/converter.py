@@ -5,6 +5,7 @@
     from textalchemy.convert.pptx_to_html import PptxToHtmlConverter, convert
     convert(Path("source.pptx"), Path("output_dir"))
 """
+
 from __future__ import annotations
 
 import logging
@@ -49,8 +50,10 @@ class PptxToHtmlConverter(BaseConverter):
         try:
             if not input_path.is_file():
                 return ConversionResult(
-                    input_path=input_path, output_path=output_path,
-                    success=False, error=f"Input file not found: {input_path}",
+                    input_path=input_path,
+                    output_path=output_path,
+                    success=False,
+                    error=f"Input file not found: {input_path}",
                 )
             output_path.mkdir(parents=True, exist_ok=True)
             (output_path / self.SUBDIR).mkdir(parents=True, exist_ok=True)
@@ -58,14 +61,18 @@ class PptxToHtmlConverter(BaseConverter):
             if self.copy_assets:
                 self._copy_static_assets(output_path)
             return ConversionResult(
-                input_path=input_path, output_path=output_path,
-                success=True, error=None,
+                input_path=input_path,
+                output_path=output_path,
+                success=True,
+                error=None,
             )
         except Exception as e:  # noqa: BLE001
             logger.exception("pptx → html conversion failed")
             return ConversionResult(
-                input_path=input_path, output_path=output_path,
-                success=False, error=str(e),
+                input_path=input_path,
+                output_path=output_path,
+                success=False,
+                error=str(e),
             )
 
     def _copy_static_assets(self, output_path: Path) -> None:
@@ -83,9 +90,3 @@ class PptxToHtmlConverter(BaseConverter):
 def convert(input_path: str | Path, output_path: str | Path, **kwargs: Any) -> ConversionResult:
     """Удобная функция-обёртка."""
     return PptxToHtmlConverter(**kwargs).convert(input_path, output_path)
-
-
-__all__ = [
-    "PptxToHtmlConverter",
-    "convert",
-]

@@ -1,4 +1,5 @@
 """Базовые типы и утилиты ядра."""
+
 from textalchemy.core.exceptions import (
     ConfigError,
     ConvertError,
@@ -16,7 +17,6 @@ from textalchemy.core.types import (
     DocFormat,
     Document,
     Match,
-    OperationResult,
     Signal,
     Table,
     Text,
@@ -32,7 +32,6 @@ __all__ = [
     "BibItem",
     "Signal",
     "Match",
-    "OperationResult",
     "compute_file_hash",
     "TextAlchemyError",
     "ConfigError",

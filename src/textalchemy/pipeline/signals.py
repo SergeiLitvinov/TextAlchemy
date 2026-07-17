@@ -8,6 +8,7 @@
 * калибровать веса по факту (после разметки);
 * сообщать в отчёте, *почему* документ не совпал (какие сигналы промахнулись).
 """
+
 from __future__ import annotations
 
 import re
@@ -21,7 +22,6 @@ from textalchemy.core.types import BibItem, Signal
 DEFAULT_WEIGHTS: dict[str, float] = {
     "manual": 100.0,
     "author": 1.0,
-    "author_in_filename": 1.2,
     "title_overlap": 2.0,
     "title_in_filename": 1.5,
     "year": 0.15,

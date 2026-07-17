@@ -1,19 +1,19 @@
 from pathlib import Path
 
-from docx import Document
-
 from textalchemy.core.exceptions import ExtractError
 
 
 def extract_text(input_path: str | Path, output_path: str | Path | None = None) -> str:
+    from textalchemy.formats.docx import read_docx
+
     input_path = Path(input_path)
     if not input_path.exists():
         raise ExtractError(f"File not found: {input_path}")
     if input_path.suffix.lower() not in (".docx",):
         raise ExtractError(f"Unsupported format: {input_path.suffix}")
     try:
-        doc = Document(str(input_path))
-        text = "\n".join(p.text for p in doc.paragraphs)
+        result = read_docx(input_path)
+        text = result.plain
     except Exception as e:
         raise ExtractError(f"Failed to extract text: {e}") from e
     if output_path:
@@ -23,16 +23,14 @@ def extract_text(input_path: str | Path, output_path: str | Path | None = None) 
 
 
 def extract_text_with_tables(input_path: str | Path, output_path: str | Path | None = None) -> str:
+    from textalchemy.formats.docx import read_docx
+
     input_path = Path(input_path)
     if not input_path.exists():
         raise ExtractError(f"File not found: {input_path}")
     try:
-        doc = Document(str(input_path))
-        parts = [p.text for p in doc.paragraphs]
-        for table in doc.tables:
-            for row in table.rows:
-                parts.append(" | ".join(cell.text for cell in row.cells))
-        text = "\n".join(parts)
+        result = read_docx(input_path, include_tables=True)
+        text = result.plain
     except Exception as e:
         raise ExtractError(f"Failed to extract text: {e}") from e
     if output_path:

@@ -8,15 +8,42 @@ from textalchemy.core.exceptions import ExtractError
 
 
 def clean_text(text: str) -> str:
+    _bs_placeholder = "\x00BS\x00"
+    text = text.replace("\\", _bs_placeholder)
     replacements = {
-        "\\": "\\textbackslash{}", "{": "\\{", "}": "\\}", "$": "\\$",
-        "&": "\\&", "#": "\\#", "^": "\\^{}", "_": "\\_{}",
-        "~": "\\textasciitilde{}", "%": "\\%", "[": "\\[", "]": "\\]",
+        "{": "\\{",
+        "}": "\\}",
+        "$": "\\$",
+        "&": "\\&",
+        "#": "\\#",
+        "^": "\\^{}",
+        "_": "\\_{}",
+        "~": "\\textasciitilde{}",
+        "%": "\\%",
+        "[": "\\[",
+        "]": "\\]",
     }
     for char, repl in replacements.items():
         text = text.replace(char, repl)
+    text = text.replace(_bs_placeholder, "\\textbackslash{}")
     text = text.replace("…", "\\dots{}")
     return text
+
+
+def _format_run_text(run) -> str:
+    text = clean_text(run.text)
+    if run.bold:
+        text = f"\\textbf{{{text}}}"
+    if run.italic:
+        text = f"\\textit{{{text}}}"
+    return text
+
+
+def _format_paragraph_text(para) -> str:
+    parts = [_format_run_text(run) for run in para.runs if run.text.strip()]
+    if not parts:
+        return clean_text(para.text)
+    return "".join(parts)
 
 
 def _get_paragraph_style(paragraph):
@@ -45,8 +72,7 @@ _PREAMBLE = """\\documentclass[12pt,a4paper]{article}
 """
 
 
-def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None,
-                  doc_type: str = "manuscript") -> str:
+def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None, doc_type: str = "manuscript") -> str:
     input_path = Path(input_path)
     if not input_path.exists():
         raise ExtractError(f"File not found: {input_path}")
@@ -61,12 +87,20 @@ def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None,
     lines.append("")
 
     for para in doc.paragraphs:
-        text = para.text.strip()
-        if not text:
-            lines.append("")
-            continue
+        if not para.runs:
+            text = para.text.strip()
+            if not text:
+                lines.append("")
+                continue
+            clean = clean_text(text)
+        else:
+            formatted = _format_paragraph_text(para)
+            clean = formatted.strip()
+            if not clean:
+                lines.append("")
+                continue
+
         style = _get_paragraph_style(para)
-        clean = clean_text(text)
         if style == "title":
             continue
         elif style == "section":
@@ -92,10 +126,12 @@ def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None,
         col_spec = "|" + "|".join(["c"] * col_count) + "|"
         lines.append(f"\\begin{{tabular}}{{{col_spec}}}")
         lines.append("\\hline")
-        for row in table.rows:
+        for i, row in enumerate(table.rows):
             cells = [clean_text(cell.text.strip()) for cell in row.cells]
             lines.append(" & ".join(cells) + " \\\\")
-            lines.append("\\hline")
+            if i < len(table.rows) - 1:
+                lines.append("\\hline")
+        lines.append("\\hline")
         lines.append("\\end{tabular}")
         lines.append("")
 
@@ -108,19 +144,27 @@ def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None,
     return result
 
 
-def docx_to_latex_pandoc(input_path: str | Path, output_path: str | Path,
-                         doc_type: str = "manuscript") -> str:
+def docx_to_latex_pandoc(input_path: str | Path, output_path: str | Path, doc_type: str = "manuscript") -> str:
     input_path = Path(input_path)
     output_path = Path(output_path)
     if not input_path.exists():
         raise ExtractError(f"File not found: {input_path}")
 
-    lua_filter = Path(__file__).parent.parent / "extract" / "lua-filters" / "sanitize.lua"
+    lua_filter = Path(__file__).parent / "lua-filters" / "sanitize.lua"
     lua_filter_str = str(lua_filter) if lua_filter.exists() else ""
 
-    cmd = ["pandoc", str(input_path), "-o", str(output_path),
-           "--from", "docx", "--to", "latex",
-           "--standalone", "--top-level-division=chapter"]
+    cmd = [
+        "pandoc",
+        str(input_path),
+        "-o",
+        str(output_path),
+        "--from",
+        "docx",
+        "--to",
+        "latex",
+        "--standalone",
+        "--top-level-division=chapter",
+    ]
     if lua_filter_str:
         cmd.extend(["--lua-filter", lua_filter_str])
 

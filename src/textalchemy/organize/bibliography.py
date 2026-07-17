@@ -1,26 +1,8 @@
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
-
-@dataclass
-class BibItem:
-    index: int = 0
-    raw_text: str = ""
-    authors: List[str] = field(default_factory=list)
-    title: str = ""
-    year: Optional[int] = None
-    doc_type: str = "unknown"
-    source: str = ""
-    pages: str = ""
-    doi: str = ""
-    isbn: str = ""
-    url: str = ""
-    journal: str = ""
-    publisher: str = ""
-    city: str = ""
-
+from textalchemy.core.types import BibItem
 
 # ── Форматы библиографии ──────────────────────────
 
@@ -47,7 +29,7 @@ def _extract_doc_type(text: str) -> str:
     return "unknown"
 
 
-def _extract_authors(text: str) -> List[str]:
+def extract_authors(text: str) -> List[str]:
     if not text:
         return []
     prefix = text[:250]
@@ -77,15 +59,14 @@ def _extract_authors(text: str) -> List[str]:
     return []
 
 
-def _extract_title(text: str) -> str:
+def extract_title(text: str) -> str:
     for delim in ["//", "URL:", "ISBN:", "doi:"]:
         pos = text.lower().find(delim.lower())
         if pos >= 0:
             text = text[:pos]
 
     title_end = len(text)
-    for pat in [r"\b\d{4}\b", r"\bМ\.?\s*:", r"\bМосква\b", r"\bСПб\b",
-                r"\bLondon\b", r"\bNew York\b"]:
+    for pat in [r"\b\d{4}\b", r"\bМ\.?\s*:", r"\bМосква\b", r"\bСПб\b", r"\bLondon\b", r"\bNew York\b"]:
         m = re.search(pat, text)
         if m and m.start() < title_end:
             title_end = m.start()
@@ -95,7 +76,7 @@ def _extract_title(text: str) -> str:
         r"[A-Za-zА-Яа-яёЁčšžČŠŽ][A-Za-zА-Яа-яёЁčšžČŠŽ-]+(?:\s+[A-Za-zА-Яа-яёЁčšžČŠŽ]\.[A-Za-zА-Яа-яёЁčšžČŠŽ]?\.?)"
     )
     m = re.match(author_pat, text[:200])
-    title = text[m.end():title_end].strip() if m else text[:title_end].strip()
+    title = text[m.end() : title_end].strip() if m else text[:title_end].strip()
 
     title = re.sub(r"^[,;:\s]+", "", title)
     title = re.sub(r"^и\.д\.\s*", "", title)
@@ -105,8 +86,8 @@ def _extract_title(text: str) -> str:
 
 def _parse_single(index: int, text: str) -> BibItem:
     item = BibItem(index=index, raw_text=text)
-    item.authors = _extract_authors(text)
-    item.title = _extract_title(text)
+    item.authors = extract_authors(text)
+    item.title = extract_title(text)
     item.doc_type = _extract_doc_type(text)
 
     year_m = re.findall(r"(?<!\d)((?:19|20)\d{2})(?!\d)", text)
@@ -186,6 +167,7 @@ def smart_parse(text: str) -> List[BibItem]:
 
 # ── Parser class ──────────────────────────────────
 
+
 class BibliographyParser:
     @staticmethod
     def parse_file(file_path: str) -> List[BibItem]:
@@ -235,6 +217,7 @@ class BibliographyParser:
     @staticmethod
     def to_gost(items: List[BibItem]) -> str:
         from textalchemy.organize.gost import GostFormatter
+
         formatter = GostFormatter()
         lines = [formatter.format_item(item) for item in items]
         return "\n\n".join(lines)

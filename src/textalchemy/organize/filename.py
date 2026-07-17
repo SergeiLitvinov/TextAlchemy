@@ -2,14 +2,44 @@ import enum
 import re
 from typing import List
 
+from textalchemy.organize.bibliography import extract_authors, extract_title
+
 
 def transliterate(text: str) -> str:
     mapping = {
-        "а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ё": "yo",
-        "ж": "zh", "з": "z", "и": "i", "й": "y", "к": "k", "л": "l", "м": "m",
-        "н": "n", "о": "o", "п": "p", "р": "r", "с": "s", "т": "t", "у": "u",
-        "ф": "f", "х": "h", "ц": "ts", "ч": "ch", "ш": "sh", "щ": "sch",
-        "ъ": "", "ы": "y", "ь": "", "э": "e", "ю": "yu", "я": "ya",
+        "а": "a",
+        "б": "b",
+        "в": "v",
+        "г": "g",
+        "д": "d",
+        "е": "e",
+        "ё": "yo",
+        "ж": "zh",
+        "з": "z",
+        "и": "i",
+        "й": "y",
+        "к": "k",
+        "л": "l",
+        "м": "m",
+        "н": "n",
+        "о": "o",
+        "п": "p",
+        "р": "r",
+        "с": "s",
+        "т": "t",
+        "у": "u",
+        "ф": "f",
+        "х": "h",
+        "ц": "ts",
+        "ч": "ch",
+        "ш": "sh",
+        "щ": "sch",
+        "ъ": "",
+        "ы": "y",
+        "ь": "",
+        "э": "e",
+        "ю": "yu",
+        "я": "ya",
     }
     return "".join(mapping.get(c, c) for c in text.lower())
 
@@ -30,27 +60,47 @@ class DocType(enum.Enum):
     @classmethod
     def from_str(cls, s: str) -> "DocType":
         mapping = {
-            "article": cls.ARTICLE, "book": cls.BOOK, "dissertation": cls.DISSERTATION,
-            "monograph": cls.MONOGRAPH, "conference": cls.CONFERENCE,
-            "collection": cls.COLLECTION, "report": cls.REPORT,
-            "standard": cls.STANDARD, "patent": cls.PATENT, "abstract": cls.ABSTRACT,
+            "article": cls.ARTICLE,
+            "book": cls.BOOK,
+            "dissertation": cls.DISSERTATION,
+            "monograph": cls.MONOGRAPH,
+            "conference": cls.CONFERENCE,
+            "collection": cls.COLLECTION,
+            "report": cls.REPORT,
+            "standard": cls.STANDARD,
+            "patent": cls.PATENT,
+            "abstract": cls.ABSTRACT,
         }
         return mapping.get(s.lower(), cls.UNKNOWN)
 
     def label_ru(self) -> str:
         return {
-            "article": "статья", "book": "книга", "dissertation": "диссертация",
-            "monograph": "монография", "conference": "конференция",
-            "collection": "сборник", "report": "отчёт", "standard": "стандарт",
-            "patent": "патент", "abstract": "автореферат", "unknown": "документ",
+            "article": "статья",
+            "book": "книга",
+            "dissertation": "диссертация",
+            "monograph": "монография",
+            "conference": "конференция",
+            "collection": "сборник",
+            "report": "отчёт",
+            "standard": "стандарт",
+            "patent": "патент",
+            "abstract": "автореферат",
+            "unknown": "документ",
         }.get(self.value, "документ")
 
     def short_rus(self) -> str:
         return {
-            "article": "статья", "book": "книга", "dissertation": "дисс",
-            "monograph": "моногр", "conference": "докл", "collection": "сб",
-            "report": "отчет", "standard": "стандарт", "patent": "патент",
-            "abstract": "автореф", "unknown": "док",
+            "article": "статья",
+            "book": "книга",
+            "dissertation": "дисс",
+            "monograph": "моногр",
+            "conference": "докл",
+            "collection": "сб",
+            "report": "отчет",
+            "standard": "стандарт",
+            "patent": "патент",
+            "abstract": "автореф",
+            "unknown": "док",
         }.get(self.value, self.value)
 
 
@@ -85,7 +135,7 @@ def format_authors(authors: List[str], max_count: int = 3) -> str:
     if max_count >= len(authors):
         return "_".join(_preserve_case_normalize(a, 15) for a in authors[:max_count])
     first = _preserve_case_normalize(authors[0], 15)
-    has_cyrillic = any("\u0400" <= c <= "\u04FF" for a in authors for c in a)
+    has_cyrillic = any("\u0400" <= c <= "\u04ff" for a in authors for c in a)
     suffix = "et_al" if not has_cyrillic else "и_др"
     return f"{first}_{suffix}"
 
@@ -131,18 +181,67 @@ _EN_SUFFIXES = [
     (r"ness$", "n."),
 ]
 
-_KEEP_RU = {"в", "на", "с", "со", "от", "из", "у", "к", "о", "об", "по", "за",
-            "при", "для", "до", "через", "и", "а", "но", "или", "не", "ни",
-            "же", "бы", "ли", "то", "как"}
-_KEEP_EN = {"the", "a", "an", "of", "in", "on", "at", "to", "for", "and", "or",
-            "with", "from", "by", "is", "it", "as", "its", "are", "was", "but",
-            "not", "nor", "per"}
+_KEEP_RU = {
+    "в",
+    "на",
+    "с",
+    "со",
+    "от",
+    "из",
+    "у",
+    "к",
+    "о",
+    "об",
+    "по",
+    "за",
+    "при",
+    "для",
+    "до",
+    "через",
+    "и",
+    "а",
+    "но",
+    "или",
+    "не",
+    "ни",
+    "же",
+    "бы",
+    "ли",
+    "то",
+    "как",
+}
+_KEEP_EN = {
+    "the",
+    "a",
+    "an",
+    "of",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "and",
+    "or",
+    "with",
+    "from",
+    "by",
+    "is",
+    "it",
+    "as",
+    "its",
+    "are",
+    "was",
+    "but",
+    "not",
+    "nor",
+    "per",
+}
 
 
 def _abbreviate_word(word: str, min_keep: int = 5) -> str:
     if len(word) <= min_keep:
         return word
-    is_cyr = any("\u0400" <= c <= "\u04FF" or c == "ё" for c in word)
+    is_cyr = any("\u0400" <= c <= "\u04ff" or c == "ё" for c in word)
     suffixes = _RU_SUFFIXES if is_cyr else _EN_SUFFIXES
     for pattern, replacement in suffixes:
         result = re.sub(pattern, replacement, word, count=1)
@@ -156,7 +255,7 @@ def _abbreviate_word(word: str, min_keep: int = 5) -> str:
 
 
 def _abbreviate_title_part(word: str) -> str:
-    is_cyr = any("\u0400" <= c <= "\u04FF" for c in word)
+    is_cyr = any("\u0400" <= c <= "\u04ff" for c in word)
     keep = _KEEP_RU if is_cyr else _KEEP_EN
     w = word.lower()
     if w in keep or len(w) <= 5:
@@ -169,7 +268,7 @@ def _abbreviate_title_part(word: str) -> str:
 def abbreviate_title(title: str, max_len: int = 55) -> str:
     if not title:
         return ""
-    clean = re.sub(r'[^\w\s\-а-яА-ЯёЁA-Za-z]', "", title)
+    clean = re.sub(r"[^\w\s\-а-яА-ЯёЁA-Za-z]", "", title)
     words = clean.split()
     abbreviated = []
     for w in words:
@@ -236,12 +335,8 @@ def build_filename(
 
 
 def extract_authors_from_text(text: str) -> List[str]:
-    return _extract_authors(text)  # noqa
+    return extract_authors(text)
 
 
 def extract_title_from_text(text: str) -> str:
-    return _extract_title(text)  # noqa
-
-
-# Import internal helpers
-from textalchemy.organize.bibliography import _extract_authors, _extract_title  # noqa: E402, F811
+    return extract_title(text)

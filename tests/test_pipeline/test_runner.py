@@ -1,4 +1,5 @@
 """Тесты pipeline.runner."""
+
 from __future__ import annotations
 
 import json
@@ -6,6 +7,7 @@ import json
 import pytest
 
 from textalchemy.core.registry import all_operations
+from textalchemy.pipeline import emails_op as _emails_op  # noqa: F401
 from textalchemy.pipeline import extract as _extract_op  # noqa: F401
 from textalchemy.pipeline import ingest as _ingest_op  # noqa: F401
 from textalchemy.pipeline import match as _match_op  # noqa: F401
@@ -17,11 +19,7 @@ from textalchemy.pipeline.runner import load_pipeline, run_pipeline
 def test_load_yaml(tmp_path):
     p = tmp_path / "pipe.yaml"
     p.write_text(
-        "steps:\n"
-        "  - op: render.latex\n"
-        "    output: tex\n"
-        "    params: {title: T}\n"
-        "output: tex\n",
+        "steps:\n  - op: render.latex\n    output: tex\n    params: {title: T}\noutput: tex\n",
         encoding="utf-8",
     )
     spec = load_pipeline(p)
@@ -32,8 +30,7 @@ def test_load_yaml(tmp_path):
 def test_load_toml(tmp_path):
     p = tmp_path / "pipe.toml"
     p.write_text(
-        'steps = [{op = "render.markdown", output = "md"}]\n'
-        'output = "md"\n',
+        'steps = [{op = "render.markdown", output = "md"}]\noutput = "md"\n',
         encoding="utf-8",
     )
     spec = load_pipeline(p)
@@ -63,7 +60,7 @@ def test_run_simple_render(tmp_path):
         "  - op: render.markdown\n"
         "    output: md\n"
         "    params:\n"
-        "      items: \"$bib\"\n"
+        '      items: "$bib"\n'
         "output: md\n"
         "bib:\n"
         "  - index: 1\n"
@@ -111,10 +108,7 @@ def test_run_step_error(tmp_path):
     """Ошибка в шаге прерывает конвейер."""
     p = tmp_path / "pipe.yaml"
     p.write_text(
-        "steps:\n"
-        "  - op: ingest.file\n"
-        "    params: {path: /no/such/file.pdf}\n"
-        "    output: doc\n",
+        "steps:\n  - op: ingest.file\n    params: {path: /no/such/file.pdf}\n    output: doc\n",
         encoding="utf-8",
     )
     result = run_pipeline(p)
@@ -182,9 +176,20 @@ def test_all_operations_in_registry():
     """Sanity check: все ожидаемые операции зарегистрированы."""
     ids = {s.id for s in all_operations()}
     expected = {
-        "ingest.file", "extract.text", "match.bibliography",
-        "render.latex", "render.latex.pandoc", "render.docx",
-        "render.bibtex", "render.gost", "render.markdown", "render.json",
+        "ingest.file",
+        "extract.text",
+        "extract.emails",
+        "match.bibliography",
+        "render.latex",
+        "render.latex.pandoc",
+        "render.docx",
+        "render.bibtex",
+        "render.gost",
+        "render.markdown",
+        "render.json",
+        "render.emails.docx",
+        "render.emails.txt",
+        "render.emails.debug",
         "name.from_match",
     }
     assert expected <= ids
