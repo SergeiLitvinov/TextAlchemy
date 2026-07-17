@@ -1,13 +1,2 @@
-include README.md
-include LICENSE
-
-recursive-include src/textalchemy/convert/pptx_to_html/assets *
-recursive-include src/textalchemy/web/templates *
-recursive-include src/textalchemy/web/static *
-recursive-include src/textalchemy/generate/templates *
-recursive-include src/textalchemy/extract/lua-filters *
-recursive-include src/textalchemy/recognize/templates *
-
-global-exclude __pycache__
-global-exclude *.py[cod]
-global-exclude .DS_Store
+# Include package data
+recursive-include textalchemy * --exclude=__pycache__

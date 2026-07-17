@@ -1,15 +1,12 @@
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
-*.egg-info/
-dist/
-build/
-wheels/
-*.egg
+*$py.class
 
 # Virtual environment
 .venv/
 venv/
+ENV/
 
 # IDE
 .vscode/
@@ -17,38 +14,36 @@ venv/
 *.swp
 *.swo
 
-# OS
-Thumbs.db
-.DS_Store
+# Environment
+.env
+.env.local
 
-# Project-specific
-literature_files/
-renamed_literature/
-converted_docx/
+# Logs
 *.log
-report.json
+logs/
 
-# Coverage
+# Testing
 .coverage
 htmlcov/
+.pytest_cache/
 
-# Project runtime data
-.textalchemy/
+# Distribution
+dist/
+*.egg-info/
+build/
 
 # Root-level temp files from testing
 /out.txt
-/bibliography.json
 /test_bib.txt
 /renamed/
 
-# Large binaries
-*.pdf
-*.doc
-*.docx
-!tests/**/fixtures/*.pdf
-!reference/*.doc
-!reference/*.docx
+# Generated artifacts
+matching_report.json
+test_config.json
 
-# Recognition models
-models/
-recognize/models/
+# Tool cache
+.textalchemy/
+
+# OS
+.DS_Store
+Thumbs.db

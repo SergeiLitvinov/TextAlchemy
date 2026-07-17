@@ -91,8 +91,10 @@ def _safe(v: Any) -> Any:
 def _interpolate(value: Any, ctx: dict) -> Any:
     """Если значение — str и содержит ``{name}``, подставить из ``ctx``."""
     if isinstance(value, str) and "{" in value:
+        safe_ctx = {k: v for k, v in ctx.items()
+                    if isinstance(k, str) and not k.startswith("_")}
         try:
-            return value.format(**ctx)
+            return value.format(**safe_ctx)
         except (KeyError, IndexError):
             return value
     if isinstance(value, dict):

@@ -7,7 +7,6 @@
 бросил исключение, пробуем следующий. Если все упали — ``Text(warnings=[...])``
 с пустым содержимым, чтобы пайплайн мог корректно зафиксировать «не смогли».
 """
-
 from __future__ import annotations
 
 import logging
@@ -125,19 +124,18 @@ def read_pdf(path: str) -> Text:
     )
 
 
-def get_pdf_info(file_path: str) -> dict:
-    """Извлечь метаданные PDF (title, author, subject)."""
-    info: dict[str, str] = {"title": "", "author": "", "subject": ""}
+def get_pdf_info(path: str) -> dict:
+    """Извлечь метаданные PDF (title, author, subject) через pypdf."""
+    info = {"title": "", "author": "", "subject": ""}
     try:
         from pypdf import PdfReader
-
-        reader = PdfReader(file_path)
+        reader = PdfReader(path)
         meta = reader.metadata
         if meta:
             info["title"] = getattr(meta, "title", "") or ""
             info["author"] = getattr(meta, "author", "") or ""
             info["subject"] = getattr(meta, "subject", "") or ""
-    except Exception:
+    except Exception:  # noqa: BLE001
         pass
     return info
 

@@ -4,11 +4,15 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
 
 ## Layout
 
-- `src/textalchemy/__main__.py` — all CLI parsing and command dispatch (`argparse` + `match`).
+- `src/textalchemy/__main__.py` — CLI entry: `_setup_parser()` + `main()` dispatch (`argparse` + `match`). Handlers live in `src/textalchemy/cli/` (12 modules: `convert_cmd.py`, `extract_cmd.py`, `match_cmd.py`, `bibliography_cmd.py`, `generate_cmd.py`, `recognize_cmd.py`, `bibtex_cmd.py`, `init_cmd.py`, `web_cmd.py`, `run_cmd.py`).
 - `src/textalchemy/convert/` — converters; each implements `BaseConverter` from `base.py` and returns `ConversionResult`.
   - `pdf_to_docx.py` — PDF → DOCX (`pdf2docx`, `pymupdf`, `libreoffice`).
   - `pptx_to_html/` — PPTX → self-contained HTML viewer (MathML via MathJax). Public API: `PptxToHtmlConverter`, `convert` (see `converter.py:84`). Shipped assets in `pptx_to_html/assets/{css,js}/` are copied to output by default.
-- `src/textalchemy/{extract,organize,generate,recognize,web}/` — other subsystems.
+- `src/textalchemy/recognize/` — OCR subsystem:
+  - `ocr.py` — `OcrEngine` поддерживает три бэкенда: Tesseract, EasyOCR, PaddleOCR. Автоопределение доступного. Поддержка `handwriting` (рукописный текст) и `use_gpu`. Метод `recognize_pdf()` конвертит PDF → изображения через PyMuPDF с масштабированием.
+  - `classifier.py` — `DocumentClassifier` по ключевым словам (статья/диссертация/монография и т.д.).
+  - `layout.py` — `LayoutAnalyzer` базовый анализ областей на изображении (текст/таблица/колонтитул).
+- `src/textalchemy/{extract,organize,generate,web}/` — other subsystems.
 - `src/textalchemy/core/` — base types (`Document`, `Text`, `Match`, `Signal`, `BibItem`) and the operation registry (`@operation`).
 - `src/textalchemy/formats/` — atomic format readers: `pdf` (chain `pdfplumber → pypdf → pymupdf`), `docx`, `txt`/`djvu`.
 - `src/textalchemy/pipeline/` — pipeline stages as `@operation`s:
@@ -20,6 +24,7 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
   - `bibliography.py` — `bibliography.parse` (path → BibItem[]), `bibliography.smart_parse` (text → BibItem[]).
   - `name.py` — `name.from_match`: `Match` → filename.
   - `render.py` — `render.latex`, `render.latex.pandoc`, `render.docx`, `render.bibtex`, `render.gost`, `render.markdown`, `render.json`.
+  - `render_html.py` — `render.html.pptx`: `Document` (.pptx) → `ConversionResult` (HTML viewer).
   - `runner.py` — YAML/TOML/JSON pipeline runner.
 - `tests/` — pytest. Subpackage `tests/pipeline/` and `tests/convert/` mirror the source. Flat: `test_cli.py`, `test_web.py`, `test_database.py`.
 - `reference/` — legacy `.doc` and README drafts; not built into the package.
@@ -33,8 +38,10 @@ Always run via `uv` so the lockfile-resolved env is used.
 - Format: `uv run ruff check --fix && uv run ruff format`
 - Test: `uv run pytest tests/ -v --tb=short` (or `--cov=textalchemy` for coverage)
 - Single test: `uv run pytest tests/test_pipeline/test_runner.py::test_run_chained_ingest_extract -v`
-- Pipeline run: `uv run textalchemy run pipeline.yaml` (or `textalchemy run --list`)
+- Pipeline run: `uv run textalchemy run pipeline.yaml` (or `textalchemy run --list`, `--json` for JSON output)
+- Most commands support `--json` for structured machine-readable output (`extract`, `convert`, `pptx2html`, `gost`, `stats`, `generate`, `bibtex`, `recognize`, `match`, `run`)
 - Web UI: `uv run textalchemy web` (defaults 127.0.0.1:8000)
+- OCR: `uv run textalchemy recognize input.pdf --backend paddle --gpu --mode handwriting --output result.docx`
 - CLI entry: `textalchemy = textalchemy.__main__:main` (see `pyproject.toml`)
 
 Equivalent `make` targets exist in the `Makefile` (`make install|test|lint|format|coverage|web`).
@@ -83,8 +90,10 @@ Run `textalchemy run --list` to see all registered operations.
 ## Adding a new CLI subcommand
 
 1. Add a parser in `_setup_parser()` and a `case` arm in `main()` in `src/textalchemy/__main__.py`.
-2. Implement `_cmd_<name>(args)` in the same file; import subsystem functions lazily inside the handler (pattern used throughout the file).
-3. Add tests in `tests/test_cli.py` following the existing style (use `main([...])` directly, not the installed `textalchemy` script).
+2. Implement `cmd_<name>(args)` in a new module under `src/textalchemy/cli/` (named `<name>_cmd.py`).
+3. Re-export from `src/textalchemy/cli/__init__.py` and import in `__main__.py`.
+4. If the command supports `--json`, add the flag to the parser and check `args.json` in the handler.
+5. Add tests in `tests/test_cli.py` following the existing style (use `main([...])` directly, not the installed `textalchemy` script).
 
 ## Adding a new pipeline operation
 
@@ -111,6 +120,7 @@ Run `textalchemy run --list` to see all registered operations.
 - `argparse` with no subcommand returns `1` and prints help; tests assert this.
 - `match` and `stats` default to `./literature_files` and `./renamed` and may pick up a bibliography file from CWD if `-b` is omitted — pass explicit paths in CI.
 - `pyproject.toml` does not declare a `[project.optional-dependencies]` entry for `pptx`; `python-pptx` and `lxml` are in core `dependencies`.
+- OCR optional dependencies (`[project.optional-dependencies] ocr`) include `pytesseract`, `easyocr`, `paddleocr`, `paddlepaddle`. Install full with `uv sync --all-extras`. PaddleOCR requires torch/PaddlePaddle (heavy).
 - `MANIFEST.in` is required for sdist builds: the package ships non-Python assets under `src/textalchemy/**/{assets,templates,static,lua-filters}/`.
 - No typecheck or pre-commit is wired into local commands beyond `ruff`; pre-commit is configured (`.pre-commit-config.yaml`) but optional.
 - On Windows, `__main__.py` reconfigures stdout/stderr to UTF-8 (so `→` in op descriptions doesn't blow up `charmap`). Don't remove this.

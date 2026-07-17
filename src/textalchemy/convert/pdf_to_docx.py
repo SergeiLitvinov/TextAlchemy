@@ -174,7 +174,7 @@ class LibreOfficeConverter(BaseConverter):
             if os.path.exists(path):
                 return path
         try:
-            result = subprocess.run(["soffice", "--version"], capture_output=True, text=True, shell=True)
+            result = subprocess.run(["soffice", "--version"], capture_output=True, text=True)
             if result.returncode == 0:
                 return "soffice"
         except FileNotFoundError:

@@ -1,10 +1,7 @@
-"""Pipeline: стадии конвейера.
+"""Pipeline: Entry point for operations.
 
-Импортируются лениво в CLI, но здесь — ``__all__`` для удобства.
-Импорт модулей здесь гарантирует, что все ``@operation``-декораторы
-выполнятся при первом обращении к пакету.
+Operations are registered via CLI, here - in ``__all__`` and via ``@operation`` decorator.
 """
-
 from textalchemy.pipeline import (
     bibliography,  # noqa: F401
     emails_op,  # noqa: F401
@@ -14,19 +11,10 @@ from textalchemy.pipeline import (
     match_files,  # noqa: F401
     name,  # noqa: F401
     render,  # noqa: F401
-    runner,  # noqa: F401
-    signals,  # noqa: F401
+    render_html,  # noqa: F401
 )
 
 __all__ = [
-    "bibliography",
-    "emails_op",
-    "extract",
-    "ingest",
-    "match",
-    "match_files",
-    "name",
-    "render",
-    "runner",
-    "signals",
+    "bibliography", "emails_op", "extract", "ingest", "match", "match_files",
+    "name", "render", "render_html", "runner",
 ]

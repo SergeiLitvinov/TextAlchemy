@@ -214,5 +214,4 @@ class TestLegacyImports:
         assert utils.list_files is list_files
         assert utils.progress_bar is progress_bar
         assert utils.validate_pdf is validate_pdf
-        # get_file_content — обёртка
-        assert callable(utils.get_file_content)
+

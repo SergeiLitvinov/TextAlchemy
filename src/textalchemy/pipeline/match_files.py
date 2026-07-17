@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional, Union
 
 from textalchemy.core.registry import operation
-from textalchemy.core.types import BibItem, Document, Match
+from textalchemy.core.types import BibItem, DocFormat, Document, Match
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +70,7 @@ def match_files(
         except Exception as e:  # noqa: BLE001
             logger.warning("match failed for %s: %s", f, e)
             m = Match(
-                document=Document(path=f, format=__import__("textalchemy.core.types", fromlist=["DocFormat"]).DocFormat.UNKNOWN,
+                document=Document(path=f, format=DocFormat.UNKNOWN,
                                   size=f.stat().st_size, sha256=""),
                 item=None,
                 matched=False,

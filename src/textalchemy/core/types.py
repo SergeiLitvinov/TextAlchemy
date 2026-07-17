@@ -4,7 +4,6 @@
 ``Text`` — извлечённое содержимое (нормализованное, блочное), ``Match`` —
 результат матчинга документа со строкой библиографии.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -19,7 +18,8 @@ class DocFormat(str, Enum):
     PPTX = "pptx"
     TXT = "txt"
     DJVU = "djvu"
-    BIB = "bib"  # библиография как plain text
+    EPUB = "epub"
+    BIB = "bib"      # библиография как plain text
     UNKNOWN = "unknown"
 
 
@@ -68,6 +68,7 @@ _EXT_FORMAT = {
     ".pptx": DocFormat.PPTX,
     ".txt": DocFormat.TXT,
     ".djvu": DocFormat.DJVU,
+    ".epub": DocFormat.EPUB,
     ".bib": DocFormat.BIB,
 }
 
@@ -119,7 +120,7 @@ class Text:
 
 @dataclass
 class BibItem:
-    """Запись библиографии."""
+    """Запись библиографии. Единый класс для всего приложения."""
 
     index: int = 0
     raw_text: str = ""
@@ -171,6 +172,15 @@ class Match:
         return 0.0
 
 
+@dataclass
+class OperationResult:
+    """Обёртка результата операции — значение + предупреждения + метрики."""
+
+    value: Any
+    warnings: list[str] = field(default_factory=list)
+    metrics: dict[str, Any] = field(default_factory=dict)
+
+
 __all__ = [
     "DocFormat",
     "BlockType",
@@ -181,4 +191,5 @@ __all__ = [
     "BibItem",
     "Signal",
     "Match",
+    "OperationResult",
 ]

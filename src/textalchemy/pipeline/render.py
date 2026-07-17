@@ -11,13 +11,13 @@
 
 без зависимостей от исходного формата документа.
 """
-
 from __future__ import annotations
 
 import logging
 from pathlib import Path
 from typing import Any, Sequence, Union
 
+from textalchemy.core.latex import escape_latex as _escape_latex
 from textalchemy.core.registry import operation
 from textalchemy.core.types import BibItem, Text
 
@@ -36,24 +36,22 @@ def _normalize_items(items: Sequence[Any]) -> list[BibItem]:
             out.append(it)
         elif hasattr(it, "authors") and hasattr(it, "title"):
             # duck-typed BibItem из organize.bibliography
-            out.append(
-                BibItem(
-                    index=getattr(it, "index", len(out) + 1),
-                    raw_text=getattr(it, "raw_text", ""),
-                    authors=list(getattr(it, "authors", []) or []),
-                    title=getattr(it, "title", "") or "",
-                    year=getattr(it, "year", None),
-                    doc_type=getattr(it, "doc_type", "unknown"),
-                    source=getattr(it, "source", ""),
-                    pages=getattr(it, "pages", ""),
-                    doi=getattr(it, "doi", ""),
-                    isbn=getattr(it, "isbn", ""),
-                    url=getattr(it, "url", ""),
-                    journal=getattr(it, "journal", ""),
-                    publisher=getattr(it, "publisher", ""),
-                    city=getattr(it, "city", ""),
-                )
-            )
+            out.append(BibItem(
+                index=getattr(it, "index", len(out) + 1),
+                raw_text=getattr(it, "raw_text", ""),
+                authors=list(getattr(it, "authors", []) or []),
+                title=getattr(it, "title", "") or "",
+                year=getattr(it, "year", None),
+                doc_type=getattr(it, "doc_type", "unknown"),
+                source=getattr(it, "source", ""),
+                pages=getattr(it, "pages", ""),
+                doi=getattr(it, "doi", ""),
+                isbn=getattr(it, "isbn", ""),
+                url=getattr(it, "url", ""),
+                journal=getattr(it, "journal", ""),
+                publisher=getattr(it, "publisher", ""),
+                city=getattr(it, "city", ""),
+            ))
         elif isinstance(it, dict):
             kwargs = {k: v for k, v in it.items() if k in BibItem.__dataclass_fields__}
             kwargs.setdefault("index", len(out) + 1)
@@ -64,61 +62,23 @@ def _normalize_items(items: Sequence[Any]) -> list[BibItem]:
     return out
 
 
-_LATEX_SPECIAL = {
-    "\\": r"\textbackslash{}",
-    "{": r"\{",
-    "}": r"\}",
-    "$": r"\$",
-    "&": r"\&",
-    "#": r"\#",
-    "^": r"\^{}",
-    "_": r"\_",
-    "~": r"\textasciitilde{}",
-    "%": r"\%",
-    "[": r"\[",
-    "]": r"\]",
-}
-
-
-def _escape_latex(text: str) -> str:
-    if not text:
-        return ""
-    for c, repl in _LATEX_SPECIAL.items():
-        text = text.replace(c, repl)
-    return text.replace("…", r"\dots{}")
-
-
 _PREAMBLE = (
-    r"\documentclass[12pt,a4paper]{article}"
-    "\n"
-    r"\usepackage[T2A]{fontenc}"
-    "\n"
-    r"\usepackage[utf8]{inputenc}"
-    "\n"
-    r"\usepackage[russian]{babel}"
-    "\n"
-    r"\usepackage{amsmath,amssymb}"
-    "\n"
-    r"\usepackage{graphicx}"
-    "\n"
-    r"\usepackage{geometry}"
-    "\n"
-    r"\geometry{left=3cm,right=1.5cm,top=2cm,bottom=2cm}"
-    "\n"
-    r"\usepackage{setspace}"
-    "\n"
-    r"\onehalfspacing"
-    "\n"
+    r"\documentclass[12pt,a4paper]{article}" "\n"
+    r"\usepackage[T2A]{fontenc}" "\n"
+    r"\usepackage[utf8]{inputenc}" "\n"
+    r"\usepackage[russian]{babel}" "\n"
+    r"\usepackage{amsmath,amssymb}" "\n"
+    r"\usepackage{graphicx}" "\n"
+    r"\usepackage{geometry}" "\n"
+    r"\geometry{left=3cm,right=1.5cm,top=2cm,bottom=2cm}" "\n"
+    r"\usepackage{setspace}" "\n"
+    r"\onehalfspacing" "\n"
 )
 
 
 @operation(
-    "render.latex",
-    input_type="Text",
-    output_type="str",
-    input_param="text",
-    description="Text → LaTeX (статья, с преамблой).",
-    tags=["render"],
+    "render.latex", input_type="Text", output_type="str", input_param="text",
+    description="Text → LaTeX (статья, с преамблой).", tags=["render"],
 )
 def render_latex(*, text: Text, title: str = "Document", author: str = "Author") -> str:
     """Минимальный LaTeX-рендер: заголовок, абзацы, таблицы.
@@ -149,14 +109,12 @@ def render_latex(*, text: Text, title: str = "Document", author: str = "Author")
             continue
         cols = max((len(r) for r in table.rows), default=0)
         spec = "|" + "|".join(["c"] * cols) + "|"
-        parts.append(r"\begin{tabular}{" + spec + "}")
+        parts.append(rf"\begin{{tabular}}{{{spec}}}")
         parts.append(r"\hline")
-        for i, row in enumerate(table.rows):
+        for row in table.rows:
             cells = [_escape_latex(c) for c in row]
             parts.append(" & ".join(cells) + r" \\")
-            if i < len(table.rows) - 1:
-                parts.append(r"\hline")
-        parts.append(r"\hline")
+            parts.append(r"\hline")
         parts.append(r"\end{tabular}")
         parts.append("")
 
@@ -165,10 +123,7 @@ def render_latex(*, text: Text, title: str = "Document", author: str = "Author")
 
 
 @operation(
-    "render.latex.pandoc",
-    input_type="Text",
-    output_type="str",
-    input_param="text",
+    "render.latex.pandoc", input_type="Text", output_type="str", input_param="text",
     description="Text → LaTeX через pandoc (требует установленный pandoc).",
     tags=["render", "external"],
 )
@@ -180,47 +135,31 @@ def render_latex_pandoc(*, text: Text, input_path: Union[str, Path, None] = None
 
     if not shutil.which("pandoc"):
         logger.warning("pandoc не найден, fallback на render.latex")
-        return render_latex(text)
+        return render_latex(text=text)
 
     if input_path is None:
-        return render_latex(text)
+        return render_latex(text=text)
 
     with tempfile.NamedTemporaryFile(suffix=".tex", delete=False, mode="w", encoding="utf-8") as f:
         out = Path(f.name)
     try:
         subprocess.run(
-            [
-                "pandoc",
-                str(input_path),
-                "-o",
-                str(out),
-                "--from",
-                "docx",
-                "--to",
-                "latex",
-                "--standalone",
-                "--top-level-division=chapter",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=120,
+            ["pandoc", str(input_path), "-o", str(out),
+             "--from", "docx", "--to", "latex",
+             "--standalone", "--top-level-division=chapter"],
+            check=True, capture_output=True, text=True, timeout=120,
         )
         return out.read_text(encoding="utf-8")
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
         logger.warning("pandoc failed: %s, fallback на render.latex", e)
-        return render_latex(text)
+        return render_latex(text=text)
     finally:
         out.unlink(missing_ok=True)
 
 
 @operation(
-    "render.docx",
-    input_type="Text",
-    output_type="Path",
-    input_param="text",
-    description="Text → DOCX (через python-docx).",
-    tags=["render"],
+    "render.docx", input_type="Text", output_type="Path", input_param="text",
+    description="Text → DOCX (через python-docx).", tags=["render"],
 )
 def render_docx(*, text: Text, output_path: Union[str, Path]) -> Path:
     """Записать ``Text`` в DOCX. Возвращает путь к созданному файлу."""
@@ -249,11 +188,8 @@ def render_docx(*, text: Text, output_path: Union[str, Path]) -> Path:
 
 
 @operation(
-    "render.bibtex",
-    input_type="list[BibItem]",
-    output_type="str",
-    description="BibItem[] → BibTeX (.bib).",
-    tags=["render"],
+    "render.bibtex", input_type="list[BibItem]", output_type="str",
+    description="BibItem[] → BibTeX (.bib).", tags=["render"],
 )
 def render_bibtex(*, items: Sequence[Any]) -> str:
     """Минимальный BibTeX-рендер: генерирует ``@misc`` записи (как старая версия).
@@ -282,11 +218,8 @@ def render_bibtex(*, items: Sequence[Any]) -> str:
 
 
 @operation(
-    "render.gost",
-    input_type="list[BibItem]",
-    output_type="str",
-    description="BibItem[] → ГОСТ Р 7.0.100.",
-    tags=["render"],
+    "render.gost", input_type="list[BibItem]", output_type="str",
+    description="BibItem[] → ГОСТ Р 7.0.100.", tags=["render"],
 )
 def render_gost(*, items: Sequence[Any]) -> str:
     """Простой рендер по ГОСТ: авторы, заглавие, // источник, год, страницы, DOI.
@@ -296,7 +229,6 @@ def render_gost(*, items: Sequence[Any]) -> str:
     Принимает ``[BibItem]`` или ``[dict]``.
     """
     items = _normalize_items(items)
-
     def fa(authors: list[str]) -> str:
         return ", ".join(authors) if authors else "Без автора"
 
@@ -318,11 +250,8 @@ def render_gost(*, items: Sequence[Any]) -> str:
 
 
 @operation(
-    "render.markdown",
-    input_type="list[BibItem]",
-    output_type="str",
-    description="BibItem[] → Markdown список.",
-    tags=["render"],
+    "render.markdown", input_type="list[BibItem]", output_type="str",
+    description="BibItem[] → Markdown список.", tags=["render"],
 )
 def render_markdown(*, items: Sequence[Any]) -> str:
     lines: list[str] = []
@@ -336,35 +265,23 @@ def render_markdown(*, items: Sequence[Any]) -> str:
 
 
 @operation(
-    "render.json",
-    input_type="list[BibItem]",
-    output_type="str",
-    description="BibItem[] → JSON.",
-    tags=["render"],
+    "render.json", input_type="list[BibItem]", output_type="str",
+    description="BibItem[] → JSON.", tags=["render"],
 )
 def render_json(*, items: Sequence[Any]) -> str:
     import json
-
     items = _normalize_items(items)
     return json.dumps(
         [
             {
-                "index": i.index,
-                "authors": i.authors,
-                "title": i.title,
-                "year": i.year,
-                "doc_type": i.doc_type,
-                "source": i.source,
-                "pages": i.pages,
-                "doi": i.doi,
-                "isbn": i.isbn,
-                "url": i.url,
+                "index": i.index, "authors": i.authors, "title": i.title,
+                "year": i.year, "doc_type": i.doc_type, "source": i.source,
+                "pages": i.pages, "doi": i.doi, "isbn": i.isbn, "url": i.url,
                 "raw": i.raw_text,
             }
             for i in items
         ],
-        ensure_ascii=False,
-        indent=2,
+        ensure_ascii=False, indent=2,
     )
 
 

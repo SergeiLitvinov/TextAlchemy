@@ -173,20 +173,20 @@ class TestDatabase:
         assert added2.index is not None
         assert db.get_item(added2.index) is not None
 
-    def test_import_from_json(self, db):
+    def test_import_from_file(self, db):
         text = "1. Тестов Т.Т. Тестовая работа. М.: Издательство, 2023. 100 с."
-        json_path = Path(tempfile.mktemp(suffix=".json"))
+        path = Path(tempfile.mktemp(suffix=".txt"))
         try:
-            json_path.write_text(text, encoding="utf-8")
-            count = db.import_from_json(str(json_path))
+            path.write_text(text, encoding="utf-8")
+            count = db.import_from_file(str(path))
             assert count == 1
             items = db.all_items()
             assert len(items) == 1
         finally:
-            json_path.unlink(missing_ok=True)
+            path.unlink(missing_ok=True)
 
-    def test_import_from_json_missing_file(self, db):
-        count = db.import_from_json("nonexistent.json")
+    def test_import_from_file_missing(self, db):
+        count = db.import_from_file("nonexistent.txt")
         assert count == 0
 
     def test_add_item_preserves_all_fields(self, db):

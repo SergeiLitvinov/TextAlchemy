@@ -25,7 +25,7 @@ def load_manual_matches(config_path: Optional[str | Path] = None) -> Dict[str, i
             try:
                 extra = json.loads(path.read_text(encoding="utf-8"))
                 matches.update(extra)
-            except Exception:
+            except (json.JSONDecodeError, OSError):
                 pass
     return matches
 
@@ -58,34 +58,23 @@ def extract_keywords_from_content(content: str, max_keywords: int = 30) -> set:
 
 
 def extract_text_from_file(file_path: str | Path) -> str:
+    from textalchemy.formats.docx import read_docx
+    from textalchemy.formats.pdf import read_pdf
+    from textalchemy.formats.txt import read_djvu, read_txt
+
     file_path = Path(file_path)
     ext = file_path.suffix.lower()
     try:
         if ext == ".pdf":
-            from pypdf import PdfReader
-            reader = PdfReader(str(file_path))
-            return "\n".join(page.extract_text() or "" for page in reader.pages)
+            return read_pdf(str(file_path)).plain
         elif ext == ".docx":
-            from docx import Document
-            doc = Document(str(file_path))
-            paras = [p.text for p in doc.paragraphs]
-            tables = []
-            for t in doc.tables:
-                for r in t.rows:
-                    for c in r.cells:
-                        tables.append(c.text)
-            return "\n".join(paras + tables)
+            return read_docx(file_path).plain
         elif ext == ".txt":
-            try:
-                return file_path.read_text(encoding="utf-8")
-            except UnicodeDecodeError:
-                return file_path.read_text(encoding="cp1251")
+            return read_txt(file_path).plain
         elif ext == ".djvu":
-            import subprocess
-            result = subprocess.run(["djvutxt", str(file_path)], capture_output=True, text=True, timeout=30)
-            return result.stdout if result.returncode == 0 else ""
+            return read_djvu(file_path).plain
         return ""
-    except Exception as e:
+    except (OSError, ValueError, TypeError) as e:
         raise OrganizeError(f"Failed to extract text from {file_path}: {e}")
 
 

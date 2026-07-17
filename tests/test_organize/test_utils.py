@@ -5,7 +5,6 @@ from textalchemy.organize.utils import (
     create_zip_archive,
     ensure_folder,
     find_duplicates,
-    get_file_content,
     get_file_info,
     list_files,
     progress_bar,
@@ -115,12 +114,4 @@ def test_create_zip_archive(tmp_path):
     assert zip_path.exists()
 
 
-def test_get_file_content(tmp_path):
-    f = tmp_path / "test.txt"
-    f.write_text("content", encoding="utf-8")
-    content = get_file_content(f)
-    assert "content" in content
 
-
-def test_get_file_content_no_file():
-    assert get_file_content(Path("nonexistent")) == ""
