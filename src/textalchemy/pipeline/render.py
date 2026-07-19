@@ -25,38 +25,17 @@ logger = logging.getLogger(__name__)
 
 
 def _normalize_items(items: Sequence[Any]) -> list[BibItem]:
-    """Принять ``[BibItem, ...]`` или ``[dict, ...]`` или любые duck-typed BibItem — вернуть ``[BibItem, ...]``.
+    """Принять ``[BibItem, ...]`` или ``[dict, ...]`` — вернуть ``[BibItem, ...]``.
 
-    Поддерживает ``BibItem`` как из ``core.types``, так и из legacy
-    ``organize.bibliography`` (duck-typed: достаточно иметь поля ``authors``/``title``/...).
+    Делегирует ``BibItem.from_dict`` для словарей (поддерживает legacy-ключ
+    ``raw`` вместо ``raw_text``) и пропускает готовые ``BibItem`` как есть.
     """
     out: list[BibItem] = []
     for it in items:
         if isinstance(it, BibItem):
             out.append(it)
-        elif hasattr(it, "authors") and hasattr(it, "title"):
-            # duck-typed BibItem из organize.bibliography
-            out.append(BibItem(
-                index=getattr(it, "index", len(out) + 1),
-                raw_text=getattr(it, "raw_text", ""),
-                authors=list(getattr(it, "authors", []) or []),
-                title=getattr(it, "title", "") or "",
-                year=getattr(it, "year", None),
-                doc_type=getattr(it, "doc_type", "unknown"),
-                source=getattr(it, "source", ""),
-                pages=getattr(it, "pages", ""),
-                doi=getattr(it, "doi", ""),
-                isbn=getattr(it, "isbn", ""),
-                url=getattr(it, "url", ""),
-                journal=getattr(it, "journal", ""),
-                publisher=getattr(it, "publisher", ""),
-                city=getattr(it, "city", ""),
-            ))
         elif isinstance(it, dict):
-            kwargs = {k: v for k, v in it.items() if k in BibItem.__dataclass_fields__}
-            kwargs.setdefault("index", len(out) + 1)
-            kwargs.setdefault("raw_text", it.get("raw", "") or it.get("title", ""))
-            out.append(BibItem(**kwargs))
+            out.append(BibItem.from_dict(it))
         else:
             raise TypeError(f"unsupported item type: {type(it)}")
     return out
@@ -222,31 +201,14 @@ def render_bibtex(*, items: Sequence[Any]) -> str:
     description="BibItem[] → ГОСТ Р 7.0.100.", tags=["render"],
 )
 def render_gost(*, items: Sequence[Any]) -> str:
-    """Простой рендер по ГОСТ: авторы, заглавие, // источник, год, страницы, DOI.
+    """Рендер по ГОСТ через ``organize.gost.GostFormatter`` (единый источник истины).
 
-    Полная реализация лежит в ``organize/gost.py``; здесь — конвейерная
-    обёртка, работающая с ``BibItem`` напрямую (без зависимости на organize/).
     Принимает ``[BibItem]`` или ``[dict]``.
     """
-    items = _normalize_items(items)
-    def fa(authors: list[str]) -> str:
-        return ", ".join(authors) if authors else "Без автора"
+    from textalchemy.organize.gost import GostFormatter
 
-    out: list[str] = []
-    for i, item in enumerate(items, start=1):
-        parts: list[str] = [fa(item.authors), item.title or item.raw_text]
-        if item.source:
-            parts.append(f"// {item.source}")
-        if item.year:
-            parts.append(f". – {item.year}")
-        if item.pages:
-            parts.append(f". – {item.pages}")
-        if item.doi:
-            parts.append(f". – DOI: {item.doi}")
-        if item.isbn:
-            parts.append(f". – ISBN: {item.isbn}")
-        out.append(f"{i}. " + " ".join(parts))
-    return "\n\n".join(out)
+    items = _normalize_items(items)
+    return GostFormatter().format_bibliography(items)
 
 
 @operation(

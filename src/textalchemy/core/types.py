@@ -49,6 +49,13 @@ class Document:
     sha256: str
     encoding: str = "utf-8"
 
+    def __post_init__(self):
+        # Лениво вычисляем хеш, если он не задан явно.
+        if not self.sha256 and Path(self.path).is_file():
+            from textalchemy.core.io import compute_hash
+
+            object.__setattr__(self, "sha256", compute_hash(self.path))
+
     @classmethod
     def from_path(cls, path: str | Path) -> "Document":
         p = Path(path)
@@ -58,7 +65,7 @@ class Document:
             path=p,
             format=_detect_format(p),
             size=p.stat().st_size,
-            sha256="",  # заполняется в pipeline/ingest.py
+            sha256="",  # заполняется в __post_init__
         )
 
 
@@ -136,6 +143,39 @@ class BibItem:
     journal: str = ""
     publisher: str = ""
     city: str = ""
+
+
+    # Поля, сериализуемые в словарь (порядок важен для UI/БД).
+    _FIELDS = (
+        "index", "raw_text", "authors", "title", "year", "doc_type",
+        "source", "pages", "doi", "isbn", "url", "journal", "publisher", "city",
+    )
+
+    def to_dict(self) -> dict:
+        return {k: getattr(self, k) for k in self._FIELDS}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "BibItem":
+        year_raw = d.get("year", "")
+        year = int(year_raw) if year_raw not in (None, "") and str(year_raw).strip().isdigit() else None
+        item_id = d.get("id")
+        index = int(item_id) if item_id not in (None, "") else (d.get("index") or 0)
+        return cls(
+            index=index,
+            raw_text=d.get("raw_text", ""),
+            authors=list(d.get("authors", [])),
+            title=d.get("title", ""),
+            year=year,
+            doc_type=d.get("doc_type", "unknown"),
+            source=d.get("source", ""),
+            pages=d.get("pages", ""),
+            doi=d.get("doi", ""),
+            isbn=d.get("isbn", ""),
+            url=d.get("url", ""),
+            journal=d.get("journal", ""),
+            publisher=d.get("publisher", ""),
+            city=d.get("city", ""),
+        )
 
 
 @dataclass

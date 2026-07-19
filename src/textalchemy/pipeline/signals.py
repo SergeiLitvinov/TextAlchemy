@@ -8,7 +8,6 @@
 * калибровать веса по факту (после разметки);
 * сообщать в отчёте, *почему* документ не совпал (какие сигналы промахнулись).
 """
-
 from __future__ import annotations
 
 import re
@@ -17,13 +16,18 @@ from difflib import SequenceMatcher
 from typing import Optional
 
 from textalchemy.core.types import BibItem, Signal
+from textalchemy.pipeline.name import transliterate
 
 # Веса по умолчанию. Их можно переопределить через ``MatchingConfig`` (TBD).
 DEFAULT_WEIGHTS: dict[str, float] = {
     "manual": 100.0,
     "author": 1.0,
+    "author_translit": 0.9,
+    "author_in_filename": 1.2,
+    "author_translit_in_filename": 1.1,
     "title_overlap": 2.0,
     "title_in_filename": 1.5,
+    "title_translit_in_filename": 2.5,
     "year": 0.15,
     "doi": 2.0,
     "isbn": 1.5,
@@ -54,20 +58,31 @@ def author_match(
     *,
     threshold: float = 0.6,
 ) -> Signal:
-    """Совпадение по автору. Возвращает один Signal с именем ``author``."""
+    """Совпадение по автору. Учитывает транслитерацию (как старая эвристика).
+
+    Возвращает агрегированный Signal с именем ``author`` (макс. вклад).
+    Отдельные вклады транслитерации отражаются в ``detail``.
+    """
     if not author or len(author) <= 3:
         return Signal(name="author", score=0.0, detail=f"author too short: {author!r}")
     a = _normalize(author)
     t = _normalize(text)
     f = _normalize(filename)
+    at = transliterate(author).lower()
     score = 0.0
     matched_in: list[str] = []
     if a in t:
-        score = 1.0
-        matched_in.append("text")
-    if a in f:
         score = max(score, 1.0)
+        matched_in.append("text")
+    if at in t:
+        score = max(score, 0.9)
+        matched_in.append("text_translit")
+    if a in f:
+        score = max(score, 1.2)
         matched_in.append("filename")
+    if at in f:
+        score = max(score, 1.1)
+        matched_in.append("filename_translit")
     if not matched_in:
         for w in t.split():
             if len(w) >= 4 and SequenceMatcher(None, a, w).ratio() >= threshold:
@@ -100,15 +115,30 @@ def title_overlap(title: str, text: str, filename: str) -> Signal:
     )
 
 
-def title_in_filename(title: str, filename: str, min_len: int = 15) -> Signal:
-    """Заголовок (или его начало) дословно встречается в имени файла."""
+def title_in_filename(
+    title: str,
+    filename: str,
+    *,
+    min_len: int = 15,
+    is_empty: bool = False,
+) -> Signal:
+    """Заголовок (или его начало) дословно встречается в имени файла.
+
+    Для пустых документов (мало текста) совпадение по имени файла весит больше
+    (перенесено из старой эвристики ``match_file_to_bibliography``).
+    """
     if not title or len(title) < min_len or not filename:
         return Signal(name="title_in_filename", score=0.0, detail="skip")
     tn = _normalize(title)
     fn = _normalize(filename).replace(" ", "_")
     head = tn[: min(60, len(tn))].replace(" ", "_")
     if head and head in fn:
-        return Signal(name="title_in_filename", score=1.0, detail=f"head={head!r}")
+        score = 2.0 if is_empty else 1.0
+        return Signal(name="title_in_filename", score=score, detail=f"head={head!r}")
+    tt = transliterate(title).lower().replace(" ", "_")
+    if len(title) > min_len and tt and (tt in fn):
+        score = 2.5 if is_empty else 1.0
+        return Signal(name="title_translit_in_filename", score=score, detail=f"translit_head={tt!r}")
     return Signal(name="title_in_filename", score=0.0, detail="no head match")
 
 
@@ -159,14 +189,15 @@ def collect_signals(
     item: BibItem,
     manual: Optional[dict[str, int]] = None,
     weights: Optional[dict[str, float]] = None,
+    is_empty: bool = False,
 ) -> list[Signal]:
-    """Собрать все сигналы для одного ``(документ, item)``."""
+    """Собрать все сигналы для одного ``(документ, item)``.
+
+    ``manual`` здесь не оценивается (это per-document override, см. ``match``).
+    Параметр существует для совместимости сигнатуры вызова.
+    """
     w = {**DEFAULT_WEIGHTS, **(weights or {})}
     raw: list[Signal] = []
-    if manual is not None:
-        # ``manual`` оценивается per-document, не per-item; здесь вес 0
-        # (вызывающий код добавит один ``Signal('manual', 1.0)`` если стем найден).
-        pass
     for author in (item.authors or [])[:5]:
         s = author_match(author, text, filename)
         s.weight = w.get("author", 1.0)
@@ -174,7 +205,7 @@ def collect_signals(
     s = title_overlap(item.title, text, filename)
     s.weight = w.get("title_overlap", 2.0)
     raw.append(s)
-    s = title_in_filename(item.title, filename)
+    s = title_in_filename(item.title, filename, is_empty=is_empty)
     s.weight = w.get("title_in_filename", 1.5)
     raw.append(s)
     s = year_match(item.year, text, filename)

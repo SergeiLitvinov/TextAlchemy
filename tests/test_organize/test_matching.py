@@ -1,13 +1,18 @@
 import json
 
-from textalchemy.organize.bibliography import BibItem
-from textalchemy.organize.matching import (
-    extract_keywords_from_content,
-    extract_text_from_file,
-    fuzzy_match_author,
-    load_manual_matches,
-    match_file_to_bibliography,
-)
+from textalchemy.core.types import DocFormat, Document, Text
+from textalchemy.organize import load_manual_matches
+from textalchemy.organize.bibliography import BibItem as OrgBibItem
+from textalchemy.pipeline.match import match_bibliography
+
+
+def _doc(path: str) -> Document:
+    return Document(path=path, format=DocFormat.UNKNOWN, size=0, sha256="")
+
+
+def _text(plain: str) -> Text:
+    return Text(plain=plain)
+
 
 # ── load_manual_matches ────────────────────────────
 
@@ -38,197 +43,107 @@ def test_load_manual_matches_nonexistent_config():
     assert "42. dbbe20b" in matches
 
 
-# ── fuzzy_match_author ─────────────────────────────
-
-def test_fuzzy_match_author_empty():
-    assert fuzzy_match_author("", "some content") is False
-
-
-def test_fuzzy_match_author_whitespace():
-    assert fuzzy_match_author("   ", "text") is False
-
-
-def test_fuzzy_match_author_exact():
-    assert fuzzy_match_author("Ivanov", "This is about Ivanov research paper") is True
-
-
-def test_fuzzy_match_author_case_insensitive():
-    assert fuzzy_match_author("ivanov", "About IVANOV paper") is True
-
-
-def test_fuzzy_match_author_no_match():
-    assert fuzzy_match_author("Petrov", "completely unrelated text") is False
-
-
-def test_fuzzy_match_author_fuzzy_match():
-    assert fuzzy_match_author("transformer", "transformers in electrical networks", threshold=0.6) is True
-
-
-def test_fuzzy_match_author_short_word():
-    assert fuzzy_match_author("abc", "some abc text") is True  # short word
-
-
-# ── extract_keywords_from_content ──────────────────
-
-def test_keywords_overlap():
-    ck = extract_keywords_from_content("analysis of power systems and electrical networks")
-    tk = extract_keywords_from_content("Analysis of Power Systems")
-    assert len(ck & tk) > 0
-
-
-def test_keywords_no_overlap():
-    ck = extract_keywords_from_content("unrelated content")
-    tk = extract_keywords_from_content("Computer Science")
-    assert len(ck & tk) == 0
-
-
-def test_keywords_empty():
-    assert extract_keywords_from_content("") == set()
-
-
-def test_keywords_stop_words_filtered():
-    kws = extract_keywords_from_content("this will have been that which are were")
-    assert kws == set()
-
-
-def test_keywords_max_keywords():
-    kws = extract_keywords_from_content("alpha beta gamma delta epsilon zeta")
-    assert len(kws) == 6
-
-
-def test_keywords_limited():
-    words = [f"word{chr(97+i)}" for i in range(50)]
-    text = " ".join(words)
-    kws = extract_keywords_from_content(text, max_keywords=10)
-    assert len(kws) == 10
-
-
-# ── extract_text_from_file ─────────────────────────
-
-def test_extract_text_from_txt(tmp_path):
-    f = tmp_path / "test.txt"
-    f.write_text("Hello world", encoding="utf-8")
-    assert extract_text_from_file(f) == "Hello world"
-
-
-def test_extract_text_from_unknown_ext(tmp_path):
-    f = tmp_path / "test.bin"
-    f.write_text("data", encoding="utf-8")
-    assert extract_text_from_file(f) == ""
-
-
-def test_extract_text_no_file():
-    result = extract_text_from_file("nonexistent.pdf")
-    assert result == ""
-
-
-# ── match_file_to_bibliography ─────────────────────
+# ── match_bibliography (new signal-based engine) ───
 
 def test_match_manual_match():
-    items = [BibItem(index=0, title="First"), BibItem(index=1, title="Second")]
-    idx, text, score = match_file_to_bibliography(
-        "content", "myfile.pdf", items,
-        manual_matches={"myfile": 2},
-    )
-    assert idx == 1
-    assert score == 1.0
+    items = [OrgBibItem(index=0, title="First"), OrgBibItem(index=1, title="Second")]
+    doc = _doc("myfile.pdf")
+    m = match_bibliography(text=_text("content"), document=doc, items=items,
+                           manual={"myfile": 2})
+    assert m.matched
+    assert m.item is items[1]
 
 
 def test_match_manual_match_out_of_range():
-    items = [BibItem(index=0, title="First")]
-    idx, text, score = match_file_to_bibliography(
-        "content", "myfile.pdf", items,
-        manual_matches={"myfile": 99},
-    )
-    assert score < 1.0
+    items = [OrgBibItem(index=0, title="First")]
+    doc = _doc("myfile.pdf")
+    m = match_bibliography(text=_text("content"), document=doc, items=items,
+                           manual={"myfile": 99})
+    assert not m.matched
 
 
 def test_match_no_items():
-    idx, text, score = match_file_to_bibliography("content", "file.pdf", [])
-    assert idx == -1
-    assert score == 0.0
+    doc = _doc("file.pdf")
+    m = match_bibliography(text=_text("content"), document=doc, items=[])
+    assert not m.matched
 
 
 def test_match_low_score_below_threshold():
-    items = [BibItem(index=0, title="About Power Transformers")]
-    idx, text, score = match_file_to_bibliography(
-        "completely unrelated text", "random.pdf", items, threshold=0.5,
-    )
-    assert idx == -1
-    assert score < 0.5
+    items = [OrgBibItem(index=0, title="About Power Transformers")]
+    doc = _doc("random.pdf")
+    m = match_bibliography(text=_text("completely unrelated text"), document=doc,
+                           items=items, threshold=0.5)
+    assert not m.matched
 
 
 def test_match_by_author_in_content():
-    items = [BibItem(index=0, authors=["Ivanov"], title="Transformers Networks")]
-    idx, text, score = match_file_to_bibliography(
-        "Ivanov studied transformers in electrical networks",
-        "paper.pdf", items,
-    )
-    assert idx == 0
-    assert score > 0
+    items = [OrgBibItem(index=0, authors=["Ivanov"], title="Transformers Networks")]
+    doc = _doc("paper.pdf")
+    m = match_bibliography(text=_text("Ivanov studied transformers in electrical networks"),
+                           document=doc, items=items)
+    assert m.matched
+    assert m.item is items[0]
 
 
 def test_match_by_author_in_filename():
-    items = [BibItem(index=0, authors=["Ivanov"], title="Power transformers")]
-    idx, text, score = match_file_to_bibliography(
-        "some content here", "ivanov_power_transformers.pdf", items,
-    )
-    assert idx == 0
-    assert score > 0
+    items = [OrgBibItem(index=0, authors=["Ivanov"], title="Power transformers")]
+    doc = _doc("ivanov_power_transformers.pdf")
+    m = match_bibliography(text=_text("some content here"), document=doc, items=items)
+    assert m.matched
 
 
 def test_match_by_title_keywords():
-    items = [BibItem(index=1, authors=["Ivanov"], title="Analysis of Power Transformers")]
-    idx, text, score = match_file_to_bibliography(
-        "Ivanov paper discusses analysis of power transformers in electrical networks",
-        "analysis_power_transformers.pdf", items,
+    items = [OrgBibItem(index=1, authors=["Ivanov"], title="Analysis of Power Transformers")]
+    doc = _doc("analysis_power_transformers.pdf")
+    m = match_bibliography(
+        text=_text("Ivanov paper discusses analysis of power transformers in electrical networks"),
+        document=doc, items=items,
     )
-    assert idx == 0
-    assert score > 0
+    assert m.matched
 
 
 def test_match_year_boost():
-    items = [BibItem(index=0, authors=["Ivanov"], title="Some Title Here", year=2020)]
-    idx, text, score = match_file_to_bibliography(
-        "Ivanov content 2020 more text", "paper.pdf", items,
-    )
-    assert idx == 0
-    assert score > 0
+    items = [OrgBibItem(index=0, authors=["Ivanov"], title="Some Title Here", year=2020)]
+    doc = _doc("paper.pdf")
+    m = match_bibliography(text=_text("Ivanov content 2020 more text"), document=doc, items=items)
+    assert m.matched
 
 
 def test_match_empty_content_with_title_in_filename():
-    items = [BibItem(index=0, authors=["Smith"], title="Power System Analysis")]
-    idx, text, score = match_file_to_bibliography(
-        "", "power_system_analysis.pdf", items,
-    )
-    assert idx == 0
-    assert score > 0
+    items = [OrgBibItem(index=0, authors=["Smith"], title="Power System Analysis")]
+    doc = _doc("power_system_analysis.pdf")
+    m = match_bibliography(text=_text(""), document=doc, items=items)
+    assert m.matched
 
 
 def test_match_author_not_found():
-    items = [BibItem(index=0, authors=["Smith"], title="Title")]
-    idx, _, score = match_file_to_bibliography(
-        "random text unrelated", "file.pdf", items, threshold=0.5,
-    )
-    assert idx == -1
+    items = [OrgBibItem(index=0, authors=["Smith"], title="Title")]
+    doc = _doc("file.pdf")
+    m = match_bibliography(text=_text("random text unrelated"), document=doc, items=items,
+                           threshold=0.5)
+    assert not m.matched
 
 
 def test_match_best_score_selected():
     items = [
-        BibItem(index=0, authors=["Ivanov"], title="Short"),
-        BibItem(index=1, authors=["Petrov"], title="About Power Transformers in Networks"),
+        OrgBibItem(index=0, authors=["Ivanov"], title="Short"),
+        OrgBibItem(index=1, authors=["Petrov"], title="About Power Transformers in Networks"),
     ]
+    doc = _doc("file.pdf")
     content = "Petrov discusses power transformers and electrical networks"
-    idx, text, score = match_file_to_bibliography(content, "file.pdf", items)
-    assert idx == 1
+    m = match_bibliography(text=_text(content), document=doc, items=items)
+    assert m.matched
+    assert m.item is items[1]
 
 
 def test_match_ignores_unknown_title():
-    items = [BibItem(index=0, title="Unknown")]
-    idx, text, score = match_file_to_bibliography("content", "file.pdf", items)
-    assert idx == -1
+    items = [OrgBibItem(index=0, title="Unknown")]
+    doc = _doc("file.pdf")
+    m = match_bibliography(text=_text("content"), document=doc, items=items)
+    assert not m.matched
 
 
 def test_match_with_empty_items_list():
-    idx, text, score = match_file_to_bibliography("content", "file.pdf", [])
-    assert idx == -1
+    doc = _doc("file.pdf")
+    m = match_bibliography(text=_text("content"), document=doc, items=[])
+    assert not m.matched

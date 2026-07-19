@@ -63,6 +63,16 @@ class TemplateEngine:
                     if placeholder in para.text:
                         para.text = para.text.replace(placeholder, str(value))
 
+            # Заменяем плейсхолдеры и внутри таблиц шаблона.
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            for key, value in params.items():
+                                placeholder = "{{" + key + "}}"
+                                if placeholder in para.text:
+                                    para.text = para.text.replace(placeholder, str(value))
+
             doc.save(str(output_path))
         except Exception as e:
             raise GenerateError(f"Failed to generate document: {e}") from e

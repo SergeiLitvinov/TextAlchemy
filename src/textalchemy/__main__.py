@@ -39,6 +39,8 @@ def _setup_parser():
     )
     parser.add_argument("--version", action="version",
                         version=f"TextAlchemy {VERSION}")
+    parser.add_argument("-v", "--debug", action="store_true",
+                        help="Подробное логирование (DEBUG)")
     parser.add_argument("-c", "--config", help="Путь к конфигурационному файлу JSON")
 
     sub = parser.add_subparsers(dest="command", help="Команды")
@@ -140,6 +142,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     parser = _setup_parser()
     args = parser.parse_args(argv)
+
+    logging.getLogger("textalchemy").setLevel(logging.DEBUG if getattr(args, "debug", False) else logging.WARNING)
 
     if not args.command:
         parser.print_help()

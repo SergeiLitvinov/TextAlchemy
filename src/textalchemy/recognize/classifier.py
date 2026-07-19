@@ -2,6 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
 
+from textalchemy.core.doc_types import DOC_TYPE_KEYWORDS, DOC_TYPES
+
 
 @dataclass
 class ClassificationResult:
@@ -11,16 +13,7 @@ class ClassificationResult:
 
 
 class DocumentClassifier:
-    DOC_TYPES = [
-        "article",
-        "book",
-        "dissertation",
-        "monograph",
-        "report",
-        "abstract",
-        "patent",
-        "standard",
-    ]
+    DOC_TYPES = list(DOC_TYPES)
 
     def __init__(self, model_path: Optional[str] = None):
         if model_path:
@@ -37,18 +30,7 @@ class DocumentClassifier:
         text_lower = text.lower()
         scores: Dict[str, float] = {t: 0.0 for t in self.DOC_TYPES}
 
-        keywords = {
-            "article": ["статья", "журнал", "doi", "abstract", "introduction", "conclusion"],
-            "book": ["учебник", "учебное пособие", "издательство", "isbn", "том"],
-            "dissertation": ["диссертация", "дис.", "кандидат", "доктор", "автореферат"],
-            "monograph": ["монография", "научное издание"],
-            "report": ["отчет", "report", "нтр"],
-            "abstract": ["автореферат", "реферат", "abstract"],
-            "patent": ["патент", "пат.", "изобретение"],
-            "standard": ["стандарт", "гост", "snip", "snip"],
-        }
-
-        for doc_type, kw_list in keywords.items():
+        for doc_type, kw_list in DOC_TYPE_KEYWORDS.items():
             match_count = sum(1 for kw in kw_list if kw in text_lower)
             if match_count > 0:
                 scores[doc_type] = min(1.0, match_count / max(len(kw_list), 1) * 2)

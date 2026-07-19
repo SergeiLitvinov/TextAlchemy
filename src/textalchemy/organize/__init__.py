@@ -11,14 +11,6 @@ from textalchemy.organize.filename import (
     transliterate,
 )
 from textalchemy.organize.gost import GostFormatter
-from textalchemy.organize.matching import (
-    DEFAULT_MANUAL_MATCHES,
-    extract_keywords_from_content,
-    extract_text_from_file,
-    fuzzy_match_author,
-    load_manual_matches,
-    match_file_to_bibliography,
-)
 from textalchemy.organize.utils import (
     calculate_file_hash,
     create_zip_archive,
@@ -30,14 +22,14 @@ from textalchemy.organize.utils import (
     sanitize_path,
     validate_pdf,
 )
+from textalchemy.pipeline.match_files import DEFAULT_MANUAL_MATCHES, load_manual_matches
 
 __all__ = [
     "BibItem", "BibliographyParser", "smart_parse", "detect_format",
     "DocType", "build_filename", "format_authors", "abbreviate_title",
     "normalize_filename", "transliterate", "extract_authors_from_text",
     "extract_title_from_text",
-    "match_file_to_bibliography", "load_manual_matches", "extract_text_from_file",
-    "fuzzy_match_author", "extract_keywords_from_content", "DEFAULT_MANUAL_MATCHES",
+    "load_manual_matches", "DEFAULT_MANUAL_MATCHES",
     "GostFormatter",
     "generate_bib",
     "progress_bar", "calculate_file_hash", "find_duplicates", "validate_pdf",

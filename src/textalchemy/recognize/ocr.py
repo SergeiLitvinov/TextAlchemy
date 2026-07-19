@@ -1,9 +1,15 @@
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
 from textalchemy.core.exceptions import RecognizeError
+
+logger = logging.getLogger(__name__)
+
+# Бэкенды, которые реально поддерживают режим handwriting.
+_HANDWRITING_BACKENDS = {"easyocr"}
 
 
 @dataclass
@@ -76,6 +82,12 @@ class OcrEngine:
         image_path = Path(image_path)
         if not image_path.exists():
             raise RecognizeError(f"Image not found: {image_path}")
+
+        if handwriting and self._backend not in _HANDWRITING_BACKENDS:
+            logger.warning(
+                "Backend %r does not natively support handwriting mode; "
+                "proceeding in printed-text mode.", self._backend,
+            )
 
         if not self._available:
             return OcrResult(
@@ -179,8 +191,8 @@ class OcrEngine:
             pages=1,
         )
 
-    def recognize_pdf(self, pdf_path: str | Path, dpi: int = 300, scale: Optional[int] = None,
-                      handwriting: bool = False, save_images: bool = False) -> List[OcrResult]:
+    def recognize_pdf(self, pdf_path: str | Path, scale: int = 3,
+                       handwriting: bool = False, save_images: bool = False) -> List[OcrResult]:
         pdf_path = Path(pdf_path)
         if not pdf_path.exists():
             raise RecognizeError(f"PDF not found: {pdf_path}")
@@ -194,10 +206,7 @@ class OcrEngine:
 
         doc = fitz.open(str(pdf_path))
 
-        if scale:
-            scale = max(2, min(6, scale))
-        else:
-            scale = 3
+        scale = max(2, min(6, scale))
 
         results: list[OcrResult] = []
 

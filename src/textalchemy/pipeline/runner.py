@@ -116,7 +116,7 @@ def load_pipeline(path: Union[str, Path]) -> dict:
     p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(p)
-    text = p.read_text(encoding="utf-8")
+    text = p.read_text(encoding="utf-8-sig")
     suffix = p.suffix.lower()
     if suffix in (".yaml", ".yml"):
         if not _HAS_YAML:

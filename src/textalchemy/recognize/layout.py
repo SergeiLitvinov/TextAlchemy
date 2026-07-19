@@ -56,26 +56,45 @@ class LayoutAnalyzer:
         try:
             import numpy as np
             from PIL import ImageFilter
-            edges = img.convert("L").filter(ImageFilter.FIND_EDGES)
-            edge_arr = np.array(edges)
-            edge_density = np.mean(edge_arr > 128)
 
-            has_table = bool(edge_density > 0.15 and edge_density < 0.4)
+            gray = img.convert("L")
+            edges = gray.filter(ImageFilter.FIND_EDGES)
+            edge_arr = np.array(edges)
+            edge_density = float(np.mean(edge_arr > 128))
+            has_table = bool(0.15 < edge_density < 0.4)
+
+            # Колонтитулы: считаем заполненность (dark pixels) в верхней/нижней полосах.
+            margin = int(width * 0.08)
+            header_h = int(height * 0.08)
+            footer_h = int(height * 0.08)
+            top_band = np.array(gray.crop((0, 0, width, header_h)))
+            bot_band = np.array(gray.crop((0, height - footer_h, width, height)))
+            ink_top = float(np.mean(top_band < 200))
+            ink_bot = float(np.mean(bot_band < 200))
+            has_header = ink_top > 0.02
+            has_footer = ink_bot > 0.02
         except ImportError:
             has_table = False
+            has_header = has_footer = False
+            margin = int(width * 0.08)
+            header_h = int(height * 0.08)
+            footer_h = int(height * 0.08)
 
         regions: List[LayoutRegion] = []
 
-        header_h = int(height * 0.08)
-        footer_h = int(height * 0.08)
-        margin = int(width * 0.08)
+        body_top = header_h if has_header else 0
+        body_bottom = (height - footer_h) if has_footer else height
+        body_height = max(1, body_bottom - body_top)
 
-        regions.append(LayoutRegion(0, 0, width, header_h, RegionType.HEADER, 0.5))
-        regions.append(LayoutRegion(0, height - footer_h, width, footer_h, RegionType.FOOTER, 0.5))
+        if has_header:
+            regions.append(LayoutRegion(0, 0, width, header_h, RegionType.HEADER,
+                                        round(min(1.0, ink_top * 10), 2)))
+        if has_footer:
+            regions.append(LayoutRegion(0, height - footer_h, width, footer_h,
+                                        RegionType.FOOTER, round(min(1.0, ink_bot * 10), 2)))
 
-        body_top = header_h
-        body_bottom = height - footer_h
-        body_height = body_bottom - body_top
+        # Широкие страницы (альбомные) — делим body на две колонки.
+        is_wide = width > height * 1.15
 
         if has_table:
             table_top = body_top + int(body_height * 0.1)
@@ -85,19 +104,31 @@ class LayoutAnalyzer:
                 RegionType.TABLE, 0.4,
             ))
             text_top = table_top + table_height
+            text_bottom = body_bottom
+        else:
+            text_top = body_top
+            text_bottom = body_bottom
+
+        if is_wide:
+            col_w = (width - 3 * margin) // 2
             regions.append(LayoutRegion(
-                margin, text_top, width - 2 * margin, body_bottom - text_top,
+                margin, text_top, col_w, text_bottom - text_top, RegionType.TEXT, 0.5,
+            ))
+            regions.append(LayoutRegion(
+                margin * 2 + col_w, text_top, col_w, text_bottom - text_top,
                 RegionType.TEXT, 0.5,
             ))
         else:
             regions.append(LayoutRegion(
-                margin, body_top, width - 2 * margin, body_height,
+                margin, text_top, width - 2 * margin, text_bottom - text_top,
                 RegionType.TEXT, 0.5,
             ))
 
-        regions.append(LayoutRegion(
-            width - margin, margin, margin // 2, margin // 2,
-            RegionType.PAGE_NUMBER, 0.3,
-        ))
+        # Номер страницы — в правом нижнем углу, если есть футер.
+        if has_footer:
+            regions.append(LayoutRegion(
+                width - margin, height - footer_h, margin // 2, footer_h,
+                RegionType.PAGE_NUMBER, 0.3,
+            ))
 
         return regions

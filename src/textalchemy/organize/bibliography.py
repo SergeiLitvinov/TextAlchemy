@@ -186,22 +186,7 @@ class BibliographyParser:
 
     @staticmethod
     def to_json(items: List[BibItem]) -> List[dict]:
-        return [
-            {
-                "index": i.index,
-                "authors": i.authors,
-                "title": i.title,
-                "year": i.year,
-                "doc_type": i.doc_type,
-                "source": i.source,
-                "pages": i.pages,
-                "doi": i.doi,
-                "isbn": i.isbn,
-                "url": i.url,
-                "raw": i.raw_text,
-            }
-            for i in items
-        ]
+        return [i.to_dict() for i in items]
 
     @staticmethod
     def to_markdown(items: List[BibItem]) -> str:

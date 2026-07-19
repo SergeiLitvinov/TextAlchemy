@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import json
 import logging
 import shutil
 from pathlib import Path
@@ -13,6 +14,31 @@ from textalchemy.core.registry import operation
 from textalchemy.core.types import BibItem, DocFormat, Document, Match
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_MANUAL_MATCHES: dict[str, int] = {
+    "42. dbbe20b": 30,
+    "16. 2014.Usloviya.Vozniknoveniya.i.Sushestvovaniya.Ferroresonansa.v.Cepyah.s.Elektromagnitnimi.Izmeritel'nymi.TN": 30,
+    "20. 1994.Usloviya.Ferroresonansa.s.Transformatorami.Napryazheniya.v.Seti.220kV": 34,
+    "2018_222_topolskydv": 61,
+}
+
+
+def load_manual_matches(config_path: Optional[str | Path] = None) -> dict[str, int]:
+    """Загрузить ручные совпадения filename→индекс (1-based) библиографии.
+
+    По умолчанию берутся встроенные ``DEFAULT_MANUAL_MATCHES``; опционально
+    дополняются/переопределяются JSON-файлом ``{stem: index}``.
+    """
+    matches = dict(DEFAULT_MANUAL_MATCHES)
+    if config_path:
+        path = Path(config_path)
+        if path.exists():
+            try:
+                extra = json.loads(path.read_text(encoding="utf-8"))
+                matches.update(extra)
+            except (json.JSONDecodeError, OSError):
+                pass
+    return matches
 
 
 @operation(

@@ -49,10 +49,21 @@ class Config:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Config":
-        naming = NamingConfig(**(data.get("naming", {})))
-        matching = MatchingConfig(**(data.get("matching", {})))
-        report = ReportConfig(**(data.get("report", {})))
-        base = {k: v for k, v in data.items() if k not in ("naming", "matching", "report")}
+        naming_fields = {f for f in NamingConfig.__dataclass_fields__}
+        matching_fields = {f for f in MatchingConfig.__dataclass_fields__}
+        report_fields = {f for f in ReportConfig.__dataclass_fields__}
+        base_fields = {
+            f for f in Config.__dataclass_fields__
+            if f not in ("naming", "matching", "report")
+        }
+
+        def _filter(d: dict, fields: set) -> dict:
+            return {k: v for k, v in d.items() if k in fields}
+
+        naming = NamingConfig(**_filter(data.get("naming", {}), naming_fields))
+        matching = MatchingConfig(**_filter(data.get("matching", {}), matching_fields))
+        report = ReportConfig(**_filter(data.get("report", {}), report_fields))
+        base = {k: v for k, v in data.items() if k in base_fields}
         return cls(naming=naming, matching=matching, report=report, **base)
 
     def to_dict(self) -> dict:

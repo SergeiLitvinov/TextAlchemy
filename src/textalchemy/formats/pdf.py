@@ -103,7 +103,11 @@ def _with_pymupdf(path: str) -> Text:
 
 
 def read_pdf(path: str) -> Text:
-    """Достать текст из PDF: pdfplumber → pypdf → pymupdf."""
+    """Достать текст из PDF: pdfplumber → pypdf → pymupdf.
+
+    Возвращает первый успешный (ненулевой) результат; предупреждения всех
+    упавших движков притаскиваются в ``warnings`` итогового ``Text``.
+    """
     engines: list[tuple[str, Callable[[str], Text]]] = [
         ("pdfplumber", _with_pdfplumber),
         ("pypdf", _with_pypdf),
@@ -113,8 +117,7 @@ def read_pdf(path: str) -> Text:
     for name, fn in engines:
         result = _safe_call(name, lambda: fn(path))
         if result.plain or result.blocks:
-            if warnings:
-                result.warnings = warnings + result.warnings
+            result.warnings = warnings + result.warnings
             return result
         warnings.extend(result.warnings)
     return Text(

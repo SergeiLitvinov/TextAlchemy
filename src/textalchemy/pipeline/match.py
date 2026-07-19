@@ -6,7 +6,6 @@ item с максимальным суммарным score. Если score ниж
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Optional
 
@@ -36,20 +35,21 @@ def match_bibliography(
     Возвращает ``Match`` с лучшим кандидатом. ``Match.matched=True`` если
     ``score >= threshold``.
     """
-    from textalchemy.pipeline.signals import collect_signals, manual_match
+    from textalchemy.pipeline.signals import DEFAULT_WEIGHTS, collect_signals, manual_match
 
     filename = Path(document.path).name
     plain = text.plain
+    is_empty = len(plain.strip()) < 100
+
     if manual:
         m = manual_match(filename, items, manual)
         if m.score >= 1.0:
-            idx = manual[re.sub(r"\.[^.]+$", "", filename)] - 1
-            from textalchemy.pipeline.signals import DEFAULT_WEIGHTS
             w = {**DEFAULT_WEIGHTS, **(weights or {})}
             m.weight = w.get("manual", 100.0)
+            idx = m.detail.split("[")[-1].rstrip("]")
             return Match(
                 document=document,
-                item=items[idx],
+                item=items[int(idx)],
                 signals=[m],
                 matched=True,
             )
@@ -59,7 +59,8 @@ def match_bibliography(
     best_score = 0.0
     for item in items:
         signals = collect_signals(
-            text=plain, filename=filename, item=item, manual=manual, weights=weights,
+            text=plain, filename=filename, item=item, weights=weights,
+            is_empty=is_empty,
         )
         score = sum(s.contribution for s in signals)
         if score > best_score:
