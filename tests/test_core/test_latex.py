@@ -18,14 +18,14 @@ def test_escape_backslash_not_double_escaped():
     # Бэкслэш экранируется один раз; добавленные "{" "}" не должны
     # повторно экранироваться (классический баг однопроходной замены).
     out = escape_latex(r"a\b")
-    assert out == r"a\textbackslash\{\}b"
+    assert out == r"a\textbackslash{}b"
     # Нет двойного экранирования бэкслэша.
     assert r"\\textbackslash" not in out
 
 
 def test_escape_special_no_double_escape():
     out = escape_latex("a{b}c\\d~e%f")
-    assert out == r"a\{b\}c\textbackslash\{\}d\textasciitilde{}e\%f"
+    assert out == r"a\{b\}c\textbackslash{}d\textasciitilde{}e\%f"
     # Не должно быть двойного экранирования бэкслэша (исходный "\\" -> "\textbackslash{}").
     assert r"\\textbackslash" not in out
 
