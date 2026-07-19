@@ -86,6 +86,16 @@ class TestBuildFilename:
         # type отсутствует
         assert "статья" not in name
 
+    def test_include_type_false_allows_template_without_type(self):
+        item = _item(index=1, authors=["Иванов"], title="Hello", doc_type="article")
+        name = build_filename(
+            item, ext=".pdf", include_type=False,
+            template="{index:02d}_{authors}_{title}",
+        )
+        assert "статья" not in name
+        assert name.startswith("01_")
+        assert name.endswith(".pdf")
+
 
 def _match(matched: bool, item: BibItem | None) -> Match:
     doc = Document(path=Path("/x.pdf"), format=DocFormat.PDF, size=0, sha256="")

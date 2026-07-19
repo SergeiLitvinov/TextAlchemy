@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from textalchemy.core.registry import operation
-from textalchemy.core.types import BibItem, Document, Match, Text
+from textalchemy.core.types import BibItem, Document, Match, Signal, Text
 
 
 @operation(
@@ -55,7 +55,7 @@ def match_bibliography(
             )
 
     best_item: Optional[BibItem] = None
-    best_signals: list = []
+    best_signals: list[Signal] = []
     best_score = 0.0
     for item in items:
         signals = collect_signals(

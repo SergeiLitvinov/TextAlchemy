@@ -143,7 +143,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = _setup_parser()
     args = parser.parse_args(argv)
 
-    logging.getLogger("textalchemy").setLevel(logging.DEBUG if getattr(args, "debug", False) else logging.WARNING)
+    debug = bool(getattr(args, "debug", False))
+    logging.getLogger("textalchemy").setLevel(logging.DEBUG if debug else logging.WARNING)
+    if debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        )
 
     if not args.command:
         parser.print_help()

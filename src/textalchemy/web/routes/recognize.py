@@ -1,8 +1,9 @@
 """API OCR-распознавания."""
 from __future__ import annotations
 
-import os
+import shutil
 import tempfile
+from pathlib import Path
 
 from fastapi import File, UploadFile
 
@@ -12,10 +13,9 @@ from textalchemy.web.app import app
 
 @app.post("/api/recognize")
 async def api_recognize(file: UploadFile = File(...)):
-    from pathlib import Path
-
     fname = file.filename or "document.pdf"
-    tmp = Path(tempfile.mkdtemp()) / fname
+    workdir = Path(tempfile.mkdtemp(prefix="textalchemy_web_"))
+    tmp = workdir / fname
     tmp.write_bytes(await file.read())
     try:
         engine = OcrEngine()
@@ -28,4 +28,4 @@ async def api_recognize(file: UploadFile = File(...)):
     except Exception as e:  # noqa: BLE001
         return {"success": False, "error": str(e)}
     finally:
-        os.unlink(tmp)
+        shutil.rmtree(workdir, ignore_errors=True)

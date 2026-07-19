@@ -204,30 +204,29 @@ class OcrEngine:
 
         import tempfile
 
-        doc = fitz.open(str(pdf_path))
-
         scale = max(2, min(6, scale))
 
         results: list[OcrResult] = []
 
-        with tempfile.TemporaryDirectory(prefix="textalchemy_ocr_") as tmpdir:
-            tmp = Path(tmpdir)
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-                mat = fitz.Matrix(scale, scale)
-                pix = page.get_pixmap(matrix=mat)
+        with fitz.open(str(pdf_path)) as doc:
+            with tempfile.TemporaryDirectory(prefix="textalchemy_ocr_") as tmpdir:
+                tmp = Path(tmpdir)
+                for page_num in range(len(doc)):
+                    page = doc[page_num]
+                    mat = fitz.Matrix(scale, scale)
+                    pix = page.get_pixmap(matrix=mat)
 
-                from PIL import Image
-                img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+                    from PIL import Image
+                    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
-                if save_images:
-                    save_path = Path.cwd() / f"page_{page_num + 1}.png"
-                else:
-                    save_path = tmp / f"page_{page_num}.png"
-                img.save(save_path)
-                result = self.recognize(save_path, handwriting=handwriting)
+                    if save_images:
+                        save_path = Path.cwd() / f"page_{page_num + 1}.png"
+                    else:
+                        save_path = tmp / f"page_{page_num}.png"
+                    img.save(save_path)
+                    result = self.recognize(save_path, handwriting=handwriting)
 
-                result.pages = len(doc)
-                results.append(result)
+                    result.pages = len(doc)
+                    results.append(result)
 
         return results

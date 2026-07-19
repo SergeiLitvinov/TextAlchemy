@@ -1,6 +1,7 @@
 """API управления библиотекой (CRUD bibliography + smart-parse + operations)."""
 from __future__ import annotations
 
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -107,7 +108,8 @@ async def api_delete_bib_item(item_id: int):
 @app.post("/api/bibliography/import")
 async def api_import_bib(file: UploadFile = File(...)):
     fname = file.filename or "import.json"
-    tmp_file = Path(tempfile.mkdtemp()) / fname
+    workdir = Path(tempfile.mkdtemp(prefix="textalchemy_web_"))
+    tmp_file = workdir / fname
     tmp_file.write_bytes(await file.read())
     try:
         items = PipelineBibliographyParser.parse_file(str(tmp_file))
@@ -120,7 +122,7 @@ async def api_import_bib(file: UploadFile = File(...)):
         _save_bib(existing)
         return {"success": True, "count": len(data)}
     finally:
-        tmp_file.unlink(missing_ok=True)
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 @app.post("/api/bibliography/smart-parse")

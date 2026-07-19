@@ -7,6 +7,37 @@ from textalchemy.core.exceptions import GenerateError
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
+def _replace_in_paragraph(paragraph, items):
+    """Подставить значения плейсхолдеров {{key}} в параграфе.
+
+    Текст собирается из всех runs (плейсхолдеры в docx часто разбиты между
+    несколькими runs), заменяется, и результат записывается в первый run с
+    сохранением его стиля; остальные runs очищаются. Это сохраняет базовое
+    форматирование параграфа (в отличие от перезаписи ``para.text``).
+    """
+    if not paragraph.runs:
+        if not items:
+            return
+        text = paragraph.text
+        replaced = text
+        for key, value in items:
+            replaced = replaced.replace("{{" + key + "}}", str(value))
+        if replaced != text:
+            paragraph.add_run(replaced)
+        return
+
+    text = "".join(run.text for run in paragraph.runs)
+    replaced = text
+    for key, value in items:
+        replaced = replaced.replace("{{" + key + "}}", str(value))
+    if replaced == text:
+        return
+    first_run = paragraph.runs[0]
+    first_run.text = replaced
+    for run in paragraph.runs[1:]:
+        run.text = ""
+
+
 @dataclass
 class DocumentTemplate:
     name: str
@@ -57,21 +88,20 @@ class TemplateEngine:
             doc = Document(str(template_path))
             params = params or {}
 
+            # Заменяем по убыванию длины ключа, чтобы более длинные
+            # плейсхолдеры (возможно, содержащие префиксы других) не
+            # конфликтовали при подстановке.
+            items = sorted(params.items(), key=lambda kv: len(kv[0]), reverse=True)
+
             for para in doc.paragraphs:
-                for key, value in params.items():
-                    placeholder = "{{" + key + "}}"
-                    if placeholder in para.text:
-                        para.text = para.text.replace(placeholder, str(value))
+                _replace_in_paragraph(para, items)
 
             # Заменяем плейсхолдеры и внутри таблиц шаблона.
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
                         for para in cell.paragraphs:
-                            for key, value in params.items():
-                                placeholder = "{{" + key + "}}"
-                                if placeholder in para.text:
-                                    para.text = para.text.replace(placeholder, str(value))
+                            _replace_in_paragraph(para, items)
 
             doc.save(str(output_path))
         except Exception as e:

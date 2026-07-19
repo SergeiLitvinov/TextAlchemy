@@ -47,10 +47,9 @@ class LayoutAnalyzer:
             return []
 
         from PIL import Image
-        img = Image.open(image_path)
-        width, height = img.size
-
-        return self._analyze_basic(img, width, height)
+        with Image.open(image_path) as img:
+            width, height = img.size
+            return self._analyze_basic(img, width, height)
 
     def _analyze_basic(self, img, width: int, height: int) -> List[LayoutRegion]:
         try:

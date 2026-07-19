@@ -1,7 +1,7 @@
 """API извлечения текста/LaTeX из загруженных файлов."""
 from __future__ import annotations
 
-import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -17,7 +17,8 @@ from textalchemy.web.app import app
 @app.post("/api/extract/text")
 async def api_extract_text(file: UploadFile = File(...), fmt: str = Form("auto")):
     fname = file.filename or "extracted.txt"
-    tmp = Path(tempfile.mkdtemp()) / fname
+    workdir = Path(tempfile.mkdtemp(prefix="textalchemy_web_"))
+    tmp = workdir / fname
     tmp.write_bytes(await file.read())
     try:
         doc = ingest_file(path=tmp)
@@ -26,7 +27,7 @@ async def api_extract_text(file: UploadFile = File(...), fmt: str = Form("auto")
     except Exception as e:  # noqa: BLE001
         return {"success": False, "error": str(e)}
     finally:
-        os.unlink(tmp)
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 @app.post("/api/extract/latex")
@@ -35,7 +36,8 @@ async def api_extract_latex(
     doc_type: str = Form("manuscript"),
 ):
     fname = file.filename or "document.docx"
-    tmp = Path(tempfile.mkdtemp()) / fname
+    workdir = Path(tempfile.mkdtemp(prefix="textalchemy_web_"))
+    tmp = workdir / fname
     tmp.write_bytes(await file.read())
     out = tmp.with_suffix(".tex")
     try:
@@ -46,6 +48,4 @@ async def api_extract_latex(
     except Exception as e:  # noqa: BLE001
         return {"success": False, "error": str(e)}
     finally:
-        os.unlink(tmp)
-        if out.exists():
-            os.unlink(out)
+        shutil.rmtree(workdir, ignore_errors=True)

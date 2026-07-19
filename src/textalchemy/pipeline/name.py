@@ -200,7 +200,9 @@ def build_filename(
     transliterate_title: bool = False,
 ) -> str:
     """Сгенерировать имя файла по ``BibItem``."""
-    required = {"index", "type", "authors", "title"}
+    required = {"index", "authors", "title"}
+    if include_type:
+        required.add("type")
     found = set(re.findall(r"\{(\w+)(?::[^}]*)?\}", template))
     missing = required - found
     if missing:

@@ -122,6 +122,9 @@ class Database:
             rec.doi = item.doi  # type: ignore[assignment]
             rec.isbn = item.isbn  # type: ignore[assignment]
             rec.url = item.url or ""  # type: ignore[assignment]
+            rec.journal = item.journal or ""  # type: ignore[assignment]
+            rec.publisher = item.publisher or ""  # type: ignore[assignment]
+            rec.city = item.city or ""  # type: ignore[assignment]
             rec.raw_text = item.raw_text  # type: ignore[assignment]
             rec.updated_at = datetime.now().isoformat()  # type: ignore[assignment]
             sess.commit()

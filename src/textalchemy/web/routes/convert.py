@@ -14,27 +14,31 @@ from textalchemy.web.app import _register_task, _tasks, app
 
 
 def _run_convert(task_id: str, src_path, out_path, tool: str, fmt: str):
+    workdir = src_path.parent
     if fmt == "pptx":
         try:
             from textalchemy.convert.pptx_to_html import convert as pptx_to_html
 
             out_dir = tempfile.mkdtemp()
-            pptx_to_html(src_path, out_dir)
-            zip_path = out_path.with_suffix(".zip")
-            shutil.make_archive(str(zip_path.with_suffix("")), "zip", out_dir)
-            content = zip_path.read_bytes()
-            _register_task(task_id, {
-                "status": "done",
-                "content": base64.b64encode(content).decode(),
-                "filename": src_path.stem + ".zip",
-                "error": None,
-            })
-            shutil.rmtree(out_dir, ignore_errors=True)
-            zip_path.unlink(missing_ok=True)
+            try:
+                pptx_to_html(src_path, out_dir)
+                zip_path = out_path.with_suffix(".zip")
+                shutil.make_archive(str(zip_path.with_suffix("")), "zip", out_dir)
+                content = zip_path.read_bytes()
+                _register_task(task_id, {
+                    "status": "done",
+                    "content": base64.b64encode(content).decode(),
+                    "filename": src_path.stem + ".zip",
+                    "error": None,
+                })
+                zip_path.unlink(missing_ok=True)
+            finally:
+                shutil.rmtree(out_dir, ignore_errors=True)
         except Exception as e:  # noqa: BLE001
             _register_task(task_id, {"status": "error", "error": str(e)})
         finally:
             src_path.unlink(missing_ok=True)
+            shutil.rmtree(workdir, ignore_errors=True)
         return
 
     try:
@@ -55,6 +59,7 @@ def _run_convert(task_id: str, src_path, out_path, tool: str, fmt: str):
     finally:
         src_path.unlink(missing_ok=True)
         out_path.unlink(missing_ok=True)
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 @app.post("/api/convert")

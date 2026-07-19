@@ -83,22 +83,23 @@ def _with_pypdf(path: str) -> Text:
 def _with_pymupdf(path: str) -> Text:
     import fitz  # type: ignore[import-not-found]
 
-    doc = fitz.open(path)
     plain_parts: list[str] = []
-    for i, page in enumerate(doc, start=1):
-        try:
-            t = page.get_text("text") or ""
-        except Exception:  # noqa: BLE001
-            t = ""
-        if t:
-            plain_parts.append(t)
-    plain = "\n".join(plain_parts)
+    with fitz.open(path) as doc:
+        for i, page in enumerate(doc, start=1):
+            try:
+                t = page.get_text("text") or ""
+            except Exception:  # noqa: BLE001
+                t = ""
+            if t:
+                plain_parts.append(t)
+        plain = "\n".join(plain_parts)
+        pages = len(doc)
     return Text(
         blocks=[Block(type=BlockType.PARAGRAPH, text=plain)] if plain else [],
         plain=plain,
         source_format=DocFormat.PDF,
         engine="pymupdf",
-        pages=len(doc),
+        pages=pages,
     )
 
 
@@ -132,12 +133,12 @@ def get_pdf_info(path: str) -> dict:
     info = {"title": "", "author": "", "subject": ""}
     try:
         from pypdf import PdfReader
-        reader = PdfReader(path)
-        meta = reader.metadata
-        if meta:
-            info["title"] = getattr(meta, "title", "") or ""
-            info["author"] = getattr(meta, "author", "") or ""
-            info["subject"] = getattr(meta, "subject", "") or ""
+        with PdfReader(path) as reader:
+            meta = reader.metadata
+            if meta:
+                info["title"] = getattr(meta, "title", "") or ""
+                info["author"] = getattr(meta, "author", "") or ""
+                info["subject"] = getattr(meta, "subject", "") or ""
     except Exception:  # noqa: BLE001
         pass
     return info

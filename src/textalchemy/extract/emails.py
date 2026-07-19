@@ -85,34 +85,32 @@ def extract_emails_from_pdf(
         raise RecognizeError("pymupdf (fitz) required for PDF OCR") from e
 
     engine = ocr_engine or OcrEngine(languages=langs.split("+"))
-    doc = fitz.open(str(pdf_path))
     all_emails: list[str] = []
     text_pages = 0
     ocr_pages = 0
 
-    for i, page in enumerate(doc, 1):
-        text_layer = page.get_text()
+    with fitz.open(str(pdf_path)) as doc:
+        for i, page in enumerate(doc, 1):
+            text_layer = page.get_text()
 
-        if len(text_layer.strip()) > min_text_length:
-            text_pages += 1
-            page_emails = extract_emails_from_text(text_layer)
-            all_emails.extend(page_emails)
-            continue
+            if len(text_layer.strip()) > min_text_length:
+                text_pages += 1
+                page_emails = extract_emails_from_text(text_layer)
+                all_emails.extend(page_emails)
+                continue
 
-        ocr_pages += 1
-        text, ok = engine.recognize_page_with_ocr(
-            page,
-            langs=langs,
-            dpi=dpi,
-            rotation=rotation,
-            psm=psm,
-            timeout_sec=timeout,
-        )
-        if ok and text:
-            page_emails = extract_emails_from_text(text)
-            all_emails.extend(page_emails)
-
-    doc.close()
+            ocr_pages += 1
+            text, ok = engine.recognize_page_with_ocr(
+                page,
+                langs=langs,
+                dpi=dpi,
+                rotation=rotation,
+                psm=psm,
+                timeout_sec=timeout,
+            )
+            if ok and text:
+                page_emails = extract_emails_from_text(text)
+                all_emails.extend(page_emails)
 
     return EmailResult(
         emails=sorted(set(all_emails)),
