@@ -125,3 +125,82 @@ def test_convert_nonexistent():
     result = conv.convert("nonexistent.pdf", "out.docx")
     assert not result.success
     assert "not found" in (result.error or "").lower()
+
+
+def _make_pdf_with_headings(tmp_path):
+    """PDF с заголовком (крупный шрифт), подзаголовком и телом текста."""
+    try:
+        import fitz
+    except ImportError:
+        pytest.skip("pymupdf not installed")
+    pdf = tmp_path / "headings.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((50, 60), "Глава 1. Введение", fontsize=20)
+    page.insert_text((50, 100), "Обычный абзац с текстом для проверки извлечения.", fontsize=11)
+    page.insert_text((50, 140), "Подраздел", fontsize=14)
+    page.insert_text((50, 180), "Ещё один абзац тела документа.", fontsize=11)
+    doc.save(str(pdf))
+    doc.close()
+    return pdf
+
+
+def test_fanout_restores_headings(tmp_path):
+    """После fanout заголовки должны получить стиль Heading, а не только Normal."""
+    pdf = _make_pdf_with_headings(tmp_path)
+    out = tmp_path / "out.docx"
+    result = FanOutConverter().convert(pdf, out)
+    assert result.success, result.error
+    from docx import Document
+
+    doc = Document(str(out))
+    styles = [p.style.name for p in doc.paragraphs if p.text.strip()]
+    assert any(s.startswith("Heading") for s in styles), f"no headings: {styles}"
+
+
+def test_pymupdf_preserves_text_runs(tmp_path):
+    """PyMuPDF: текстовая страница → текст, без растровых вставок."""
+    pdf = _make_pdf_with_headings(tmp_path)
+    out = tmp_path / "out.docx"
+    result = PyMuPdfConverter().convert(pdf, out)
+    assert result.success
+    from docx import Document
+
+    doc = Document(str(out))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    # Текст извлечён как текст (а не картинка). Кириллица в консоли искажается,
+    # поэтому проверяем длину и отсутствие растровых вставок.
+    assert len(text.strip()) > 50
+    with zipfile.ZipFile(out) as zf:
+        media = [n for n in zf.namelist() if n.startswith("word/media/")]
+    assert not media, "текстовая страница не должна содержать картинок"
+
+
+def test_docx_to_latex_quality(tmp_path):
+    """DOCX→LaTeX: заголовки, жирный текст и таблицы попадают в .tex."""
+    try:
+        from docx import Document as D
+    except ImportError:
+        pytest.skip("python-docx not installed")
+    from textalchemy.convert.docx_to_latex import DocxToLatexConverter
+
+    doc = D()
+    doc.add_heading("Глава 1. Введение", level=1)
+    p = doc.add_paragraph()
+    p.add_run("Обычный ")
+    rb = p.add_run("жирный")
+    rb.bold = True
+    t = doc.add_table(rows=1, cols=2)
+    t.rows[0].cells[0].text = "Имя"
+    t.rows[0].cells[1].text = "Год"
+    src = tmp_path / "src.docx"
+    doc.save(str(src))
+    out = tmp_path / "out.tex"
+    result = DocxToLatexConverter().convert(src, out)
+    assert result.success, result.error
+    tex = out.read_text(encoding="utf-8")
+    assert r"\section{" in tex
+    assert r"\textbf{жирный}" in tex
+    assert r"\begin{tabular}" in tex
+    assert r"\end{document}" in tex
+

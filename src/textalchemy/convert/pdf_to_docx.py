@@ -49,24 +49,53 @@ class PyMuPdfConverter(BaseConverter):
         try:
             import fitz
             from docx import Document as DocxDocument
-            from docx.shared import Inches
+            from docx.shared import Inches, Pt
 
             d = DocxDocument()
             with fitz.open(str(input_path)) as doc:
                 for page_num in range(len(doc)):
                     page = doc[page_num]
-                    text = (page.get_text() or "").strip()
-                    if len(text) >= self.text_threshold:
-                        # Текстовая страница — текстом.
-                        for line in text.splitlines():
-                            d.add_paragraph(line)
+                    text_dict = page.get_text("dict") or {}
+                    blocks = text_dict.get("blocks", []) if isinstance(text_dict, dict) else []
+                    # Собираем видимый текст; если нет ни одного символа — скан.
+                    has_text = False
+                    for b in blocks:
+                        if b.get("type") != 0:
+                            continue
+                        for line in b.get("lines", []):
+                            for span in line.get("spans", []):
+                                if (span.get("text") or "").strip():
+                                    has_text = True
+                                    break
+                            if has_text:
+                                break
+                        if has_text:
+                            break
+                    if has_text:
+                        # Текстовая страница — текстом, с сохранением размера шрифта.
+                        for b in blocks:
+                            if b.get("type") != 0:
+                                continue
+                            for line in b.get("lines", []):
+                                spans = line.get("spans", [])
+                                line_text = "".join(s.get("text", "") for s in spans).strip()
+                                if not line_text:
+                                    continue
+                                para = d.add_paragraph()
+                                for s in spans:
+                                    run = para.add_run(s.get("text", ""))
+                                    size = s.get("size")
+                                    if size:
+                                        try:
+                                            run.font.size = Pt(float(size))
+                                        except Exception:  # noqa: BLE001
+                                            pass
                     else:
-                        # Мало текста (скан, формулы) — рендерим как картинку.
+                        # Реально пустая страница (скан, формулы) — картинкой.
                         pix = page.get_pixmap(dpi=self.render_dpi)
                         img_path = output_path.parent / f".__pymupdf_page_{page_num}.png"
                         pix.save(str(img_path))
                         try:
-                            # Сохраняем пропорции страницы, ограничивая ширину 6".
                             width_in = 6.0
                             ratio = pix.height / max(pix.width, 1)
                             d.add_picture(
@@ -176,6 +205,7 @@ class FanOutConverter(BaseConverter):
             tried.append(tool)
             result = converter.convert(input_path, output_path)
             if result.success and result.output_path.exists() and result.output_path.stat().st_size > 0:
+                self._postprocess(output_path)
                 return ConversionResult(
                     input_path, result.output_path, True, None,
                 )
@@ -184,6 +214,21 @@ class FanOutConverter(BaseConverter):
             input_path, Path(output_path), False,
             f"all engines failed (tried: {tried}); last error: {last_error}",
         )
+
+    @staticmethod
+    def _postprocess(output_path: str | Path) -> None:
+        """Восстановить структуру (заголовки) и нормализовать шрифт."""
+        try:
+            from textalchemy.convert.docx_postprocess import (
+                apply_heading_styles,
+                ensure_min_font,
+            )
+
+            ensure_min_font(output_path)
+            apply_heading_styles(output_path)
+        except Exception:  # noqa: BLE001
+            # Пост-обработка — best-effort, не ломаем результат конвертации.
+            pass
 
 
 def create_converter(tool: str) -> BaseConverter:
