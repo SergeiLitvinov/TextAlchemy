@@ -73,15 +73,36 @@ def render_latex(*, text: Text, title: str = "Document", author: str = "Author")
     parts.append(r"\maketitle")
     parts.append("")
 
+    in_list = False
     for block in text.blocks:
         if block.type.value == "heading":
+            if in_list:
+                parts.append(r"\end{itemize}")
+                parts.append("")
+                in_list = False
             level = max(1, min(block.level or 1, 3))
             cmd = ("section", "subsection", "subsubsection")[level - 1]
             parts.append(rf"\{cmd}{{{_escape_latex(block.text)}}}")
             parts.append("")
+        elif block.type.value == "list_item":
+            if not in_list:
+                parts.append(r"\begin{itemize}")
+                parts.append("")
+                in_list = True
+            parts.append(rf"\item {_escape_latex(block.text)}")
         else:
-            parts.append(_escape_latex(block.text))
+            if in_list:
+                parts.append(r"\end{itemize}")
+                parts.append("")
+                in_list = False
+            if block.type.value == "code" or block.type.value == "equation":
+                parts.append(block.text)
+            else:
+                parts.append(_escape_latex(block.text))
             parts.append("")
+    if in_list:
+        parts.append(r"\end{itemize}")
+        parts.append("")
 
     for table in text.tables:
         if not table.rows:

@@ -10,6 +10,7 @@
                 <select id="input-fmt">
                     <option value="pdf">PDF → DOCX</option>
                     <option value="pptx">PPTX → HTML (zip)</option>
+                    <option value="latex">DOCX → LaTeX</option>
                 </select>
             </div>
             <div class="form-group" id="tool-group">
@@ -66,9 +67,18 @@
 
     fmtSelect.addEventListener('change', () => {
         const isPdf = fmtSelect.value === 'pdf';
+        const isLatex = fmtSelect.value === 'latex';
         toolGroup.style.display = isPdf ? '' : 'none';
-        dropLabel.textContent = isPdf ? 'Перетащите PDF файл сюда' : 'Перетащите PPTX файл сюда';
-        fileInput.accept = isPdf ? '.pdf' : '.pptx';
+        if (isLatex) {
+            dropLabel.textContent = 'Перетащите DOCX файл сюда';
+            fileInput.accept = '.docx';
+        } else if (isPdf) {
+            dropLabel.textContent = 'Перетащите PDF файл сюда';
+            fileInput.accept = '.pdf';
+        } else {
+            dropLabel.textContent = 'Перетащите PPTX файл сюда';
+            fileInput.accept = '.pptx';
+        }
     });
 
     dropZone.addEventListener('click', () => fileInput.click());
@@ -83,7 +93,8 @@
 
     async function handleFile(file) {
         const isPdf = fmtSelect.value === 'pdf';
-        const ext = isPdf ? '.pdf' : '.pptx';
+        const isLatex = fmtSelect.value === 'latex';
+        const ext = isLatex ? '.docx' : (isPdf ? '.pdf' : '.pptx');
         if (!file.name.toLowerCase().endsWith(ext)) {
             setStatus(`Пожалуйста, выберите ${ext.toUpperCase()} файл`, 'error');
             return;
@@ -108,7 +119,7 @@
                 const data = await res.json();
                 if (data.status === 'done') {
                     setProgress(true, 90, 'Формирование файла…');
-                    window.location.href = url;
+                    await downloadResult(url);
                     toast('Конвертация завершена', 'success');
                 } else if (data.status === 'error') {
                     setProgress(false);
@@ -118,15 +129,7 @@
                     setTimeout(() => pollTask(url), 1000);
                 }
             } else {
-                const blob = await res.blob();
-                const disposition = res.headers.get('Content-Disposition') || '';
-                const match = disposition.match(/filename="?(.+?)"?$/);
-                const fname = match ? match[1] : 'converted';
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = fname;
-                a.click();
-                URL.revokeObjectURL(a.href);
+                await downloadResult(url, res);
                 setProgress(false);
                 setStatus('Готово! Файл загружен.', 'success');
             }
@@ -134,6 +137,21 @@
             setProgress(false);
             setStatus(`Ошибка сети: ${e.message}`, 'error');
         }
+    }
+
+    async function downloadResult(url, res) {
+        const response = res || await fetch(url);
+        const blob = await response.blob();
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename="?(.+?)"?$/);
+        const fname = match ? match[1] : 'converted';
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     }
 </script>
 {% endblock %}

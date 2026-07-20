@@ -130,9 +130,9 @@
     if (opts.json !== undefined) {
       init.headers["Content-Type"] = "application/json";
       init.body = JSON.stringify(opts.json);
-    } else if opts.formData) {
+    } else if (opts.formData) {
       init.body = opts.formData;
-    } else if opts.body) {
+    } else if (opts.body) {
       init.body = opts.body;
     }
     let res;

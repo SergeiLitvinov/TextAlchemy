@@ -154,7 +154,10 @@ class FanOutConverter(BaseConverter):
         return "fanout"
 
     def __init__(self, tools: list[str] | None = None) -> None:
-        self.tools = tools or ["pdf2docx", "pymupdf", "libreoffice"]
+        # pdf2docx сохраняет текст и разметку (не растровые вставки),
+        # поэтому он — приоритетный. pymupdf (с растровым фолбэком для
+        # сканов) оставлен последним.
+        self.tools = tools or ["pdf2docx", "libreoffice", "pymupdf"]
 
     def convert(self, input_path: str | Path, output_path: str | Path) -> ConversionResult:
         prepared = self._prepare(input_path, output_path)
