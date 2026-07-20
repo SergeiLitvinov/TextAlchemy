@@ -1,91 +1,103 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Generate — TextAlchemy</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>TextAlchemy</h1>
-                <nav>
-            <a href="/">Главная</a>
-            <a href="/extract">Извлечь</a>
-            <a href="/convert">Конверт</a>
-            <a href="/bibliography">Библиография</a>
-            <a href="/matching">Сопоставление</a>
-            <a href="/pipeline">Pipeline</a>
-            <a href="/recognize">Распознать</a>
-            <a href="/export" class="active">Экспорт</a>
-        </nav>
-    </div>
-    <div class="container">
-        <div class="card">
-            <h2>Generate Document</h2>
-            <p>Create documents from templates with parameter substitution.</p>
-            <form id="generate-form">
-                <div class="form-group">
-                    <label for="template">Template:</label>
+{% extends "base.html" %}
+{% set active = 'generate' %}
+{% block title %}TextAlchemy — Generate{% endblock %}
+{% block content %}
+    <div class="card">
+        <h2>⚙️ Генерация документа</h2>
+        <p>Создание документов из шаблонов с подстановкой параметров.</p>
+        <form id="generate-form">
+            <div class="form-grid">
+                <div>
+                    <label for="template">Шаблон</label>
                     <select id="template" required>
-                        <option value="">-- select template --</option>
+                        <option value="">— выберите шаблон —</option>
                     </select>
                 </div>
-                <div class="form-group">
-                    <label for="output">Output filename:</label>
+                <div>
+                    <label for="output">Имя выходного файла</label>
                     <input type="text" id="output" value="output.docx" required>
                 </div>
-                <div class="form-group">
-                    <label for="params">Parameters (JSON):</label>
-                    <textarea id="params" rows="6" style="width:100%;font-family:monospace;font-size:13px;">{"title": "My Document", "author": "Author Name"}</textarea>
-                </div>
-                <button type="submit" class="btn">Generate</button>
-            </form>
-            <div id="generate-result" style="margin-top:1rem;display:none;">
-                <pre id="generate-output" style="background:var(--bg-secondary);padding:1rem;border-radius:4px;"></pre>
             </div>
-        </div>
+            <div class="form-group">
+                <label for="params">Параметры (JSON)</label>
+                <textarea id="params" rows="6">{"title": "My Document", "author": "Author Name"}</textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" id="genBtn">Сгенерировать</button>
+            </div>
+        </form>
+        <div id="status" class="status-bar" style="display:none;"></div>
     </div>
+{% endblock %}
 
-    <script>
-        async function loadTemplates() {
-            try {
-                const res = await fetch('/api/generate/templates');
-                const templates = await res.json();
-                const sel = document.getElementById('template');
-                templates.forEach(t => {
-                    const opt = document.createElement('option');
-                    opt.value = t.name;
-                    opt.textContent = t.name + (t.description ? ' — ' + t.description : '');
-                    sel.appendChild(opt);
-                });
-            } catch (e) {
-                console.warn('Failed to load templates:', e);
+{% block scripts %}
+<script>
+    const $ = (id) => document.getElementById(id);
+
+    function setStatus(msg, type) {
+        const el = $('status');
+        if (!msg) { el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        el.className = 'status-bar ' + (type || 'info');
+        el.textContent = msg;
+    }
+
+    async function loadTemplates() {
+        try {
+            const templates = await api('/api/generate/templates');
+            const sel = $('template');
+            for (const t of templates) {
+                const opt = document.createElement('option');
+                opt.value = t.name;
+                opt.textContent = t.name + (t.description ? ' — ' + t.description : '');
+                sel.appendChild(opt);
             }
+        } catch (_) { /* toast уже показан */ }
+    }
+    loadTemplates();
+
+    $('generate-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const template = $('template').value;
+        const output = $('output').value || 'output.docx';
+        let params;
+        try {
+            params = $('params').value.trim() || '{}';
+            JSON.parse(params);
+        } catch (err) {
+            toast('Параметры должны быть валидным JSON', 'error');
+            setStatus('Ошибка разбора JSON параметров: ' + err.message, 'error');
+            return;
         }
-        loadTemplates();
-
-        document.getElementById('generate-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const template = document.getElementById('template').value;
-            const output = document.getElementById('output').value;
-            const params = document.getElementById('params').value;
-            const resEl = document.getElementById('generate-result');
-            const outEl = document.getElementById('generate-output');
-            resEl.style.display = 'block';
-            outEl.textContent = 'Generating...';
-            try {
-                const res = await fetch('/api/generate', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: new URLSearchParams({template, output, params}),
-                });
+        const fd = new FormData();
+        fd.set('template', template);
+        fd.set('output', output);
+        fd.set('params', params);
+        const btn = $('genBtn');
+        setLoading(btn, true);
+        setStatus('Генерация…', 'info');
+        try {
+            const res = await fetch('/api/generate', { method: 'POST', body: fd });
+            if (res.ok && res.headers.get('Content-Type').includes('application/json')) {
                 const data = await res.json();
-                outEl.textContent = JSON.stringify(data, null, 2);
-            } catch (e) {
-                outEl.textContent = 'Error: ' + e.message;
+                setStatus('Ошибка: ' + (data.error || 'неизвестно'), 'error');
+            } else if (res.ok) {
+                const blob = await res.blob();
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = output;
+                a.click();
+                URL.revokeObjectURL(a.href);
+                setStatus('Документ сгенерирован и загружен.', 'success');
+                toast('Документ готов', 'success');
+            } else {
+                setStatus('Ошибка генерации', 'error');
             }
-        });
-    </script>
-</body>
-</html>
+        } catch (err) {
+            setStatus('Ошибка сети: ' + err.message, 'error');
+        } finally {
+            setLoading(btn, false);
+        }
+    });
+</script>
+{% endblock %}

@@ -197,6 +197,38 @@ label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.
 select, input[type="text"], input[type="number"] { margin-bottom: 0.75rem; }
 .form-actions { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; }
 
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.5rem 1rem;
+}
+
+.form-grid > div { margin-bottom: 0.25rem; }
+
+.card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+
+.card-head h2 { margin-bottom: 0; }
+
+.row-actions { white-space: nowrap; }
+.row-actions button {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 0.25rem 0.5rem;
+    margin-right: 0.25rem;
+    font-size: 0.875rem;
+}
+.row-actions button:hover { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+.file-drop { margin-bottom: 1rem; }
+
 @media (prefers-color-scheme: dark) {
     :root {
         --bg: #0f172a;

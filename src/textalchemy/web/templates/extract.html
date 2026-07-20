@@ -1,90 +1,89 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Extract — TextAlchemy</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>TextAlchemy</h1>
-        <nav>
-            <a href="/">Главная</a>
-            <a href="/extract" class="active">Извлечь</a>
-            <a href="/convert">Конверт</a>
-            <a href="/bibliography">Библиография</a>
-            <a href="/matching">Сопоставление</a>
-            <a href="/pipeline">Pipeline</a>
-            <a href="/recognize">Распознать</a>
-            <a href="/export">Экспорт</a>
-        </nav>
-    </div>
-    <div class="container">
-        <div class="card">
-            <h2>Извлечение текста</h2>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Формат файла</label>
-                    <select id="input-fmt">
-                        <option value="auto">Автоопределение</option>
-                        <option value="pdf">PDF</option>
-                        <option value="docx">DOCX</option>
-                        <option value="txt">TXT</option>
-                        <option value="djvu">DJVU</option>
-                    </select>
-                </div>
-            </div>
-            <div class="file-drop" id="dropZone">
-                <div style="font-size:3rem;margin-bottom:0.5rem;">📄</div>
-                <strong>Перетащите файл сюда</strong>
-                <div class="hint">или нажмите для выбора файла</div>
-                <input type="file" id="fileInput">
+{% extends "base.html" %}
+{% set active = 'extract' %}
+{% block title %}TextAlchemy — Извлечь{% endblock %}
+{% block content %}
+    <div class="card">
+        <h2>Извлечение текста</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Формат файла</label>
+                <select id="input-fmt">
+                    <option value="auto">Автоопределение</option>
+                    <option value="pdf">PDF</option>
+                    <option value="docx">DOCX</option>
+                    <option value="txt">TXT</option>
+                    <option value="djvu">DJVU</option>
+                </select>
             </div>
         </div>
-        <div class="card">
+        <div class="file-drop" id="dropZone">
+            <div style="font-size:3rem;margin-bottom:0.5rem;">📄</div>
+            <strong>Перетащите файл сюда</strong>
+            <div class="hint">или нажмите для выбора файла</div>
+            <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.djvu">
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-head">
             <h2>Результат</h2>
-            <textarea id="result" readonly placeholder="Извлечённый текст появится здесь..."></textarea>
-            <div id="status" class="status-bar" style="display:none;"></div>
+            <button type="button" id="copyBtn">📋 Копировать</button>
         </div>
+        <textarea id="result" readonly placeholder="Извлечённый текст появится здесь..."></textarea>
+        <div id="status" class="status-bar" style="display:none"></div>
     </div>
-    <script>
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const resultArea = document.getElementById('result');
-        const statusBar = document.getElementById('status');
-        const fmtSelect = document.getElementById('input-fmt');
+{% endblock %}
 
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-        dropZone.addEventListener('drop', (e) => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); });
-        fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+{% block scripts %}
+<script>
+    const $ = (id) => document.getElementById(id);
+    const dropZone = $('dropZone');
+    const fileInput = $('fileInput');
+    const resultArea = $('result');
 
-        async function handleFile(file) {
-            showStatus('Загрузка...', 'info');
-            const form = new FormData();
-            form.append('file', file);
-            form.append('fmt', fmtSelect.value);
-            try {
-                const res = await fetch('/api/extract/text', { method: 'POST', body: form });
-                const data = await res.json();
-                if (data.success) {
-                    resultArea.value = data.text;
-                    showStatus(`Извлечено из: ${data.filename} (${data.text.length} символов)`, 'success');
-                } else {
-                    showStatus(`Ошибка: ${data.error}`, 'error');
-                }
-            } catch (e) {
-                showStatus(`Ошибка сети: ${e.message}`, 'error');
-            }
+    function setStatus(msg, type) {
+        const el = $('status');
+        if (!msg) { el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        el.className = 'status-bar ' + (type || 'info');
+        el.textContent = msg;
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => {
+        if (fileInput.files[0]) handleFile(fileInput.files[0]);
+    });
+
+    async function handleFile(file) {
+        setStatus('Загрузка…', 'info');
+        const form = new FormData();
+        form.append('file', file);
+        form.append('fmt', $('input-fmt').value);
+        try {
+            const data = await api('/api/extract/text', { method: 'POST', formData: form });
+            resultArea.value = data.text;
+            setStatus(`Извлечено из «${data.filename}» (${data.text.length} символов)`, 'success');
+            toast('Текст извлечён', 'success');
+        } catch (_) { setStatus('', null); }
+    }
+
+    $('copyBtn').addEventListener('click', async () => {
+        if (!resultArea.value) { toast('Нечего копировать', 'warning'); return; }
+        try {
+            await navigator.clipboard.writeText(resultArea.value);
+            toast('Скопировано в буфер обмена', 'success');
+        } catch (_) {
+            resultArea.select();
+            document.execCommand('copy');
+            toast('Скопировано', 'success');
         }
-
-        function showStatus(msg, type) {
-            statusBar.textContent = msg;
-            statusBar.className = 'status-bar ' + type;
-            statusBar.style.display = 'block';
-        }
-    </script>
-</body>
-</html>
+    });
+</script>
+{% endblock %}

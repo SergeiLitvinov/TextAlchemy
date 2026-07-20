@@ -1,43 +1,62 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TextAlchemy — Экспорт</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>💾 Экспорт библиографии</h1>
-                <nav>
-            <a href="/">Главная</a>
-            <a href="/extract">Извлечь</a>
-            <a href="/convert">Конверт</a>
-            <a href="/bibliography">Библиография</a>
-            <a href="/matching">Сопоставление</a>
-            <a href="/pipeline">Pipeline</a>
-            <a href="/recognize">Распознать</a>
-            <a href="/export" class="active">Экспорт</a>
-        </nav>
-    </div>
-    <div class="container">
+{% extends "base.html" %}
+{% set active = 'export' %}
+{% block title %}TextAlchemy — Экспорт{% endblock %}
+{% block content %}
+    <div class="card">
+        <h2>💾 Экспорт библиографии</h2>
+        <p>Выгрузите всю библиотеку в удобном формате.</p>
         <div class="grid-3">
             <div class="card text-center">
-                <h2>JSON</h2>
+                <h3>JSON</h3>
                 <p>Структурированный формат для обмена данными</p>
-                <a href="/api/export/json" class="btn">Скачать JSON</a>
+                <a href="/api/export/json" class="btn" data-fmt="JSON">Скачать JSON</a>
             </div>
             <div class="card text-center">
-                <h2>Markdown</h2>
+                <h3>Markdown</h3>
                 <p>Человекочитаемый формат разметки</p>
-                <a href="/api/export/markdown" class="btn">Скачать Markdown</a>
+                <a href="/api/export/markdown" class="btn" data-fmt="Markdown">Скачать Markdown</a>
             </div>
             <div class="card text-center">
-                <h2>ГОСТ</h2>
+                <h3>ГОСТ</h3>
                 <p>Оформление по ГОСТ Р 7.0.100-2018</p>
-                <a href="/api/export/gost" class="btn">Скачать ГОСТ</a>
+                <a href="/api/export/gost" class="btn" data-fmt="ГОСТ">Скачать ГОСТ</a>
+            </div>
+            <div class="card text-center">
+                <h3>BibTeX</h3>
+                <p>Для LaTeX / Zotero / JabRef</p>
+                <a href="/api/export/bibtex" class="btn" data-fmt="BibTeX">Скачать BibTeX</a>
+            </div>
+            <div class="card text-center">
+                <h3>CSV</h3>
+                <p>Таблица для Excel</p>
+                <a href="/api/export/csv" class="btn" data-fmt="CSV">Скачать CSV</a>
+            </div>
+            <div class="card text-center">
+                <h3>RIS</h3>
+                <p>Для EndNote / Mendeley</p>
+                <a href="/api/export/ris" class="btn" data-fmt="RIS">Скачать RIS</a>
             </div>
         </div>
+        <div id="status" class="status-bar" style="display:none;"></div>
     </div>
-</body>
-</html>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const $ = (id) => document.getElementById(id);
+    function setStatus(msg, type) {
+        const el = $('status');
+        if (!msg) { el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        el.className = 'status-bar ' + (type || 'info');
+        el.textContent = msg;
+    }
+    document.querySelectorAll('a[data-fmt]').forEach((a) => {
+        a.addEventListener('click', () => {
+            toast(`Экспорт ${a.dataset.fmt} начат`, 'info');
+            setStatus(`Файл ${a.dataset.fmt} скачивается…`, 'info');
+            setTimeout(() => setStatus('', null), 2000);
+        });
+    });
+</script>
+{% endblock %}

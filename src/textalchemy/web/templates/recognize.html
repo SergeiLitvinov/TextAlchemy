@@ -1,79 +1,98 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Recognize — TextAlchemy</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>TextAlchemy</h1>
-                <nav>
-            <a href="/">Главная</a>
-            <a href="/extract">Извлечь</a>
-            <a href="/convert">Конверт</a>
-            <a href="/bibliography">Библиография</a>
-            <a href="/matching">Сопоставление</a>
-            <a href="/pipeline">Pipeline</a>
-            <a href="/recognize" class="active">Распознать</a>
-            <a href="/export">Экспорт</a>
-        </nav>
-    </div>
-    <div class="container">
-        <div class="card">
-            <h2>👁️ Визуальное распознавание</h2>
-            <p>OCR из изображений и сканированных PDF.</p>
-            <div class="file-drop" id="dropZone" style="margin-top:1rem;">
-                <div style="font-size:3rem;margin-bottom:0.5rem;">🖼️</div>
-                <strong>Перетащите изображение сюда</strong>
-                <div class="hint">или нажмите для выбора файла (PNG, JPG, PDF)</div>
-                <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.pdf">
+{% extends "base.html" %}
+{% set active = 'recognize' %}
+{% block title %}TextAlchemy — Распознать{% endblock %}
+{% block content %}
+    <div class="card">
+        <h2>👁️ Визуальное распознавание</h2>
+        <p>OCR из изображений и сканированных PDF.</p>
+        <div class="form-grid">
+            <div>
+                <label>Языки (через +)</label>
+                <input type="text" id="lang" value="rus+eng">
+            </div>
+            <div>
+                <label>Режим</label>
+                <select id="mode">
+                    <option value="printed">Печатный текст</option>
+                    <option value="handwriting">Рукописный</option>
+                </select>
+            </div>
+            <div style="display:flex;align-items:flex-end">
+                <label style="display:flex;align-items:center;gap:.35rem;font-weight:400">
+                    <input type="checkbox" id="gpu"> Использовать GPU
+                </label>
             </div>
         </div>
-        <div class="card">
-            <h2>Результат распознавания</h2>
-            <textarea id="result" readonly placeholder="Распознанный текст появится здесь..."></textarea>
-            <div id="status" class="status-bar" style="display:none;"></div>
+        <div class="file-drop" id="dropZone" style="margin-top:1rem;">
+            <div style="font-size:3rem;margin-bottom:0.5rem;">🖼️</div>
+            <strong>Перетащите изображение сюда</strong>
+            <div class="hint">или нажмите для выбора файла (PNG, JPG, PDF)</div>
+            <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.pdf">
         </div>
+        <div id="status" class="status-bar" style="display:none;"></div>
     </div>
-    <script>
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const resultArea = document.getElementById('result');
-        const statusBar = document.getElementById('status');
 
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-        dropZone.addEventListener('drop', (e) => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); });
-        fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+    <div class="card">
+        <div class="card-head">
+            <h2>Результат распознавания</h2>
+            <button type="button" id="copyBtn">📋 Копировать</button>
+        </div>
+        <textarea id="result" readonly placeholder="Распознанный текст появится здесь..."></textarea>
+    </div>
+{% endblock %}
 
-        async function handleFile(file) {
-            showStatus('Распознавание...', 'info');
-            const form = new FormData();
-            form.append('file', file);
-            try {
-                const res = await fetch('/api/recognize', { method: 'POST', body: form });
-                const data = await res.json();
-                if (data.success) {
-                    resultArea.value = data.text || '(текст не распознан)';
-                    const confidence = data.confidence ? ` (confidence: ${(data.confidence * 100).toFixed(1)}%)` : '';
-                    const backend = data.backend ? ` Backend: ${data.backend}` : ' (stub)';
-                    showStatus(`Готово!${confidence}${backend}`, 'success');
-                } else {
-                    showStatus(`Ошибка: ${data.error}`, 'error');
-                }
-            } catch (e) {
-                showStatus(`Ошибка сети: ${e.message}`, 'error');
-            }
+{% block scripts %}
+<script>
+    const $ = (id) => document.getElementById(id);
+    const dropZone = $('dropZone');
+    const fileInput = $('fileInput');
+    const resultArea = $('result');
+
+    function setStatus(msg, type) {
+        const el = $('status');
+        if (!msg) { el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        el.className = 'status-bar ' + (type || 'info');
+        el.textContent = msg;
+    }
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+    async function handleFile(file) {
+        setStatus('Распознавание…', 'info');
+        const form = new FormData();
+        form.append('file', file);
+        form.append('lang', $('lang').value);
+        form.append('gpu', $('gpu').checked ? 'true' : 'false');
+        form.append('mode', $('mode').value);
+        try {
+            const data = await api('/api/recognize', { method: 'POST', formData: form });
+            resultArea.value = data.text || '(текст не распознан)';
+            const confidence = data.confidence ? ` (confidence: ${(data.confidence * 100).toFixed(1)}%)` : '';
+            const backend = data.backend ? ` Backend: ${data.backend}` : ' (stub)';
+            setStatus(`Готово!${confidence}${backend}`, 'success');
+            toast('Распознавание завершено', 'success');
+        } catch (_) { setStatus('', null); }
+    }
+
+    $('copyBtn').addEventListener('click', async () => {
+        if (!resultArea.value) { toast('Нечего копировать', 'warning'); return; }
+        try {
+            await navigator.clipboard.writeText(resultArea.value);
+            toast('Скопировано в буфер обмена', 'success');
+        } catch (_) {
+            resultArea.select();
+            document.execCommand('copy');
+            toast('Скопировано', 'success');
         }
-
-        function showStatus(msg, type) {
-            statusBar.textContent = msg;
-            statusBar.className = 'status-bar ' + type;
-            statusBar.style.display = 'block';
-        }
-    </script>
-</body>
-</html>
+    });
+</script>
+{% endblock %}

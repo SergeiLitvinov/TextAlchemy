@@ -1,77 +1,79 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TextAlchemy — Отчёты</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>📊 Отчёты</h1>
-                <nav>
-            <a href="/">Главная</a>
-            <a href="/extract">Извлечь</a>
-            <a href="/convert">Конверт</a>
-            <a href="/bibliography">Библиография</a>
-            <a href="/matching">Сопоставление</a>
-            <a href="/pipeline">Pipeline</a>
-            <a href="/recognize">Распознать</a>
-            <a href="/export" class="active">Экспорт</a>
-        </nav>
-    </div>
-    <div class="container">
+{% extends "base.html" %}
+{% set active = 'reports' %}
+{% block title %}TextAlchemy — Отчёты{% endblock %}
+{% block content %}
+    <div class="card">
+        <h2>📊 Отчёты и статистика</h2>
         <div class="grid-2">
             <div class="card">
-                <h2>Статистика</h2>
-                <div id="stats">
-                    <p>Загрузка...</p>
-                </div>
+                <h3>Статистика</h3>
+                <div id="stats"><p class="hint">Загрузка…</p></div>
             </div>
             <div class="card">
-                <h2>Типы документов</h2>
-                <div id="docTypes">
-                    <p>Загрузка...</p>
-                </div>
+                <h3>Типы документов</h3>
+                <div id="docTypes"><p class="hint">Загрузка…</p></div>
             </div>
         </div>
-        <div class="card">
-            <h2>Последнее сопоставление</h2>
-            <div id="lastMatching">
-                {% if report %}
-                <p>Совпадений: {{ report.matched|length }}, без совпадений: {{ report.unmatched|length }}, ошибок: {{ report.errors|length }}</p>
-                <table>
-                    <thead>
-                        <tr><th>Оригинал</th><th>Новое имя</th><th>Оценка</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for m in report.matched %}
-                        <tr><td>{{ m.original }}</td><td>{{ m.new }}</td><td>{{ m.score }}</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                {% else %}
-                <p>Сопоставление ещё не запускалось.</p>
-                {% endif %}
+        <div class="card" style="margin-top:1rem;">
+            <div class="card-head">
+                <h3>Последнее сопоставление</h3>
+                <button type="button" id="refreshBtn">🔄 Обновить</button>
             </div>
+            <div id="lastMatching"><p class="hint">Загрузка…</p></div>
         </div>
+        <div id="status" class="status-bar" style="display:none;"></div>
     </div>
-    <script>
-        async function loadStats() {
-            const res = await fetch('/api/stats');
-            const data = await res.json();
-            document.getElementById('stats').innerHTML = `
-                <p>Записей в библиографии: ${data.total_bib}</p>
-                <p>Всего файлов: ${data.total_files}</p>
-                <p>Совпало: ${data.matched_files}</p>
-                <p>Без совпадения: ${data.unmatched}</p>
-                <p>Прогресс: ${data.progress}%</p>
-            `;
-            const dtHtml = Object.entries(data.doc_types)
-                .map(([k, v]) => `<p>${k}: ${v}</p>`).join('');
-            document.getElementById('docTypes').innerHTML = dtHtml || '<p>Нет данных</p>';
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const $ = (id) => document.getElementById(id);
+    function setStatus(msg, type) {
+        const el = $('status');
+        if (!msg) { el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        el.className = 'status-bar ' + (type || 'info');
+        el.textContent = msg;
+    }
+
+    function renderStats(d) {
+        const stats = [
+            ['Записей в библиографии', d.total_bib],
+            ['Всего файлов', d.total_files],
+            ['Совпало', d.matched_files],
+            ['Без совпадения', d.unmatched],
+            ['Прогресс', d.progress + '%'],
+        ];
+        $('stats').innerHTML = stats.map(([k, v]) => `<p>${esc(k)}: <strong>${esc(String(v))}</strong></p>`).join('');
+        const dt = Object.entries(d.doc_types || {});
+        $('docTypes').innerHTML = dt.length
+            ? dt.map(([k, v]) => `<p>${esc(k)}: <strong>${esc(String(v))}</strong></p>`).join('')
+            : '<p class="hint">Нет данных</p>';
+    }
+
+    function renderMatching(r) {
+        const el = $('lastMatching');
+        if (!r) { el.innerHTML = '<p class="hint">Сопоставление ещё не запускалось.</p>'; return; }
+        const matched = Array.isArray(r.matched) ? r.matched : [];
+        const unmatched = Array.isArray(r.unmatched) ? r.unmatched : [];
+        const errors = Array.isArray(r.errors) ? r.errors : [];
+        let html = `<p>Совпадений: <strong>${matched.length}</strong>, без совпадений: <strong>${unmatched.length}</strong>, ошибок: <strong>${errors.length}</strong></p>`;
+        if (matched.length) {
+            html += '<table><thead><tr><th>Оригинал</th><th>Новое имя</th><th>Оценка</th></tr></thead><tbody>';
+            html += matched.map((m) => `<tr><td>${esc(m.original || '')}</td><td>${esc(m.new || '')}</td><td>${esc(String(m.score ?? ''))}</td></tr>`).join('');
+            html += '</tbody></table>';
         }
-        loadStats();
-    </script>
-</body>
-</html>
+        el.innerHTML = html;
+    }
+
+    async function loadAll() {
+        try {
+            const d = await api('/api/stats');
+            renderStats(d);
+            renderMatching(d.matching);
+        } catch (_) { /* toast уже показан */ }
+    }
+    loadAll();
+    $('refreshBtn').addEventListener('click', () => { setStatus('Обновление…', 'info'); loadAll(); setTimeout(() => setStatus('', null), 1200); });
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+<div class="header">
+    <h1>TextAlchemy</h1>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Переключить тему">🌓</button>
+    <nav>
+        <a href="/" {% if active == 'index' %}class="active"{% endif %}>Главная</a>
+        <a href="/extract" {% if active == 'extract' %}class="active"{% endif %}>Извлечь</a>
+        <a href="/convert" {% if active == 'convert' %}class="active"{% endif %}>Конверт</a>
+        <a href="/bibliography" {% if active == 'bibliography' %}class="active"{% endif %}>Библиография</a>
+        <a href="/matching" {% if active == 'matching' %}class="active"{% endif %}>Сопоставление</a>
+        <a href="/pipeline" {% if active == 'pipeline' %}class="active"{% endif %}>Pipeline</a>
+        <a href="/recognize" {% if active == 'recognize' %}class="active"{% endif %}>Распознать</a>
+        <a href="/export" {% if active == 'export' %}class="active"{% endif %}>Экспорт</a>
+    </nav>
+</div>

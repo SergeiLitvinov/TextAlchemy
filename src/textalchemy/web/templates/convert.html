@@ -1,142 +1,139 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Convert — TextAlchemy</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>TextAlchemy</h1>
-        <nav>
-            <a href="/">Главная</a>
-            <a href="/extract">Извлечь</a>
-            <a href="/convert" class="active">Конверт</a>
-            <a href="/bibliography">Библиография</a>
-            <a href="/matching">Сопоставление</a>
-            <a href="/pipeline">Pipeline</a>
-            <a href="/recognize">Распознать</a>
-            <a href="/export">Экспорт</a>
-        </nav>
-    </div>
-    <div class="container">
-        <div class="card">
-            <h2>Конвертация</h2>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>Формат на входе</label>
-                    <select id="input-fmt">
-                        <option value="pdf">PDF → DOCX</option>
-                        <option value="pptx">PPTX → HTML (zip)</option>
-                    </select>
-                </div>
-                <div class="form-group" id="tool-group">
-                    <label>Инструмент конвертации (PDF)</label>
-                    <select id="tool">
-                        <option value="fanout">FanOut (все движки)</option>
-                        <option value="pdf2docx">pdf2docx</option>
-                        <option value="pymupdf">PyMuPDF</option>
-                        <option value="libreoffice">LibreOffice</option>
-                    </select>
-                </div>
+{% extends "base.html" %}
+{% set active = 'convert' %}
+{% block title %}TextAlchemy — Конверт{% endblock %}
+{% block content %}
+    <div class="card">
+        <h2>Конвертация</h2>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Формат на входе</label>
+                <select id="input-fmt">
+                    <option value="pdf">PDF → DOCX</option>
+                    <option value="pptx">PPTX → HTML (zip)</option>
+                </select>
             </div>
-            <div class="file-drop" id="dropZone" style="margin-top:1rem;">
-                <div style="font-size:3rem;margin-bottom:0.5rem;">📄</div>
-                <strong id="drop-label">Перетащите PDF файл сюда</strong>
-                <div class="hint">или нажмите для выбора файла</div>
-                <input type="file" id="fileInput">
+            <div class="form-group" id="tool-group">
+                <label>Инструмент конвертации (PDF)</label>
+                <select id="tool">
+                    <option value="fanout">FanOut (все движки)</option>
+                    <option value="pdf2docx">pdf2docx</option>
+                    <option value="pymupdf">PyMuPDF</option>
+                    <option value="libreoffice">LibreOffice</option>
+                </select>
             </div>
         </div>
-        <div class="card">
-            <div id="status" class="status-bar" style="display:none;"></div>
+        <div class="file-drop" id="dropZone" style="margin-top:1rem;">
+            <div style="font-size:3rem;margin-bottom:0.5rem;">📄</div>
+            <strong id="drop-label">Перетащите PDF файл сюда</strong>
+            <div class="hint">или нажмите для выбора файла</div>
+            <input type="file" id="fileInput">
         </div>
+        <div id="progressWrap" style="display:none;margin-top:1rem">
+            <div style="height:8px;background:var(--border);border-radius:99px;overflow:hidden">
+                <div id="progressBar" style="height:100%;width:30%;background:var(--primary);transition:width .4s"></div>
+            </div>
+            <div id="progressText" style="font-size:.8rem;color:var(--text-muted);margin-top:.35rem">Конвертация…</div>
+        </div>
+        <div id="status" class="status-bar" style="display:none;"></div>
     </div>
-    <script>
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-        const statusBar = document.getElementById('status');
-        const toolSelect = document.getElementById('tool');
-        const fmtSelect = document.getElementById('input-fmt');
-        const toolGroup = document.getElementById('tool-group');
-        const dropLabel = document.getElementById('drop-label');
+{% endblock %}
 
-        fmtSelect.addEventListener('change', () => {
-            const isPdf = fmtSelect.value === 'pdf';
-            toolGroup.style.display = isPdf ? '' : 'none';
-            dropLabel.textContent = isPdf ? 'Перетащите PDF файл сюда' : 'Перетащите PPTX файл сюда';
-            fileInput.accept = isPdf ? '.pdf' : '.pptx';
-        });
+{% block scripts %}
+<script>
+    const $ = (id) => document.getElementById(id);
+    const dropZone = $('dropZone');
+    const fileInput = $('fileInput');
+    const toolSelect = $('tool');
+    const fmtSelect = $('input-fmt');
+    const toolGroup = $('tool-group');
+    const dropLabel = $('drop-label');
 
-        dropZone.addEventListener('click', () => fileInput.click());
-        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-        dropZone.addEventListener('drop', (e) => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); });
-        fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+    function setStatus(msg, type) {
+        const el = $('status');
+        if (!msg) { el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        el.className = 'status-bar ' + (type || 'info');
+        el.textContent = msg;
+    }
 
-        async function handleFile(file) {
-            const isPdf = fmtSelect.value === 'pdf';
-            const ext = isPdf ? '.pdf' : '.pptx';
-            if (!file.name.toLowerCase().endsWith(ext)) {
-                showStatus(`Пожалуйста, выберите ${ext.toUpperCase()} файл`, 'error');
-                return;
+    function setProgress(on, pct, text) {
+        $('progressWrap').style.display = on ? 'block' : 'none';
+        if (on) {
+            $('progressBar').style.width = (pct || 30) + '%';
+            if (text) $('progressText').textContent = text;
+        }
+    }
+
+    fmtSelect.addEventListener('change', () => {
+        const isPdf = fmtSelect.value === 'pdf';
+        toolGroup.style.display = isPdf ? '' : 'none';
+        dropLabel.textContent = isPdf ? 'Перетащите PDF файл сюда' : 'Перетащите PPTX файл сюда';
+        fileInput.accept = isPdf ? '.pdf' : '.pptx';
+    });
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+    });
+    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
+
+    async function handleFile(file) {
+        const isPdf = fmtSelect.value === 'pdf';
+        const ext = isPdf ? '.pdf' : '.pptx';
+        if (!file.name.toLowerCase().endsWith(ext)) {
+            setStatus(`Пожалуйста, выберите ${ext.toUpperCase()} файл`, 'error');
+            return;
+        }
+        const form = new FormData();
+        form.append('file', file);
+        form.append('tool', toolSelect.value);
+        form.append('fmt', fmtSelect.value);
+        setProgress(true, 30, 'Отправка файла…');
+        try {
+            const data = await api('/api/convert', { method: 'POST', formData: form });
+            if (data.success) {
+                pollTask(data.status);
             }
-            showStatus(isPdf ? 'Конвертация PDF в DOCX...' : 'Конвертация PPTX в HTML...', 'info');
-            const form = new FormData();
-            form.append('file', file);
-            form.append('tool', toolSelect.value);
-            form.append('fmt', fmtSelect.value);
-            try {
-                const res = await fetch('/api/convert', { method: 'POST', body: form });
+        } catch (_) { setProgress(false); setStatus('', null); }
+    }
+
+    async function pollTask(url) {
+        try {
+            const res = await fetch(url);
+            if (res.headers.get('Content-Type')?.includes('application/json')) {
                 const data = await res.json();
-                if (data.success) {
-                    const taskUrl = data.status;
-                    pollTask(taskUrl);
+                if (data.status === 'done') {
+                    setProgress(true, 90, 'Формирование файла…');
+                    window.location.href = url;
+                    toast('Конвертация завершена', 'success');
+                } else if (data.status === 'error') {
+                    setProgress(false);
+                    setStatus(`Ошибка: ${data.error}`, 'error');
                 } else {
-                    showStatus(`Ошибка: ${data.error}`, 'error');
+                    setProgress(true, 60, 'Конвертация…');
+                    setTimeout(() => pollTask(url), 1000);
                 }
-            } catch (e) {
-                showStatus(`Ошибка сети: ${e.message}`, 'error');
+            } else {
+                const blob = await res.blob();
+                const disposition = res.headers.get('Content-Disposition') || '';
+                const match = disposition.match(/filename="?(.+?)"?$/);
+                const fname = match ? match[1] : 'converted';
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = fname;
+                a.click();
+                URL.revokeObjectURL(a.href);
+                setProgress(false);
+                setStatus('Готово! Файл загружен.', 'success');
             }
+        } catch (e) {
+            setProgress(false);
+            setStatus(`Ошибка сети: ${e.message}`, 'error');
         }
-
-        async function pollTask(url) {
-            try {
-                const res = await fetch(url);
-                if (res.headers.get('Content-Type')?.includes('application/json')) {
-                    const data = await res.json();
-                    if (data.status === 'done') {
-                        // redirect to download
-                        window.location.href = url;
-                    } else if (data.status === 'error') {
-                        showStatus(`Ошибка: ${data.error}`, 'error');
-                    } else {
-                        showStatus('Конвертация...', 'info');
-                        setTimeout(() => pollTask(url), 1000);
-                    }
-                } else {
-                    // binary download
-                    const blob = await res.blob();
-                    const disposition = res.headers.get('Content-Disposition') || '';
-                    const match = disposition.match(/filename="?(.+?)"?$/);
-                    const fname = match ? match[1] : 'converted';
-                    const a = document.createElement('a');
-                    a.href = URL.createObjectURL(blob);
-                    a.download = fname;
-                    a.click();
-                    URL.revokeObjectURL(url);
-                    showStatus('Готово! Файл загружен.', 'success');
-                }
-            } catch (e) {
-                showStatus(`Ошибка сети: ${e.message}`, 'error');
-            }
-        }
-
-        function showStatus(msg, type) {
-            statusBar.textContent = msg;
-            statusBar.className = 'status-bar ' + type;
-            statusBar.style.display = 'block';
-        }
-    </script>
-</body>
-</html>
+    }
+</script>
+{% endblock %}

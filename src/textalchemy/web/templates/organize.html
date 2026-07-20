@@ -1,33 +1,14 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pipeline — TextAlchemy</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>TextAlchemy</h1>
-                <nav>
-            <a href="/">Главная</a>
-            <a href="/extract">Извлечь</a>
-            <a href="/convert">Конверт</a>
-            <a href="/bibliography">Библиография</a>
-            <a href="/matching">Сопоставление</a>
-            <a href="/pipeline" class="active">Pipeline</a>
-            <a href="/recognize">Распознать</a>
-            <a href="/export">Экспорт</a>
-        </nav>
-    </div>
-    <div class="container">
-        <div class="card">
-            <h2>Pipeline Runner</h2>
-            <p>Запуск произвольного пайплайна из YAML/JSON спецификации.</p>
-            <form id="pipeline-form">
-                <div class="form-group">
-                    <label for="spec">Pipeline spec (YAML or JSON):</label>
-                    <textarea id="spec" rows="12" style="width:100%;font-family:monospace;font-size:13px;">steps:
+{% extends "base.html" %}
+{% set active = 'pipeline' %}
+{% block title %}TextAlchemy — Pipeline{% endblock %}
+{% block content %}
+    <div class="card">
+        <h2>🔧 Pipeline Runner</h2>
+        <p>Запуск произвольного пайплайна из YAML/JSON спецификации.</p>
+        <form id="pipeline-form">
+            <div class="form-group">
+                <label for="spec">Pipeline spec (YAML или JSON)</label>
+                <textarea id="spec" rows="12">steps:
   - op: ingest.file
     output: doc
     params: {path: input.txt}
@@ -39,56 +20,75 @@
     output: tex
     params: {title: "Demo"}
 output: tex</textarea>
-                </div>
-                <button type="submit" class="btn">Run Pipeline</button>
-            </form>
-            <div id="pipeline-result" style="margin-top:1rem;display:none;">
-                <h3>Result</h3>
-                <pre id="result-output" style="background:var(--bg-secondary);padding:1rem;border-radius:4px;overflow-x:auto;"></pre>
             </div>
-        </div>
-
-        <div class="card" style="margin-top:1rem;">
-            <h2>Available Operations</h2>
-            <button class="btn" onclick="loadOperations()">List Operations</button>
-            <div id="operations-list" style="margin-top:0.5rem;"></div>
+            <div class="form-actions">
+                <button type="submit" id="runBtn">Запустить пайплайн</button>
+            </div>
+        </form>
+        <div id="status" class="status-bar" style="display:none;"></div>
+        <div id="pipeline-result" style="display:none;margin-top:1rem;">
+            <h3>Результат</h3>
+            <pre id="result-output"></pre>
         </div>
     </div>
 
-    <script>
-        async function loadOperations() {
-            const el = document.getElementById('operations-list');
-            el.innerHTML = 'Loading...';
-            try {
-                const res = await fetch('/api/operations');
-                const ops = await res.json();
-                el.innerHTML = '<table><tr><th>ID</th><th>Input</th><th>Output</th><th>Description</th></tr>' +
-                    ops.map(o => `<tr><td><code>${o.id}</code></td><td>${o.input_type}</td><td>${o.output_type}</td><td>${o.description}</td></tr>`).join('') +
-                    '</table>';
-            } catch (e) {
-                el.innerHTML = 'Error: ' + e.message;
-            }
-        }
+    <div class="card" style="margin-top:1rem;">
+        <div class="card-head">
+            <h2>Доступные операции</h2>
+            <button type="button" id="listBtn">📋 Список операций</button>
+        </div>
+        <div id="operations-list"><p class="hint">Нажмите кнопку, чтобы загрузить список.</p></div>
+    </div>
+{% endblock %}
 
-        document.getElementById('pipeline-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const spec = document.getElementById('spec').value;
-            const resEl = document.getElementById('pipeline-result');
-            const outEl = document.getElementById('result-output');
-            resEl.style.display = 'block';
-            outEl.textContent = 'Running...';
-            try {
-                const res = await fetch('/api/pipeline/run', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: new URLSearchParams({spec}),
-                });
-                const data = await res.json();
-                outEl.textContent = JSON.stringify(data, null, 2);
-            } catch (e) {
-                outEl.textContent = 'Error: ' + e.message;
-            }
-        });
-    </script>
-</body>
-</html>
+{% block scripts %}
+<script>
+    const $ = (id) => document.getElementById(id);
+    function setStatus(msg, type) {
+        const el = $('status');
+        if (!msg) { el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        el.className = 'status-bar ' + (type || 'info');
+        el.textContent = msg;
+    }
+
+    async function loadOperations() {
+        const el = $('operations-list');
+        el.innerHTML = '<p class="hint">Загрузка…</p>';
+        try {
+            const ops = await api('/api/operations');
+            let html = '<table><thead><tr><th>ID</th><th>Input</th><th>Output</th><th>Описание</th></tr></thead><tbody>';
+            html += ops.map((o) => `<tr><td><code>${esc(o.id)}</code></td><td>${esc(o.input_type || '')}</td><td>${esc(o.output_type || '')}</td><td>${esc(o.description || '')}</td></tr>`).join('');
+            html += '</tbody></table>';
+            el.innerHTML = html;
+        } catch (_) { el.innerHTML = '<p class="hint">Не удалось загрузить операции.</p>'; }
+    }
+    $('listBtn').addEventListener('click', loadOperations);
+
+    $('pipeline-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const spec = $('spec').value;
+        const btn = $('runBtn');
+        setLoading(btn, true);
+        setStatus('Запуск пайплайна…', 'info');
+        $('pipeline-result').style.display = 'block';
+        $('result-output').textContent = 'Выполнение…';
+        try {
+            const res = await fetch('/api/pipeline/run', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: new URLSearchParams({spec}),
+            });
+            const data = await res.json();
+            $('result-output').textContent = JSON.stringify(data, null, 2);
+            setStatus('Пайплайн завершён.', 'success');
+            toast('Пайплайн завершён', 'success');
+        } catch (err) {
+            $('result-output').textContent = 'Ошибка: ' + err.message;
+            setStatus('Ошибка запуска: ' + err.message, 'error');
+        } finally {
+            setLoading(btn, false);
+        }
+    });
+</script>
+{% endblock %}

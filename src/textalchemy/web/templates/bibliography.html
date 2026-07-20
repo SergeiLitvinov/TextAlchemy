@@ -1,169 +1,260 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TextAlchemy — Библиография</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>📚 Библиография</h1>
-                <nav>
-            <a href="/">Главная</a>
-            <a href="/extract">Извлечь</a>
-            <a href="/convert">Конверт</a>
-            <a href="/bibliography" class="active">Библиография</a>
-            <a href="/matching">Сопоставление</a>
-            <a href="/pipeline">Pipeline</a>
-            <a href="/recognize">Распознать</a>
-            <a href="/export">Экспорт</a>
-        </nav>
-    </div>
-    <div class="container">
-        <div class="card">
-            <h2>Добавить/Редактировать</h2>
-            <form id="bibForm">
-                <input type="hidden" id="itemId" value="">
-                <label>Авторы (через точку с запятой)</label>
-                <input type="text" id="authors" required>
-                <label>Название</label>
-                <input type="text" id="title" required>
-                <label>Тип документа</label>
-                <select id="doc_type">
-                    <option value="article">Статья</option>
-                    <option value="book">Книга</option>
-                    <option value="conference">Конференция</option>
-                    <option value="thesis">Диссертация</option>
-                    <option value="report">Отчёт</option>
-                    <option value="patent">Патент</option>
-                    <option value="standard">Стандарт</option>
-                    <option value="methodical">Методичка</option>
-                    <option value="electronic">Эл. ресурс</option>
-                    <option value="other">Прочее</option>
-                </select>
-                <label>Год</label>
-                <input type="text" id="year">
-                <label>Журнал</label>
-                <input type="text" id="journal">
-                <label>Издательство</label>
-                <input type="text" id="publisher">
-                <label>Город</label>
-                <input type="text" id="city">
-                <label>Страницы</label>
-                <input type="text" id="pages">
-                <label>ISBN</label>
-                <input type="text" id="isbn">
-                <label>DOI</label>
-                <input type="text" id="doi">
-                <label>Источник (путь к файлу)</label>
-                <input type="text" id="source">
-                <div class="form-actions">
-                    <button type="submit">Сохранить</button>
-                    <button type="button" id="cancelEdit" style="display:none">Отмена</button>
+{% extends "base.html" %}
+{% set active = 'bibliography' %}
+{% block title %}TextAlchemy — Библиография{% endblock %}
+{% block content %}
+    <div class="card">
+        <h2>Добавить / Редактировать</h2>
+        <form id="bibForm">
+            <input type="hidden" id="itemId" value="">
+            <div class="form-grid">
+                <div>
+                    <label>Авторы (через точку с запятой)</label>
+                    <input type="text" id="authors" required>
                 </div>
+                <div>
+                    <label>Название</label>
+                    <input type="text" id="title" required>
+                </div>
+                <div>
+                    <label>Тип документа</label>
+                    <select id="doc_type">
+                        <option value="article">Статья</option>
+                        <option value="book">Книга</option>
+                        <option value="conference">Конференция</option>
+                        <option value="dissertation">Диссертация</option>
+                        <option value="report">Отчёт</option>
+                        <option value="patent">Патент</option>
+                        <option value="standard">Стандарт</option>
+                        <option value="collection">Сборник</option>
+                        <option value="monograph">Монография</option>
+                        <option value="abstract">Автореферат</option>
+                        <option value="other">Прочее</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Год</label>
+                    <input type="text" id="year" inputmode="numeric">
+                </div>
+                <div>
+                    <label>Журнал</label>
+                    <input type="text" id="journal">
+                </div>
+                <div>
+                    <label>Издательство</label>
+                    <input type="text" id="publisher">
+                </div>
+                <div>
+                    <label>Город</label>
+                    <input type="text" id="city">
+                </div>
+                <div>
+                    <label>Страницы</label>
+                    <input type="text" id="pages">
+                </div>
+                <div>
+                    <label>ISBN</label>
+                    <input type="text" id="isbn">
+                </div>
+                <div>
+                    <label>DOI</label>
+                    <input type="text" id="doi">
+                </div>
+                <div>
+                    <label>Источник (путь к файлу)</label>
+                    <input type="text" id="source">
+                </div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" id="saveBtn">Сохранить</button>
+                <button type="button" id="cancelEdit" style="display:none">Отмена</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <h2>Библиография (<span id="bibCount">{{ bib_items|length }}</span>)</h2>
+            <form id="importForm" enctype="multipart/form-data" style="display:inline-flex;gap:.5rem;align-items:center">
+                <input type="file" name="file" accept=".json,.bib,.txt" id="importFile">
+                <button type="submit" id="importBtn">Импорт</button>
             </form>
         </div>
-        <div class="card">
-            <h2>Библиография (<span id="bibCount">{{ bib_items|length }}</span>)</h2>
-            <div style="margin-bottom:1rem">
-                <form id="importForm" enctype="multipart/form-data" style="display:inline">
-                    <input type="file" name="file" accept=".json,.bib,.txt" id="importFile">
-                    <button type="submit">Импорт</button>
-                </form>
-            </div>
-            <table id="bibTable">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Авторы</th>
-                        <th>Название</th>
-                        <th>Тип</th>
-                        <th>Год</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="bibBody">
-                    {% for item in bib_items %}
-                    <tr>
-                        <td>{{ item.id }}</td>
-                        <td>{{ item.authors|join('; ') }}</td>
-                        <td>{{ item.title }}</td>
-                        <td>{{ item.doc_type }}</td>
-                        <td>{{ item.year }}</td>
-                        <td>
-                            <button onclick="editItem({{ item.id }})">✏️</button>
-                            <button onclick="deleteItem({{ item.id }})">🗑️</button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div style="margin-bottom:1rem">
+            <input type="text" id="bibSearch" placeholder="🔎 Поиск по авторам или названию…" style="width:100%">
         </div>
+        <table id="bibTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Авторы</th>
+                    <th>Название</th>
+                    <th>Тип</th>
+                    <th>Год</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="bibBody">
+                {% for item in bib_items %}
+                <tr data-id="{{ item.id }}">
+                    <td>{{ item.id }}</td>
+                    <td>{{ item.authors|join('; ') }}</td>
+                    <td>{{ item.title }}</td>
+                    <td>{{ item.doc_type }}</td>
+                    <td>{{ item.year }}</td>
+                    <td class="row-actions">
+                        <button data-act="edit" data-id="{{ item.id }}" title="Редактировать">✏️</button>
+                        <button data-act="delete" data-id="{{ item.id }}" title="Удалить">🗑️</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p id="bibEmpty" style="display:none;color:var(--text-muted)">Ничего не найдено.</p>
     </div>
-    <script>
-        const form = document.getElementById('bibForm');
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const id = document.getElementById('itemId').value;
-            const fd = new FormData();
-            fd.set('authors', document.getElementById('authors').value);
-            fd.set('title', document.getElementById('title').value);
-            fd.set('doc_type', document.getElementById('doc_type').value);
-            fd.set('year', document.getElementById('year').value);
-            fd.set('journal', document.getElementById('journal').value);
-            fd.set('publisher', document.getElementById('publisher').value);
-            fd.set('city', document.getElementById('city').value);
-            fd.set('pages', document.getElementById('pages').value);
-            fd.set('isbn', document.getElementById('isbn').value);
-            fd.set('doi', document.getElementById('doi').value);
-            fd.set('source', document.getElementById('source').value);
-            const url = id ? `/api/bibliography/${id}` : '/api/bibliography';
-            const method = id ? 'PUT' : 'POST';
-            const res = await fetch(url, { method, body: fd });
-            if (res.ok) location.reload();
-        });
+{% endblock %}
 
-        document.getElementById('cancelEdit').addEventListener('click', () => {
-            document.getElementById('itemId').value = '';
-            form.reset();
-            document.getElementById('cancelEdit').style.display = 'none';
-        });
+{% block scripts %}
+<script>
+    const $ = (id) => document.getElementById(id);
 
-        async function editItem(id) {
-            const items = await (await fetch('/api/bibliography')).json();
-            const item = items.find(i => i.id === id);
-            if (!item) return;
-            document.getElementById('itemId').value = item.id;
-            document.getElementById('authors').value = (item.authors || []).join('; ');
-            document.getElementById('title').value = item.title || '';
-            document.getElementById('doc_type').value = item.doc_type || 'article';
-            document.getElementById('year').value = item.year || '';
-            document.getElementById('journal').value = item.journal || '';
-            document.getElementById('publisher').value = item.publisher || '';
-            document.getElementById('city').value = item.city || '';
-            document.getElementById('pages').value = item.pages || '';
-            document.getElementById('isbn').value = item.isbn || '';
-            document.getElementById('doi').value = item.doi || '';
-            document.getElementById('source').value = item.source || '';
-            document.getElementById('cancelEdit').style.display = 'inline';
+    function collectForm() {
+        const fd = new FormData();
+        fd.set('authors', $('authors').value);
+        fd.set('title', $('title').value);
+        fd.set('doc_type', $('doc_type').value);
+        fd.set('year', $('year').value);
+        fd.set('journal', $('journal').value);
+        fd.set('publisher', $('publisher').value);
+        fd.set('city', $('city').value);
+        fd.set('pages', $('pages').value);
+        fd.set('isbn', $('isbn').value);
+        fd.set('doi', $('doi').value);
+        fd.set('source', $('source').value);
+        return fd;
+    }
+
+    function fillForm(item) {
+        $('itemId').value = item.id;
+        $('authors').value = (item.authors || []).join('; ');
+        $('title').value = item.title || '';
+        $('doc_type').value = item.doc_type || 'article';
+        $('year').value = item.year || '';
+        $('journal').value = item.journal || '';
+        $('publisher').value = item.publisher || '';
+        $('city').value = item.city || '';
+        $('pages').value = item.pages || '';
+        $('isbn').value = item.isbn || '';
+        $('doi').value = item.doi || '';
+        $('source').value = item.source || '';
+        $('cancelEdit').style.display = 'inline';
+        $('saveBtn').textContent = 'Обновить';
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function resetForm() {
+        $('itemId').value = '';
+        $('bibForm').reset();
+        $('cancelEdit').style.display = 'none';
+        $('saveBtn').textContent = 'Сохранить';
+    }
+
+    function renderRows(items) {
+        const body = $('bibBody');
+        body.innerHTML = '';
+        const q = ($('bibSearch').value || '').toLowerCase();
+        let shown = 0;
+        for (const item of items) {
+            const hay = ((item.authors || []).join(' ') + ' ' + (item.title || '')).toLowerCase();
+            if (q && !hay.includes(q)) continue;
+            shown++;
+            const tr = document.createElement('tr');
+            tr.dataset.id = item.id;
+            tr.innerHTML =
+                `<td>${esc(item.id)}</td>` +
+                `<td>${esc((item.authors || []).join('; '))}</td>` +
+                `<td>${esc(item.title)}</td>` +
+                `<td>${esc(item.doc_type)}</td>` +
+                `<td>${esc(item.year)}</td>` +
+                `<td class="row-actions">` +
+                `<button data-act="edit" data-id="${esc(item.id)}" title="Редактировать">✏️</button>` +
+                `<button data-act="delete" data-id="${esc(item.id)}" title="Удалить">🗑️</button>` +
+                `</td>`;
+            body.appendChild(tr);
         }
+        $('bibCount').textContent = items.length;
+        $('bibEmpty').style.display = shown === 0 ? 'block' : 'none';
+    }
 
-        async function deleteItem(id) {
+    // Загрузка списка с сервера (вместо location.reload)
+    async function refresh() {
+        try {
+            const items = await api('/api/bibliography');
+            renderRows(items);
+        } catch (_) { /* toast уже показан */ }
+    }
+
+    $('bibForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = $('itemId').value;
+        const fd = collectForm();
+        const btn = $('saveBtn');
+        setLoading(btn, true);
+        try {
+            if (id) {
+                await api(`/api/bibliography/${id}`, { method: 'PUT', formData: fd });
+                toast('Запись обновлена', 'success');
+            } else {
+                await api('/api/bibliography', { method: 'POST', formData: fd });
+                toast('Запись добавлена', 'success');
+            }
+            resetForm();
+            await refresh();
+        } catch (_) { /* toast уже показан */ }
+        finally { setLoading(btn, false); }
+    });
+
+    $('cancelEdit').addEventListener('click', resetForm);
+
+    $('bibBody').addEventListener('click', async (e) => {
+        const btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+        const id = Number(btn.dataset.id);
+        const act = btn.dataset.act;
+        if (act === 'edit') {
+            const items = await api('/api/bibliography');
+            const item = items.find((i) => i.id === id);
+            if (item) fillForm(item);
+        } else if (act === 'delete') {
             if (!confirm('Удалить запись?')) return;
-            await fetch(`/api/bibliography/${id}`, { method: 'DELETE' });
-            location.reload();
+            setLoading(btn, true);
+            try {
+                await api(`/api/bibliography/${id}`, { method: 'DELETE' });
+                toast('Запись удалена', 'success');
+                await refresh();
+            } catch (_) { /* toast уже показан */ }
+            finally { setLoading(btn, false); }
         }
+    });
 
-        document.getElementById('importForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const fileInput = document.getElementById('importFile');
-            if (!fileInput.files[0]) return;
-            const fd = new FormData();
-            fd.set('file', fileInput.files[0]);
-            await fetch('/api/bibliography/import', { method: 'POST', body: fd });
-            location.reload();
-        });
-    </script>
-</body>
-</html>
+    $('importForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fileInput = $('importFile');
+        if (!fileInput.files[0]) return;
+        const fd = new FormData();
+        fd.set('file', fileInput.files[0]);
+        const btn = $('importBtn');
+        setLoading(btn, true);
+        try {
+            const r = await api('/api/bibliography/import', { method: 'POST', formData: fd });
+            toast(`Импортировано записей: ${r.count}`, 'success');
+            fileInput.value = '';
+            await refresh();
+        } catch (_) { /* toast уже показан */ }
+        finally { setLoading(btn, false); }
+    });
+
+    $('bibSearch').addEventListener('input', () => {
+        api('/api/bibliography').then(renderRows).catch(() => {});
+    });
+</script>
+{% endblock %}
