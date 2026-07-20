@@ -159,11 +159,16 @@ class BibItem:
         year_raw = d.get("year", "")
         year = int(year_raw) if year_raw not in (None, "") and str(year_raw).strip().isdigit() else None
         item_id = d.get("id")
-        index = int(item_id) if item_id not in (None, "") else (d.get("index") or 0)
+        try:
+            index = int(item_id) if item_id not in (None, "") else (d.get("index") or 0)
+        except (TypeError, ValueError):
+            index = d.get("index") or 0
+        raw_authors = d.get("authors", [])
+        authors = [raw_authors] if isinstance(raw_authors, str) else list(raw_authors)
         return cls(
             index=index,
             raw_text=d.get("raw_text", ""),
-            authors=list(d.get("authors", [])),
+            authors=authors,
             title=d.get("title", ""),
             year=year,
             doc_type=d.get("doc_type", "unknown"),

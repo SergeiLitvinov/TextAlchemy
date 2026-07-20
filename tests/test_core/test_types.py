@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from textalchemy.core.types import (
+    BibItem,
     Block,
     BlockType,
     DocFormat,
@@ -46,6 +47,26 @@ class TestText:
         t = Text(blocks=[Block(type=BlockType.PARAGRAPH, text="hi")], plain="hi")
         assert len(t.blocks) == 1
         assert t.plain == "hi"
+
+
+class TestBibItem:
+    def test_from_dict_authors_as_string(self):
+        item = BibItem.from_dict({"title": "T", "authors": "Иванов"})
+        assert item.authors == ["Иванов"]
+
+    def test_from_dict_authors_as_list(self):
+        item = BibItem.from_dict({"title": "T", "authors": ["Иванов", "Петров"]})
+        assert item.authors == ["Иванов", "Петров"]
+
+    def test_from_dict_year_parsing(self):
+        assert BibItem.from_dict({"year": "2020"}).year == 2020
+        assert BibItem.from_dict({"year": ""}).year is None
+        assert BibItem.from_dict({}).year is None
+
+    def test_from_dict_id_to_index(self):
+        assert BibItem.from_dict({"id": 5}).index == 5
+        assert BibItem.from_dict({"id": "5"}).index == 5
+        assert BibItem.from_dict({"id": "bad"}).index == 0
 
 
 class TestSignal:

@@ -51,32 +51,32 @@ class PyMuPdfConverter(BaseConverter):
             from docx import Document as DocxDocument
             from docx.shared import Inches
 
-            doc = fitz.open(str(input_path))
             d = DocxDocument()
-            for page_num in range(len(doc)):
-                page = doc[page_num]
-                text = (page.get_text() or "").strip()
-                if len(text) >= self.text_threshold:
-                    # Текстовая страница — текстом.
-                    for line in text.splitlines():
-                        d.add_paragraph(line)
-                else:
-                    # Мало текста (скан, формулы) — рендерим как картинку.
-                    pix = page.get_pixmap(dpi=self.render_dpi)
-                    img_path = output_path.parent / f".__pymupdf_page_{page_num}.png"
-                    pix.save(str(img_path))
-                    try:
-                        # Сохраняем пропорции страницы, ограничивая ширину 6".
-                        width_in = 6.0
-                        ratio = pix.height / max(pix.width, 1)
-                        d.add_picture(
-                            str(img_path),
-                            width=Inches(width_in),
-                            height=Inches(width_in * ratio),
-                        )
-                    finally:
-                        img_path.unlink(missing_ok=True)
-                d.add_page_break()
+            with fitz.open(str(input_path)) as doc:
+                for page_num in range(len(doc)):
+                    page = doc[page_num]
+                    text = (page.get_text() or "").strip()
+                    if len(text) >= self.text_threshold:
+                        # Текстовая страница — текстом.
+                        for line in text.splitlines():
+                            d.add_paragraph(line)
+                    else:
+                        # Мало текста (скан, формулы) — рендерим как картинку.
+                        pix = page.get_pixmap(dpi=self.render_dpi)
+                        img_path = output_path.parent / f".__pymupdf_page_{page_num}.png"
+                        pix.save(str(img_path))
+                        try:
+                            # Сохраняем пропорции страницы, ограничивая ширину 6".
+                            width_in = 6.0
+                            ratio = pix.height / max(pix.width, 1)
+                            d.add_picture(
+                                str(img_path),
+                                width=Inches(width_in),
+                                height=Inches(width_in * ratio),
+                            )
+                        finally:
+                            img_path.unlink(missing_ok=True)
+                    d.add_page_break()
             d.save(str(output_path))
         except Exception as e:
             return ConversionResult(input_path, output_path, False, str(e))
@@ -120,20 +120,21 @@ class LibreOfficeConverter(BaseConverter):
             env = os.environ.copy()
             env["PATH"] = str(lo_dir) + ";" + env.get("PATH", "")
 
-            cmd1 = [self.libreoffice_path, "--headless", "--writer",
-                    "--convert-to", "odt", "--outdir", str(output_path.parent.absolute()),
-                    str(input_path.absolute())]
-            r1 = subprocess.run(cmd1, capture_output=True, text=True, timeout=300, env=env)
-            if not temp_odt.exists():
-                return ConversionResult(input_path, output_path, False, r1.stderr[:200])
+            try:
+                cmd1 = [self.libreoffice_path, "--headless", "--writer",
+                        "--convert-to", "odt", "--outdir", str(output_path.parent.absolute()),
+                        str(input_path.absolute())]
+                r1 = subprocess.run(cmd1, capture_output=True, text=True, timeout=300, env=env)
+                if not temp_odt.exists():
+                    return ConversionResult(input_path, output_path, False, r1.stderr[:200])
 
-            cmd2 = [self.libreoffice_path, "--headless",
-                    "--convert-to", "docx:MS Word 2007 XML",
-                    "--outdir", str(output_path.parent.absolute()),
-                    str(temp_odt.absolute())]
-            subprocess.run(cmd2, capture_output=True, text=True, timeout=300, env=env)
-            if temp_odt.exists():
-                temp_odt.unlink()
+                cmd2 = [self.libreoffice_path, "--headless",
+                        "--convert-to", "docx:MS Word 2007 XML",
+                        "--outdir", str(output_path.parent.absolute()),
+                        str(temp_odt.absolute())]
+                subprocess.run(cmd2, capture_output=True, text=True, timeout=300, env=env)
+            finally:
+                temp_odt.unlink(missing_ok=True)
         except subprocess.TimeoutExpired:
             return ConversionResult(input_path, output_path, False, "Timeout")
         except Exception as e:

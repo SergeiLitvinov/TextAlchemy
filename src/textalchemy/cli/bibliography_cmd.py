@@ -8,9 +8,15 @@ def cmd_gost(args: argparse.Namespace) -> int:
     from textalchemy.pipeline.bibliography import parse_bibliography
     from textalchemy.pipeline.render import render_gost
 
+    input_path = Path(args.input)
+    if not input_path.is_file():
+        print(f"Error: bibliography file not found: {args.input}", file=sys.stderr)
+        return 1
     items = parse_bibliography(path=args.input)
     result = render_gost(items=items)
-    Path(args.output).write_text(result, encoding="utf-8")
+    out_path = Path(args.output)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(result, encoding="utf-8")
     if args.json:
         print(json.dumps({"input": args.input, "output": args.output, "entries": len(items)}))
     else:
@@ -50,16 +56,23 @@ def cmd_export(args: argparse.Namespace) -> int:
     from textalchemy.pipeline.bibliography import parse_bibliography
     from textalchemy.pipeline.render import render_gost, render_json, render_markdown
 
+    input_path = Path(args.input)
+    if not input_path.is_file():
+        print(f"Error: bibliography file not found: {args.input}", file=sys.stderr)
+        return 1
     items = parse_bibliography(path=args.input)
     fmt = args.format
     if fmt == "json":
         out = args.output or "bibliography.json"
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
         Path(out).write_text(render_json(items=items), encoding="utf-8")
     elif fmt == "markdown":
         out = args.output or "bibliography.md"
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
         Path(out).write_text(render_markdown(items=items), encoding="utf-8")
     elif fmt == "gost":
         out = args.output or "bibliography_gost.txt"
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
         Path(out).write_text(render_gost(items=items), encoding="utf-8")
     else:
         print(f"Unknown format: {fmt}", file=sys.stderr)
