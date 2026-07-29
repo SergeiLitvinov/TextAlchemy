@@ -62,6 +62,25 @@ class TemplateEngine:
                 ))
         return templates
 
+    def resolve_template(self, template_name: str) -> Path:
+        """Найти шаблон по пути или имени в каталоге шаблонов."""
+
+        direct = Path(template_name)
+        candidates = [direct] if direct.is_file() else []
+        candidates.extend(
+            [
+                self.templates_dir / template_name,
+                self.templates_dir / f"{template_name}.docx",
+                self.templates_dir / f"{template_name}.doc",
+            ]
+        )
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        available = ", ".join(t.name for t in self.list_templates())
+        msg = f"Template '{template_name}' not found. Available: {available or 'none'}"
+        raise GenerateError(msg)
+
     def generate(
         self,
         template_name: str,
@@ -69,17 +88,7 @@ class TemplateEngine:
         params: Optional[Dict[str, Any]] = None,
     ) -> Path:
         output_path = Path(output_path)
-        template_path = self.templates_dir / template_name
-
-        if not template_path.exists():
-            template_path = self.templates_dir / f"{template_name}.docx"
-        if not template_path.exists():
-            template_path = self.templates_dir / f"{template_name}.doc"
-
-        if not template_path.exists():
-            available = ", ".join(t.name for t in self.list_templates())
-            msg = f"Template '{template_name}' not found. Available: {available or 'none'}"
-            raise GenerateError(msg)
+        template_path = self.resolve_template(template_name)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
 

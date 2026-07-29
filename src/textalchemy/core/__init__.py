@@ -1,5 +1,34 @@
 """Базовые типы и утилиты ядра."""
+
+from textalchemy.core.diagnostics import ConversionIssue, ConversionReport, IssueSeverity
 from textalchemy.core.doc_types import DOC_TYPE_KEYWORDS, DOC_TYPES
+from textalchemy.core.document_adapters import document_to_text, text_to_document
+from textalchemy.core.document_codec import (
+    document_from_dict,
+    document_from_json,
+    document_to_dict,
+    document_to_json,
+    load_document,
+    save_document,
+)
+from textalchemy.core.document_model import (
+    Box,
+    ConversionMode,
+    DocumentModel,
+    Formula,
+    FormulaFormat,
+    Image,
+    Length,
+    PageSettings,
+    Paragraph,
+    Resource,
+    ResourceKind,
+    Section,
+    TableCell,
+    TableRow,
+    TextRun,
+    TextStyle,
+)
 from textalchemy.core.exceptions import (
     ConfigError,
     ConvertError,
@@ -44,4 +73,31 @@ __all__ = [
     "OrganizeError",
     "GenerateError",
     "RecognizeError",
+    "Box",
+    "ConversionMode",
+    "DocumentModel",
+    "Formula",
+    "FormulaFormat",
+    "Image",
+    "Length",
+    "PageSettings",
+    "Paragraph",
+    "Resource",
+    "ResourceKind",
+    "Section",
+    "TableCell",
+    "TableRow",
+    "TextRun",
+    "TextStyle",
+    "document_from_dict",
+    "document_from_json",
+    "document_to_dict",
+    "document_to_json",
+    "document_to_text",
+    "load_document",
+    "save_document",
+    "text_to_document",
+    "ConversionIssue",
+    "ConversionReport",
+    "IssueSeverity",
 ]

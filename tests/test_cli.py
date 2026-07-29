@@ -239,6 +239,161 @@ def test_cli_generate_list_json(capsys):
     assert isinstance(data, list)
 
 
+def test_cli_generate_docx_from_data_and_schema(tmp_path, capsys):
+    from docx import Document
+
+    template = tmp_path / "report.docx"
+    output = tmp_path / "result.docx"
+    data_path = tmp_path / "data.json"
+    schema_path = tmp_path / "schema.json"
+    document = Document()
+    document.add_heading("{{ title }}", level=1)
+    document.add_paragraph("{% for item in items %}")
+    document.add_paragraph("Item: {{ item }}")
+    document.add_paragraph("{% endfor %}")
+    document.save(template)
+    data_path.write_text('{"title": "Report", "items": ["A", "B"]}', encoding="utf-8")
+    schema_path.write_text(
+        '{"fields": {"title": {"type": "string"}, "items": {"type": "array"}}, "allow_extra": false}',
+        encoding="utf-8",
+    )
+
+    ret = main(
+        [
+            "generate",
+            str(template),
+            str(output),
+            "--data",
+            str(data_path),
+            "--schema",
+            str(schema_path),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert ret == 0
+    assert payload["success"] is True
+    assert payload["lossless"] is True
+    assert [paragraph.text for paragraph in Document(output).paragraphs] == ["Report", "Item: A", "Item: B"]
+
+
+def test_cli_generate_validation_error_is_json(tmp_path, capsys):
+    from docx import Document
+
+    template = tmp_path / "report.docx"
+    output = tmp_path / "result.docx"
+    data_path = tmp_path / "data.json"
+    schema_path = tmp_path / "schema.json"
+    document = Document()
+    document.add_paragraph("{{ title }}")
+    document.save(template)
+    data_path.write_text('{"title": 42}', encoding="utf-8")
+    schema_path.write_text('{"fields": {"title": {"type": "string"}}}', encoding="utf-8")
+
+    ret = main(
+        [
+            "generate",
+            str(template),
+            str(output),
+            "--data",
+            str(data_path),
+            "--schema",
+            str(schema_path),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert ret == 1
+    assert payload["success"] is False
+    assert "expected string" in payload["error"]
+    assert not output.exists()
+
+
+def test_cli_generate_self_contained_html_with_typed_image(tmp_path, capsys):
+    from docx import Document
+    from PIL import Image as PillowImage
+
+    template = tmp_path / "report.docx"
+    output = tmp_path / "result.html"
+    image = tmp_path / "diagram.png"
+    data_path = tmp_path / "data.json"
+    schema_path = tmp_path / "schema.json"
+    document = Document()
+    document.add_paragraph("{{ diagram }}")
+    document.save(template)
+    PillowImage.new("RGB", (5, 5), "blue").save(image)
+    data_path.write_text(json.dumps({"diagram": {"source": str(image), "alt_text": "Diagram"}}), encoding="utf-8")
+    schema_path.write_text('{"fields": {"diagram": {"type": "image"}}, "allow_extra": false}', encoding="utf-8")
+
+    ret = main(
+        [
+            "generate",
+            str(template),
+            str(output),
+            "--data",
+            str(data_path),
+            "--schema",
+            str(schema_path),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    html = output.read_text(encoding="utf-8")
+    assert ret == 0
+    assert payload["success"] is True
+    assert payload["lossless"] is True
+    assert payload["metrics"]["embedded_resources"] == 1
+    assert "data:image/png;base64," in html
+    assert 'alt="Diagram"' in html
+
+
+def test_cli_generate_pdf_from_same_template_data_and_schema(tmp_path, capsys):
+    import fitz
+    from docx import Document
+
+    template = tmp_path / "report.docx"
+    output = tmp_path / "result.pdf"
+    data_path = tmp_path / "data.json"
+    schema_path = tmp_path / "schema.json"
+    document = Document()
+    document.add_heading("{{ title }}", level=1)
+    document.add_paragraph("{% for item in items %}")
+    document.add_paragraph("Item: {{ item }}")
+    document.add_paragraph("{% endfor %}")
+    document.save(template)
+    data_path.write_text('{"title": "PDF Report", "items": ["Alpha", "Beta"]}', encoding="utf-8")
+    schema_path.write_text(
+        '{"fields": {"title": {"type": "string"}, "items": {"type": "array"}}, "allow_extra": false}',
+        encoding="utf-8",
+    )
+
+    ret = main(
+        [
+            "generate",
+            str(template),
+            str(output),
+            "--data",
+            str(data_path),
+            "--schema",
+            str(schema_path),
+            "--json",
+        ]
+    )
+
+    payload = json.loads(capsys.readouterr().out)
+    assert ret == 0
+    assert payload["success"] is True
+    assert payload["lossless"] is True
+    with fitz.open(output) as pdf:
+        text = "".join(page.get_text() for page in pdf)
+    assert "PDF Report" in text
+    assert "Item: Alpha" in text
+    assert "Item: Beta" in text
+
+
 # ── recognize ──────────────────────────────────────
 
 def test_cli_recognize_no_file(capsys):

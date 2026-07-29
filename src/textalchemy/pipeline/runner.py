@@ -77,6 +77,9 @@ class RunResult:
 
 def _safe(v: Any) -> Any:
     """Преобразовать значение в JSON-сериализуемое."""
+    from textalchemy.core.document_codec import document_to_dict
+    from textalchemy.core.document_model import DocumentModel
+
     if v is None or isinstance(v, (str, int, float, bool)):
         return v
     if isinstance(v, (list, tuple)):
@@ -85,6 +88,8 @@ def _safe(v: Any) -> Any:
         return {str(k): _safe(x) for k, x in v.items()}
     if isinstance(v, Path):
         return str(v)
+    if isinstance(v, DocumentModel):
+        return document_to_dict(v)
     return str(v)
 
 

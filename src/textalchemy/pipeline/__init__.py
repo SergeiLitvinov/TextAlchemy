@@ -12,9 +12,10 @@ from textalchemy.pipeline import (
     name,  # noqa: F401
     render,  # noqa: F401
     render_html,  # noqa: F401
+    template,  # noqa: F401
 )
 
 __all__ = [
     "bibliography", "emails_op", "extract", "ingest", "match", "match_files",
-    "name", "render", "render_html", "runner",
+    "name", "render", "render_html", "runner", "template",
 ]

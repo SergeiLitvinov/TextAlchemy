@@ -8,6 +8,7 @@ from textalchemy.cli.init_cmd import cmd_init
 from textalchemy.cli.match_cmd import cmd_match
 from textalchemy.cli.recognize_cmd import cmd_recognize
 from textalchemy.cli.run_cmd import cmd_run
+from textalchemy.cli.template_cmd import cmd_template_check
 from textalchemy.cli.web_cmd import cmd_web
 
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     "cmd_gost", "cmd_stats", "cmd_export", "cmd_generate",
     "cmd_recognize", "cmd_bibtex", "cmd_init", "cmd_web", "cmd_run",
     "cmd_completion",
+    "cmd_template_check",
 ]

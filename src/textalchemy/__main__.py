@@ -18,6 +18,7 @@ from textalchemy.cli import (
     cmd_recognize,
     cmd_run,
     cmd_stats,
+    cmd_template_check,
     cmd_web,
 )
 
@@ -95,6 +96,15 @@ def _setup_parser():
     p.add_argument("-p", "--param", action="append")
     p.add_argument("--list", action="store_true")
     p.add_argument("--templates-dir", type=str)
+    p.add_argument("--data", help="Данные шаблона JSON/YAML/TOML")
+    p.add_argument("--schema", help="Схема данных JSON/YAML/TOML")
+    p.add_argument("--no-strict", action="store_true", help="Разрешить отсутствующие переменные")
+    p.add_argument("--json", action="store_true", help="Вывод в JSON")
+
+    p = sub.add_parser("template-check", help="Проверить DOCX-шаблон и схему без генерации")
+    p.add_argument("template", help="Путь к DOCX-шаблону")
+    p.add_argument("--schema", help="Схема данных JSON/YAML/TOML")
+    p.add_argument("--data", help="Тестовые данные JSON/YAML/TOML")
     p.add_argument("--json", action="store_true", help="Вывод в JSON")
 
     p = sub.add_parser("recognize", help="OCR распознавание (печатный/рукописный текст)")
@@ -173,6 +183,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return cmd_export(args)
             case "generate":
                 return cmd_generate(args)
+            case "template-check":
+                return cmd_template_check(args)
             case "recognize":
                 return cmd_recognize(args)
             case "bibtex":
