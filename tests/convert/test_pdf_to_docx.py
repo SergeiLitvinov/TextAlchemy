@@ -179,12 +179,12 @@ def test_pymupdf_preserves_text_runs(tmp_path):
 def test_docx_to_latex_quality(tmp_path):
     """DOCX→LaTeX: заголовки, жирный текст и таблицы попадают в .tex."""
     try:
-        from docx import Document as D
+        from docx import Document as DocxDocument
     except ImportError:
         pytest.skip("python-docx not installed")
     from textalchemy.convert.docx_to_latex import DocxToLatexConverter
 
-    doc = D()
+    doc = DocxDocument()
     doc.add_heading("Глава 1. Введение", level=1)
     p = doc.add_paragraph()
     p.add_run("Обычный ")
