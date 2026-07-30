@@ -63,3 +63,20 @@ def test_validate_reports_nested_missing_resource():
     assert len(errors) == 1
     assert "unknown resource 'missing'" in errors[0]
     assert "rows[0].cells[0]" in errors[0]
+
+
+def test_validate_reports_missing_image_fallback_resource():
+    document = DocumentModel(
+        resources={"vector": Resource("vector", ResourceKind.VECTOR_IMAGE, "image/svg+xml", data=b"<svg/>")},
+        sections=[
+            Section(
+                blocks=[
+                    Paragraph(content=[Image("vector", properties={"fallback_resource_id": "missing-preview"})])
+                ]
+            )
+        ],
+    )
+
+    assert document.validate() == [
+        "sections[0].blocks[0].content[0]: unknown fallback resource 'missing-preview'"
+    ]

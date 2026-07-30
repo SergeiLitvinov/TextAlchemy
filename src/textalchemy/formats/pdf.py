@@ -1,7 +1,7 @@
 """Текстовый ридер с цепочкой fallback-движков.
 
 Стратегия:
-  pdfplumber → pypdf → pymupdf (text mode)
+  pdfplumber → pypdf → pymupdf (geometry → semantics)
 
 Каждый движок возвращает ``Text`` с заполненным ``engine``. Если движок
 бросил исключение, пробуем следующий. Если все упали — ``Text(warnings=[...])``
@@ -10,9 +10,12 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import Callable
 
 from textalchemy.core.types import Block, BlockType, DocFormat, Text
+from textalchemy.formats.pdf_geometry import PdfGeometryDocument, extract_pdf_geometry
+from textalchemy.formats.pdf_semantic import analyze_pdf_geometry
 
 logger = logging.getLogger(__name__)
 
@@ -81,26 +84,13 @@ def _with_pypdf(path: str) -> Text:
 
 
 def _with_pymupdf(path: str) -> Text:
-    import fitz  # type: ignore[import-not-found]
+    return analyze_pdf_geometry(extract_pdf_geometry(path))
 
-    plain_parts: list[str] = []
-    with fitz.open(path) as doc:
-        for i, page in enumerate(doc, start=1):
-            try:
-                t = page.get_text("text") or ""
-            except Exception:  # noqa: BLE001
-                t = ""
-            if t:
-                plain_parts.append(t)
-        plain = "\n".join(plain_parts)
-        pages = len(doc)
-    return Text(
-        blocks=[Block(type=BlockType.PARAGRAPH, text=plain)] if plain else [],
-        plain=plain,
-        source_format=DocFormat.PDF,
-        engine="pymupdf",
-        pages=pages,
-    )
+
+def read_pdf_geometry(path: str | Path) -> PdfGeometryDocument:
+    """Публичный геометрический импорт PDF без семантических эвристик."""
+
+    return extract_pdf_geometry(path)
 
 
 def read_pdf(path: str) -> Text:
@@ -144,4 +134,4 @@ def get_pdf_info(path: str) -> dict:
     return info
 
 
-__all__ = ["read_pdf", "get_pdf_info"]
+__all__ = ["get_pdf_info", "read_pdf", "read_pdf_geometry"]

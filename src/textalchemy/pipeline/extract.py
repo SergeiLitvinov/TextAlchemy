@@ -1,7 +1,7 @@
 """Универсальный ридер: Document → Text.
 
 Выбирает движок по ``Document.format``. Сейчас PDF идёт по цепочке
-``pdfplumber → pypdf → pymupdf`` (см. formats/pdf.py).
+``pdfplumber → pypdf → pymupdf geometry → semantics`` (см. formats/pdf.py).
 """
 from __future__ import annotations
 

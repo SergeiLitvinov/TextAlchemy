@@ -150,6 +150,57 @@ def test_write_docx_model_preserves_svg_as_vector_resource(tmp_path):
     assert restored_image.alt_text == "vector diagram"
 
 
+def test_write_docx_model_prefers_office_svg_over_raster_fallback(tmp_path):
+    output = tmp_path / "office-svg.docx"
+    second_output = tmp_path / "office-svg-roundtrip.docx"
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><circle r="20"/></svg>'
+    fallback_png = _png_bytes(tmp_path)
+    document = DocumentModel(
+        resources={
+            "vector": Resource("vector", ResourceKind.VECTOR_IMAGE, "image/svg+xml", data=svg),
+            "preview": Resource("preview", ResourceKind.RASTER_IMAGE, "image/png", data=fallback_png),
+        },
+        sections=[
+            Section(
+                blocks=[
+                    Paragraph(
+                        content=[
+                            Image(
+                                "vector",
+                                alt_text="Office SVG",
+                                box=Box(0, 0, 120, 80),
+                                properties={"fallback_resource_id": "preview"},
+                            )
+                        ]
+                    )
+                ]
+            )
+        ],
+    )
+
+    report = write_docx_model(document, output)
+    restored = read_docx_model(output)
+    restored_image = restored.sections[0].blocks[0].content[0]
+    fallback_id = restored_image.properties.fallback_resource_id
+    second_report = write_docx_model(restored, second_output)
+
+    assert report.lossless
+    assert second_report.lossless
+    assert isinstance(restored_image, Image)
+    assert restored.resources[restored_image.resource_id].kind is ResourceKind.VECTOR_IMAGE
+    assert restored.resources[restored_image.resource_id].media_type == "image/svg+xml"
+    assert restored.resources[restored_image.resource_id].data == svg
+    assert fallback_id is not None
+    assert restored.resources[fallback_id].kind is ResourceKind.RASTER_IMAGE
+    assert restored.resources[fallback_id].data == fallback_png
+    with zipfile.ZipFile(second_output) as archive:
+        xml = archive.read("word/document.xml").decode("utf-8")
+        media_names = {name for name in archive.namelist() if name.startswith("word/media/")}
+    assert "svgBlip" in xml
+    assert any(name.endswith(".svg") for name in media_names)
+    assert any(name.endswith(".png") for name in media_names)
+
+
 def test_write_docx_model_recreates_custom_styles_and_continuous_sections(tmp_path):
     source_path = tmp_path / "source.docx"
     output = tmp_path / "roundtrip.docx"
@@ -283,6 +334,75 @@ def test_write_docx_model_roundtrips_image_crop_rotation_and_wrap_polygon(tmp_pa
     assert restored_image.box == Box(36, 54, 144, 96, rotation=12.5)
     assert restored_image.properties["wrap_text"] == "largest"
     assert restored_image.properties["wrap_polygon"] == polygon
+
+
+def test_write_docx_model_roundtrips_image_flip_transparency_border_and_shadow(tmp_path):
+    output = tmp_path / "image-effects.docx"
+    second_output = tmp_path / "image-effects-restored.docx"
+    drawing_namespace = "http://schemas.openxmlformats.org/drawingml/2006/main"
+    document = DocumentModel(
+        resources={"picture": Resource("picture", ResourceKind.RASTER_IMAGE, "image/png", data=_png_bytes(tmp_path))},
+        sections=[
+            Section(
+                blocks=[
+                    Paragraph(
+                        content=[
+                            Image(
+                                "picture",
+                                box=Box(0, 0, 96, 64),
+                                properties={
+                                    "flip_horizontal": True,
+                                    "flip_vertical": False,
+                                    "blip_effects_xml": [
+                                        f'<a:alphaModFix xmlns:a="{drawing_namespace}" amt="42000"/>',
+                                        f'<a:grayscl xmlns:a="{drawing_namespace}"/>',
+                                        f'<a:lum xmlns:a="{drawing_namespace}" bright="12000" contrast="8000"/>',
+                                    ],
+                                    "line_xml": (
+                                        f'<a:ln xmlns:a="{drawing_namespace}" w="25400">'
+                                        '<a:solidFill><a:srgbClr val="336699"/></a:solidFill>'
+                                        '<a:prstDash val="dash"/></a:ln>'
+                                    ),
+                                    "shape_effects_xml": (
+                                        f'<a:effectLst xmlns:a="{drawing_namespace}">'
+                                        '<a:outerShdw blurRad="38100" dist="25400" dir="2700000">'
+                                        '<a:srgbClr val="000000"><a:alpha val="35000"/></a:srgbClr>'
+                                        '</a:outerShdw></a:effectLst>'
+                                    ),
+                                },
+                            )
+                        ]
+                    )
+                ]
+            )
+        ],
+    )
+
+    report = write_docx_model(document, output)
+    restored = read_docx_model(output)
+    restored_image = restored.sections[0].blocks[0].content[0]
+    second_report = write_docx_model(restored, second_output)
+
+    assert report.lossless
+    assert second_report.lossless
+    assert isinstance(restored_image, Image)
+    assert restored_image.properties.flip_horizontal is True
+    assert restored_image.properties.flip_vertical is False
+    assert restored_image.properties.opacity == 0.42
+    assert restored_image.properties.grayscale is True
+    assert len(restored_image.properties.blip_effects_xml) == 3
+    assert "lum" in restored_image.properties.blip_effects_xml[2]
+    assert "336699" in (restored_image.properties.line_xml or "")
+    assert "outerShdw" in (restored_image.properties.shape_effects_xml or "")
+    with zipfile.ZipFile(second_output) as archive:
+        xml = archive.read("word/document.xml").decode("utf-8")
+    assert 'flipH="1"' in xml
+    assert 'flipV="0"' in xml
+    assert 'amt="42000"' in xml
+    assert "<a:grayscl" in xml
+    assert 'bright="12000"' in xml
+    assert '<a:ln w="25400">' in xml
+    assert "<a:outerShdw" in xml
 
 
 def test_write_docx_model_preserves_first_and_even_running_content(tmp_path):

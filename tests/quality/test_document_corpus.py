@@ -96,15 +96,18 @@ def test_scientific_report_docx_roundtrip_retains_supported_structure(tmp_path):
     conversion = write_docx_model(model, target)
     restored = read_docx_model(target)
     comparison = compare_inspections(inspect_document_model(model), inspect_document_model(restored))
-    footnotes = model.resources["docx-footnotes"]
-    endnotes = model.resources["docx-endnotes"]
-    footnote_relationships = {item["id"]: item for item in footnotes.properties["relationships"]}
-    endnote_relationships = {item["id"]: item for item in endnotes.properties["relationships"]}
+    assert model.package is not None
+    footnote_relationships = {
+        item.id: item for item in model.package.relationships if item.source == "/word/footnotes.xml"
+    }
+    endnote_relationships = {
+        item.id: item for item in model.package.relationships if item.source == "/word/endnotes.xml"
+    }
 
     assert conversion.success
-    assert footnote_relationships["rIdNoteImage"]["resource_id"] == "docx-footnotes-rIdNoteImage"
-    assert footnote_relationships["rIdNoteLink"]["target"] == "https://example.com/conversion-contract"
-    assert endnote_relationships["rIdEndnoteLink"]["target"] == "https://example.com/endnote-target"
+    assert footnote_relationships["rIdNoteImage"].target == "/word/media/footnote-icon.png"
+    assert footnote_relationships["rIdNoteLink"].target == "https://example.com/conversion-contract"
+    assert endnote_relationships["rIdEndnoteLink"].target == "https://example.com/endnote-target"
     assert model.sections[0].first_page_headers[0].plain_text.endswith("FIRST PAGE")
     assert model.sections[0].even_page_headers[0].plain_text.endswith("EVEN PAGE")
     assert model.sections[0].headers[0].plain_text.endswith("ODD PAGE")
@@ -192,11 +195,15 @@ def test_scientific_report_docx_roundtrip_retains_supported_structure(tmp_path):
         "complex_fields",
         "numbered_paragraphs",
         "resources",
+        "package_parts",
     ):
         assert comparison.retention[metric]["ratio"] == 1.0
-    assert comparison.matching_resource_hashes == 8
+    assert comparison.matching_resource_hashes == 2
+    assert comparison.matching_package_part_hashes == 6
     assert comparison.resource_comparison["exact_hash_retention_ratio"] == 1
     assert comparison.resource_comparison["exact_byte_retention_ratio"] == 1
+    assert comparison.package_comparison["exact_hash_retention_ratio"] == 1
+    assert comparison.package_comparison["exact_byte_retention_ratio"] == 1
     assert comparison.geometry_summary["max_dimension_error_pt"] == 0
     assert comparison.geometry_summary["max_margin_error_pt"] == 0
     assert all(item["same_geometry"] for item in comparison.page_geometry)

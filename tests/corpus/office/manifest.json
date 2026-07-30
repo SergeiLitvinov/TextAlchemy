@@ -1,0 +1,13 @@
+{
+  "libreoffice-scientific-slides.pptx": {
+    "format": "pptx",
+    "producer": "LibreOffice",
+    "producer_version": "25.8.6.2 Windows_X86_64",
+    "source_generator": "tests.corpus.multiformat:build_pptx",
+    "generated_at": "2026-07-30",
+    "sha256": "85cde1c97eb01a1c0c91f8677e43ee13a7c42bd173ecde94651b59e8d0793f2b",
+    "bytes": 37474,
+    "slides": 2,
+    "expected_vector_profile": "ppt/media/image1.wmf"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "source": "tests.corpus.multiformat:build_pdf",
+  "renderer": "PyMuPDF",
+  "dpi": 96,
+  "normalised_size": [160, 160],
+  "thresholds": {
+    "min_similarity": 0.96,
+    "max_hash_distance": 16,
+    "min_foreground_iou": 0.60
+  },
+  "pages": [
+    {
+      "file": "scientific-layout-page-1.png",
+      "width": 640,
+      "height": 854,
+      "sha256": "39d07241ae74bd2860741afb9ef6e94492bd2f0df3bc56e2c6158df1c81c77d5"
+    },
+    {
+      "file": "scientific-layout-page-2.png",
+      "width": 854,
+      "height": 640,
+      "sha256": "f14e94861bcbce90cdd4136f6602c970c47ba120f7f458ebbc8f2176088f106d"
+    }
+  ]
+}

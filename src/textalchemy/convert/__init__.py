@@ -1,3 +1,4 @@
+from textalchemy.convert.backends import ExporterBackend, ImporterBackend, PathConverterBackend
 from textalchemy.convert.base import BaseConverter, ConversionResult
 from textalchemy.convert.capabilities import built_in_capabilities, create_capability_registry
 from textalchemy.convert.docx_to_latex import DocxToLatexConverter
@@ -14,13 +15,39 @@ from textalchemy.convert.pdf_to_docx import (
 from textalchemy.convert.pdf_writer import write_pdf_model
 from textalchemy.convert.pptx_to_html import PptxToHtmlConverter
 from textalchemy.convert.pptx_to_html import convert as pptx_to_html
+from textalchemy.convert.protocols import (
+    ConversionBackend,
+    ConversionValue,
+    DocumentExporter,
+    DocumentImporter,
+    PathConverter,
+)
 
 __all__ = [
-    "BaseConverter", "ConversionResult",
-    "built_in_capabilities", "create_capability_registry",
-    "ConversionExecutor", "ConversionRequest", "infer_format",
-    "Pdf2DocxConverter", "PyMuPdfConverter", "LibreOfficeConverter", "FanOutConverter",
-    "DocxToLatexConverter", "create_converter",
-    "PptxToHtmlConverter", "pptx_to_html",
-    "write_docx_model", "write_html_model", "write_pdf_model",
+    "BaseConverter",
+    "ConversionBackend",
+    "ConversionExecutor",
+    "ConversionRequest",
+    "ConversionResult",
+    "ConversionValue",
+    "DocxToLatexConverter",
+    "DocumentExporter",
+    "DocumentImporter",
+    "ExporterBackend",
+    "FanOutConverter",
+    "ImporterBackend",
+    "LibreOfficeConverter",
+    "PathConverter",
+    "PathConverterBackend",
+    "Pdf2DocxConverter",
+    "PptxToHtmlConverter",
+    "PyMuPdfConverter",
+    "built_in_capabilities",
+    "create_capability_registry",
+    "create_converter",
+    "infer_format",
+    "pptx_to_html",
+    "write_docx_model",
+    "write_html_model",
+    "write_pdf_model",
 ]

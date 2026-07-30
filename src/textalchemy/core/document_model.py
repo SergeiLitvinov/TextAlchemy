@@ -11,6 +11,16 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypeAlias
 
+from textalchemy.core.properties import (
+    ImageProperties,
+    ParagraphProperties,
+    SectionProperties,
+    TableCellProperties,
+    TableProperties,
+    TableRowProperties,
+    TextStyleProperties,
+)
+
 
 class ConversionMode(str, Enum):
     EDITABLE = "editable"
@@ -23,6 +33,9 @@ class ResourceKind(str, Enum):
     VECTOR_IMAGE = "vector_image"
     FONT = "font"
     ATTACHMENT = "attachment"
+
+
+VECTOR_IMAGE_MEDIA_TYPES = frozenset({"image/svg+xml", "image/x-emf", "image/x-wmf", "image/emf", "image/wmf"})
 
 
 class FormulaFormat(str, Enum):
@@ -71,7 +84,11 @@ class TextStyle:
     color: str | None = None
     background: str | None = None
     language: str | None = None
-    properties: dict[str, Any] = field(default_factory=dict)
+    properties: TextStyleProperties = field(default_factory=TextStyleProperties)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.properties, TextStyleProperties):
+            self.properties = TextStyleProperties(self.properties)
 
 
 @dataclass
@@ -89,6 +106,76 @@ class Resource:
             raise ValueError("resource id must not be empty")
         if self.data is None and self.source is None:
             raise ValueError("resource requires either data or source")
+
+
+@dataclass
+class PackagePart:
+    """Opaque package part preserved for a format-aware round-trip."""
+
+    name: str
+    media_type: str
+    data: bytes
+
+    def __post_init__(self) -> None:
+        if not self.name.startswith("/"):
+            raise ValueError("package part name must be absolute")
+
+
+@dataclass
+class PackageRelationship:
+    """Directed relationship between package parts or to an external target."""
+
+    id: str
+    relationship_type: str
+    source: str
+    target: str
+    external: bool = False
+
+
+@dataclass
+class PackageGraph:
+    """Format-specific package topology kept outside semantic resources."""
+
+    format: str
+    root: str = "/word/document.xml"
+    parts: dict[str, PackagePart] = field(default_factory=dict)
+    relationships: list[PackageRelationship] = field(default_factory=list)
+
+    def add_part(self, part: PackagePart) -> None:
+        if part.name in self.parts and self.parts[part.name] != part:
+            raise ValueError(f"duplicate package part: {part.name}")
+        self.parts[part.name] = part
+
+    def add_relationship(self, relationship: PackageRelationship) -> None:
+        key = (relationship.source, relationship.id)
+        if any((item.source, item.id) == key for item in self.relationships):
+            raise ValueError(f"duplicate package relationship: {relationship.source}:{relationship.id}")
+        self.relationships.append(relationship)
+
+    def related_part(self, source: str, relationship_type: str) -> PackagePart | None:
+        relationship = next(
+            (
+                item
+                for item in self.relationships
+                if item.source == source and item.relationship_type == relationship_type and not item.external
+            ),
+            None,
+        )
+        return self.parts.get(relationship.target) if relationship is not None else None
+
+    def validate(self) -> list[str]:
+        errors: list[str] = []
+        seen: set[tuple[str, str]] = set()
+        for relationship in self.relationships:
+            key = (relationship.source, relationship.id)
+            if key in seen:
+                errors.append(f"duplicate relationship {relationship.source}:{relationship.id}")
+            seen.add(key)
+            if relationship.source not in self.parts and relationship.source != self.root:
+                errors.append(f"unknown relationship source {relationship.source!r}")
+            if not relationship.external and relationship.target not in self.parts:
+                errors.append(f"unknown relationship target {relationship.target!r}")
+        return errors
 
 
 @dataclass
@@ -114,8 +201,12 @@ class Image:
     resource_id: str
     alt_text: str = ""
     box: Box | None = None
-    properties: dict[str, Any] = field(default_factory=dict)
+    properties: ImageProperties = field(default_factory=ImageProperties)
     crop: ImageCrop | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.properties, ImageProperties):
+            self.properties = ImageProperties(self.properties)
 
 
 Inline: TypeAlias = TextRun | Formula | Image
@@ -127,7 +218,11 @@ class Paragraph:
     style_id: str | None = None
     alignment: str | None = None
     box: Box | None = None
-    properties: dict[str, Any] = field(default_factory=dict)
+    properties: ParagraphProperties = field(default_factory=ParagraphProperties)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.properties, ParagraphProperties):
+            self.properties = ParagraphProperties(self.properties)
 
     @property
     def plain_text(self) -> str:
@@ -147,13 +242,21 @@ class TableCell:
     blocks: list[Block] = field(default_factory=list)
     row_span: int = 1
     column_span: int = 1
-    properties: dict[str, Any] = field(default_factory=dict)
+    properties: TableCellProperties = field(default_factory=TableCellProperties)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.properties, TableCellProperties):
+            self.properties = TableCellProperties(self.properties)
 
 
 @dataclass
 class TableRow:
     cells: list[TableCell] = field(default_factory=list)
-    properties: dict[str, Any] = field(default_factory=dict)
+    properties: TableRowProperties = field(default_factory=TableRowProperties)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.properties, TableRowProperties):
+            self.properties = TableRowProperties(self.properties)
 
 
 @dataclass
@@ -161,7 +264,11 @@ class Table:
     rows: list[TableRow] = field(default_factory=list)
     style_id: str | None = None
     box: Box | None = None
-    properties: dict[str, Any] = field(default_factory=dict)
+    properties: TableProperties = field(default_factory=TableProperties)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.properties, TableProperties):
+            self.properties = TableProperties(self.properties)
 
 
 Block: TypeAlias = Paragraph | Table | Formula | Image
@@ -187,7 +294,11 @@ class Section:
     first_page_footers: list[Block] = field(default_factory=list)
     even_page_headers: list[Block] = field(default_factory=list)
     even_page_footers: list[Block] = field(default_factory=list)
-    properties: dict[str, Any] = field(default_factory=dict)
+    properties: SectionProperties = field(default_factory=SectionProperties)
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.properties, SectionProperties):
+            self.properties = SectionProperties(self.properties)
 
 
 @dataclass
@@ -198,9 +309,10 @@ class DocumentModel:
     resources: dict[str, Resource] = field(default_factory=dict)
     styles: dict[str, TextStyle] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+    package: PackageGraph | None = None
     mode: ConversionMode = ConversionMode.BALANCED
     source_format: str | None = None
-    version: int = 1
+    version: int = 2
 
     def add_resource(self, resource: Resource) -> None:
         if resource.id in self.resources:
@@ -212,13 +324,20 @@ class DocumentModel:
 
         errors: list[str] = []
 
+        def check_image(image: Image, location: str) -> None:
+            if image.resource_id not in self.resources:
+                errors.append(f"{location}: unknown resource {image.resource_id!r}")
+            fallback_id = image.properties.fallback_resource_id
+            if fallback_id is not None and fallback_id not in self.resources:
+                errors.append(f"{location}: unknown fallback resource {fallback_id!r}")
+
         def check_block(block: Block, location: str) -> None:
-            if isinstance(block, Image) and block.resource_id not in self.resources:
-                errors.append(f"{location}: unknown resource {block.resource_id!r}")
+            if isinstance(block, Image):
+                check_image(block, location)
             elif isinstance(block, Paragraph):
                 for index, item in enumerate(block.content):
-                    if isinstance(item, Image) and item.resource_id not in self.resources:
-                        errors.append(f"{location}.content[{index}]: unknown resource {item.resource_id!r}")
+                    if isinstance(item, Image):
+                        check_image(item, f"{location}.content[{index}]")
             elif isinstance(block, Table):
                 for row_index, row in enumerate(block.rows):
                     for cell_index, cell in enumerate(row.cells):
@@ -237,6 +356,8 @@ class DocumentModel:
             ):
                 for block_index, block in enumerate(getattr(section, collection_name)):
                     check_block(block, f"sections[{section_index}].{collection_name}[{block_index}]")
+        if self.package is not None:
+            errors.extend(f"package: {error}" for error in self.package.validate())
         return errors
 
 
@@ -249,16 +370,27 @@ __all__ = [
     "FormulaFormat",
     "Image",
     "ImageCrop",
+    "ImageProperties",
     "Inline",
     "Length",
     "PageSettings",
+    "PackageGraph",
+    "PackagePart",
+    "PackageRelationship",
     "Paragraph",
+    "ParagraphProperties",
     "Resource",
     "ResourceKind",
     "Section",
+    "SectionProperties",
     "Table",
     "TableCell",
+    "TableCellProperties",
+    "TableProperties",
     "TableRow",
+    "TableRowProperties",
     "TextRun",
     "TextStyle",
+    "TextStyleProperties",
+    "VECTOR_IMAGE_MEDIA_TYPES",
 ]

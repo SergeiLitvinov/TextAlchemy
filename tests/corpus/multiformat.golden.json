@@ -1,0 +1,22 @@
+{
+  "emf": {
+    "bytes": 128,
+    "records": 2,
+    "signature": 1179469088
+  },
+  "pdf": {
+    "pages": 2,
+    "title": "TextAlchemy multi-format PDF corpus",
+    "page_sizes_pt": [[480.0, 640.0], [640.0, 480.0]],
+    "minimum_text_blocks": 12,
+    "minimum_drawings": 8,
+    "minimum_images": 1
+  },
+  "pptx": {
+    "slides": 2,
+    "minimum_tables": 1,
+    "minimum_charts": 1,
+    "minimum_notes": 2,
+    "emf_part": "ppt/media/scientific-diagram.emf"
+  }
+}

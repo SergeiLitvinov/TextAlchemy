@@ -6,9 +6,11 @@ import importlib.util
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
+from textalchemy.convert.backends import ExporterBackend, ImporterBackend, PathConverterBackend
 from textalchemy.convert.capabilities import create_capability_registry
+from textalchemy.convert.protocols import ConversionBackend, ConversionValue
 from textalchemy.core.conversion_graph import (
     DEFAULT_FEATURES,
     CapabilityRegistry,
@@ -19,7 +21,8 @@ from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_model import ConversionMode, DocumentModel
 from textalchemy.core.types import DocFormat
 
-StepHandler = Callable[[Any, Path], tuple[Any, ConversionReport | None]]
+StepHandler = Callable[[ConversionValue, Path], tuple[ConversionValue, ConversionReport | None]]
+BackendEntry = ConversionBackend | StepHandler
 RequirementChecker = Callable[[str], bool]
 
 _MODULE_REQUIREMENTS = {
@@ -45,11 +48,11 @@ class ConversionExecutor:
         self,
         *,
         registry: CapabilityRegistry | None = None,
-        handlers: dict[str, StepHandler] | None = None,
+        handlers: dict[str, BackendEntry] | None = None,
         requirement_checker: RequirementChecker | None = None,
     ) -> None:
         self.registry = registry or create_capability_registry()
-        self.handlers = handlers or _built_in_handlers()
+        self.backends = _built_in_backends() if handlers is None else handlers
         self.requirement_checker = requirement_checker or requirement_available
 
     def execute(self, request: ConversionRequest) -> ConversionReport:
@@ -92,19 +95,22 @@ class ConversionExecutor:
         report.metrics["executed_steps"] = []
         report.metrics["step_metrics"] = {}
         try:
-            value: Any = _load_initial(request)
+            value = _load_initial(request)
             if not plan.steps and request.target is not DocFormat.MODEL:
                 request.output_path.parent.mkdir(parents=True, exist_ok=True)
                 if request.input_path.resolve() != request.output_path.resolve():
                     shutil.copy2(request.input_path, request.output_path)
                 return report
             for step in plan.steps:
-                handler = self.handlers[step.id]
-                value, step_report = handler(value, request.output_path)
+                backend = self.backends[step.id]
+                execute = backend.execute if isinstance(backend, ConversionBackend) else backend
+                value, step_report = execute(value, request.output_path)
                 report.metrics["executed_steps"].append(step.id)
                 if step_report is not None:
                     report.issues.extend(step_report.issues)
                     report.metrics["step_metrics"][step.id] = step_report.metrics
+                    if not step_report.success:
+                        return report
             if request.target is DocFormat.MODEL:
                 if not isinstance(value, DocumentModel):
                     raise TypeError(f"route returned {type(value).__name__}, expected DocumentModel")
@@ -118,7 +124,7 @@ class ConversionExecutor:
         return report
 
     def _step_available(self, step: ConverterCapabilities) -> bool:
-        return step.id in self.handlers and all(self.requirement_checker(item) for item in step.requirements)
+        return step.id in self.backends and all(self.requirement_checker(item) for item in step.requirements)
 
 
 def requirement_available(requirement: str) -> bool:
@@ -160,101 +166,71 @@ def _load_initial(request: ConversionRequest) -> Path | DocumentModel:
     return request.input_path
 
 
-def _built_in_handlers() -> dict[str, StepHandler]:
+def _built_in_backends() -> dict[str, ConversionBackend]:
     return {
-        "docx.model": _docx_to_model,
-        "model.docx": _model_to_docx,
-        "model.html": _model_to_html,
-        "model.pdf": _model_to_pdf,
-        "pdf.docx.pdf2docx": _pdf2docx,
-        "pdf.docx.libreoffice": _libreoffice_pdf_to_docx,
-        "pdf.docx.pymupdf": _pymupdf_pdf_to_docx,
-        "pptx.html": _pptx_to_html,
-        "docx.latex": _docx_to_latex,
+        "docx.model": ImporterBackend("docx.model", _read_docx),
+        "model.docx": ExporterBackend("model.docx", _write_docx),
+        "model.html": ExporterBackend("model.html", _write_html),
+        "model.pdf": ExporterBackend("model.pdf", _write_pdf),
+        "pdf.docx.pdf2docx": PathConverterBackend(
+            "pdf.docx.pdf2docx",
+            lambda source, output: _convert_pdf(source, output, "pdf2docx"),
+        ),
+        "pdf.docx.libreoffice": PathConverterBackend(
+            "pdf.docx.libreoffice",
+            lambda source, output: _convert_pdf(source, output, "libreoffice"),
+        ),
+        "pdf.docx.pymupdf": PathConverterBackend(
+            "pdf.docx.pymupdf",
+            lambda source, output: _convert_pdf(source, output, "pymupdf"),
+        ),
+        "pptx.html": PathConverterBackend("pptx.html", _convert_pptx_html),
+        "docx.latex": PathConverterBackend("docx.latex", _convert_docx_latex),
     }
 
 
-def _docx_to_model(value: Any, _output: Path) -> tuple[DocumentModel, None]:
+def _read_docx(source: Path) -> DocumentModel:
     from textalchemy.formats.docx import read_docx_model
 
-    return read_docx_model(_require_path(value)), None
+    return read_docx_model(source)
 
 
-def _model_to_docx(value: Any, output: Path) -> tuple[Path, ConversionReport]:
+def _write_docx(model: DocumentModel, output: Path) -> ConversionReport:
     from textalchemy.convert.docx_writer import write_docx_model
 
-    model = _require_model(value)
-    return output, write_docx_model(model, output)
+    return write_docx_model(model, output)
 
 
-def _model_to_html(value: Any, output: Path) -> tuple[Path, ConversionReport]:
+def _write_html(model: DocumentModel, output: Path) -> ConversionReport:
     from textalchemy.convert.html_writer import write_html_model
 
-    model = _require_model(value)
-    return output, write_html_model(model, output)
+    return write_html_model(model, output)
 
 
-def _model_to_pdf(value: Any, output: Path) -> tuple[Path, ConversionReport]:
+def _write_pdf(model: DocumentModel, output: Path) -> ConversionReport:
     from textalchemy.convert.pdf_writer import write_pdf_model
 
-    model = _require_model(value)
-    return output, write_pdf_model(model, output)
+    return write_pdf_model(model, output)
 
 
-def _legacy_path_converter(value: Any, output: Path, tool: str) -> tuple[Path, ConversionReport]:
+def _convert_pdf(source: Path, output: Path, tool: str) -> ConversionReport:
     from textalchemy.convert.pdf_to_docx import create_converter
 
-    source = _require_path(value)
-    legacy = create_converter(tool).convert(source, output)
-    report = ConversionReport(output)
+    report = create_converter(tool).convert(source, output)
     report.metrics["engine"] = tool
-    if not legacy.success:
-        report.add(IssueSeverity.ERROR, "legacy-converter", legacy.error or f"{tool} failed")
-    return output, report
+    return report
 
 
-def _pdf2docx(value: Any, output: Path) -> tuple[Path, ConversionReport]:
-    return _legacy_path_converter(value, output, "pdf2docx")
-
-
-def _libreoffice_pdf_to_docx(value: Any, output: Path) -> tuple[Path, ConversionReport]:
-    return _legacy_path_converter(value, output, "libreoffice")
-
-
-def _pymupdf_pdf_to_docx(value: Any, output: Path) -> tuple[Path, ConversionReport]:
-    return _legacy_path_converter(value, output, "pymupdf")
-
-
-def _pptx_to_html(value: Any, output: Path) -> tuple[Path, ConversionReport]:
+def _convert_pptx_html(source: Path, output: Path) -> ConversionReport:
     from textalchemy.convert.pptx_to_html import PptxToHtmlConverter
 
-    legacy = PptxToHtmlConverter().convert(_require_path(value), output)
-    report = ConversionReport(legacy.output_path)
-    if not legacy.success:
-        report.add(IssueSeverity.ERROR, "legacy-converter", legacy.error or "pptx2html failed")
-    return legacy.output_path, report
+    return PptxToHtmlConverter().convert(source, output)
 
 
-def _docx_to_latex(value: Any, output: Path) -> tuple[Path, ConversionReport]:
+def _convert_docx_latex(source: Path, output: Path) -> ConversionReport:
     from textalchemy.convert.docx_to_latex import DocxToLatexConverter
 
-    legacy = DocxToLatexConverter().convert(_require_path(value), output)
-    report = ConversionReport(output)
-    if not legacy.success:
-        report.add(IssueSeverity.ERROR, "legacy-converter", legacy.error or "docx2latex failed")
-    return output, report
-
-
-def _require_path(value: Any) -> Path:
-    if not isinstance(value, Path):
-        raise TypeError(f"conversion step expected Path, got {type(value).__name__}")
-    return value
-
-
-def _require_model(value: Any) -> DocumentModel:
-    if not isinstance(value, DocumentModel):
-        raise TypeError(f"conversion step expected DocumentModel, got {type(value).__name__}")
-    return value
+    return DocxToLatexConverter().convert(source, output)
 
 
 __all__ = [

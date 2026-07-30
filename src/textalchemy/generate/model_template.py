@@ -21,6 +21,7 @@ from jinja2.sandbox import SandboxedEnvironment
 
 from textalchemy.core.diagnostics import ConversionReport
 from textalchemy.core.document_model import (
+    VECTOR_IMAGE_MEDIA_TYPES,
     Block,
     DocumentModel,
     Formula,
@@ -364,8 +365,7 @@ class _Renderer:
         identity = raw if raw is not None else str(source).encode("utf-8")
         resource_id = f"template-image-{hashlib.sha256(identity).hexdigest()[:16]}"
         media_type = value.media_type or _guess_media_type(value.filename or str(source or ""))
-        vector_types = {"image/svg+xml", "image/x-emf", "image/x-wmf"}
-        kind = ResourceKind.VECTOR_IMAGE if media_type in vector_types else ResourceKind.RASTER_IMAGE
+        kind = ResourceKind.VECTOR_IMAGE if media_type in VECTOR_IMAGE_MEDIA_TYPES else ResourceKind.RASTER_IMAGE
         if resource_id not in self.model.resources:
             self.model.add_resource(
                 Resource(

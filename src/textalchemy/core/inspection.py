@@ -34,6 +34,7 @@ class DocumentInspection:
     metrics: dict[str, int] = field(default_factory=dict)
     pages: list[dict[str, Any]] = field(default_factory=list)
     resources: list[dict[str, Any]] = field(default_factory=list)
+    package_parts: list[dict[str, Any]] = field(default_factory=list)
     fonts: dict[str, int] = field(default_factory=dict)
     formula_formats: dict[str, int] = field(default_factory=dict)
     issues: list[ConversionIssue] = field(default_factory=list)
@@ -58,6 +59,7 @@ class DocumentInspection:
             "metrics": self.metrics,
             "pages": self.pages,
             "resources": self.resources,
+            "package_parts": self.package_parts,
             "fonts": self.fonts,
             "formula_formats": self.formula_formats,
             "issues": [
@@ -80,8 +82,10 @@ class DocumentComparison:
     page_geometry: list[dict[str, Any]]
     geometry_summary: dict[str, float | int]
     resource_comparison: dict[str, Any]
+    package_comparison: dict[str, Any]
     font_comparison: dict[str, Any]
     matching_resource_hashes: int
+    matching_package_part_hashes: int
     issues: list[ConversionIssue] = field(default_factory=list)
 
     @property
@@ -100,8 +104,10 @@ class DocumentComparison:
             "page_geometry": self.page_geometry,
             "geometry_summary": self.geometry_summary,
             "resource_comparison": self.resource_comparison,
+            "package_comparison": self.package_comparison,
             "font_comparison": self.font_comparison,
             "matching_resource_hashes": self.matching_resource_hashes,
+            "matching_package_part_hashes": self.matching_package_part_hashes,
             "issues": [
                 {
                     "severity": issue.severity.value,
@@ -144,6 +150,11 @@ def compare_inspections(source: DocumentInspection, target: DocumentInspection) 
     issues.extend(geometry_issues)
     resource_comparison, resource_issues = _compare_resources(source.resources, target.resources)
     issues.extend(resource_issues)
+    package_comparison, package_issues = _compare_resources(source.package_parts, target.package_parts)
+    issues.extend(
+        ConversionIssue(issue.severity, "package-part-loss", issue.message.replace("resource", "package part"))
+        for issue in package_issues
+    )
     font_comparison, font_issues = _compare_fonts(source.fonts, target.fonts)
     issues.extend(font_issues)
     return DocumentComparison(
@@ -153,8 +164,10 @@ def compare_inspections(source: DocumentInspection, target: DocumentInspection) 
         page_geometry=page_geometry,
         geometry_summary=geometry_summary,
         resource_comparison=resource_comparison,
+        package_comparison=package_comparison,
         font_comparison=font_comparison,
         matching_resource_hashes=resource_comparison["exact_hash_matches"],
+        matching_package_part_hashes=package_comparison["exact_hash_matches"],
         issues=issues,
     )
 
@@ -445,6 +458,8 @@ def inspect_document_model(
         sections=len(document.sections),
         pages=len(document.sections),
         resources=len(document.resources),
+        package_parts=len(document.package.parts) if document.package is not None else 0,
+        package_relationships=len(document.package.relationships) if document.package is not None else 0,
         style_definitions=len(document.styles),
     )
     fonts: Counter[str] = Counter()
@@ -478,16 +493,17 @@ def inspect_document_model(
                     referenced_resources,
                 )
     for resource in document.resources.values():
-        if resource.properties.get("role") in {
-            "docx-footnotes",
-            "docx-endnotes",
-            "docx-numbering",
-            "docx-styles",
-            "docx-theme",
-            "docx-related-part",
-        }:
-            referenced_resources.add(resource.id)
         report.resources.append(_inspect_resource(resource, report))
+    if document.package is not None:
+        report.package_parts = [
+            {
+                "id": part.name,
+                "media_type": part.media_type,
+                "size_bytes": len(part.data),
+                "sha256": hashlib.sha256(part.data).hexdigest(),
+            }
+            for part in document.package.parts.values()
+        ]
     for resource_id in sorted(set(document.resources) - referenced_resources):
         report.add(IssueSeverity.WARNING, "unused-resource", f"resource {resource_id!r} is not referenced")
 
@@ -799,6 +815,7 @@ def _quality_metrics(report: DocumentInspection) -> dict[str, int]:
         "fields": metrics.get("fields", 0),
         "complex_fields": metrics.get("complex_fields", 0),
         "resources": metrics.get("resources", 0),
+        "package_parts": metrics.get("package_parts", 0),
     }
 
 

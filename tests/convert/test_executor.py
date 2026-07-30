@@ -11,6 +11,7 @@ from textalchemy.core.conversion_graph import (
     DocumentFeature,
     FeatureSupport,
 )
+from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_codec import load_document
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.types import DocFormat
@@ -139,6 +140,72 @@ def test_executor_reports_unavailable_theoretical_route(tmp_path):
     assert not report.success
     assert report.issues[0].feature == "route"
     assert "missing-engine" in report.issues[0].message
+
+
+def test_executor_stops_after_failed_backend(tmp_path):
+    registry = CapabilityRegistry()
+    modes = frozenset({ConversionMode.BALANCED})
+    registry.register(
+        ConverterCapabilities(
+            "first",
+            DocFormat.TXT,
+            DocFormat.DOCX,
+            modes,
+            {DocumentFeature.TEXT: FeatureSupport.EXACT},
+        )
+    )
+    registry.register(
+        ConverterCapabilities(
+            "second",
+            DocFormat.DOCX,
+            DocFormat.HTML,
+            modes,
+            {DocumentFeature.TEXT: FeatureSupport.EXACT},
+        )
+    )
+    source = tmp_path / "source.txt"
+    output = tmp_path / "output.html"
+    source.write_text("body", encoding="utf-8")
+    calls: list[str] = []
+
+    def first(value, target):
+        calls.append("first")
+        report = ConversionReport(target)
+        report.add(IssueSeverity.ERROR, "converter", "failed")
+        return Path(value), report
+
+    def second(value, target):
+        calls.append("second")
+        return target, None
+
+    report = ConversionExecutor(
+        registry=registry,
+        handlers={"first": first, "second": second},
+    ).execute(
+        ConversionRequest(
+            source,
+            output,
+            DocFormat.TXT,
+            DocFormat.HTML,
+            features=frozenset({DocumentFeature.TEXT}),
+        )
+    )
+
+    assert not report.success
+    assert calls == ["first"]
+    assert report.metrics["executed_steps"] == ["first"]
+
+
+def test_empty_backend_mapping_disables_all_routes(tmp_path):
+    source = tmp_path / "source.docx"
+    source.write_bytes(b"not used")
+
+    report = ConversionExecutor(handlers={}).execute(
+        ConversionRequest(source, tmp_path / "model.json", DocFormat.DOCX, DocFormat.MODEL)
+    )
+
+    assert not report.success
+    assert report.issues[0].feature == "route"
 
 
 def test_infer_format_supports_model_and_latex():
