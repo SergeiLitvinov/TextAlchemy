@@ -26,6 +26,8 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Distribution
 dist/
@@ -36,6 +38,8 @@ build/
 /out.txt
 /test_bib.txt
 /renamed/
+/bibliography.json
+/e-mail_test/
 
 # Generated artifacts
 matching_report.json
@@ -43,6 +47,7 @@ test_config.json
 
 # Tool cache
 .textalchemy/
+.uv-cache/
 
 # OS
 .DS_Store

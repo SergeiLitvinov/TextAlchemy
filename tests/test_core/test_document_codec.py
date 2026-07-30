@@ -13,6 +13,7 @@ from textalchemy.core.document_model import (
     Formula,
     FormulaFormat,
     Image,
+    ImageCrop,
     Length,
     Paragraph,
     Resource,
@@ -38,15 +39,29 @@ def _complex_document() -> DocumentModel:
     )
     paragraph = Paragraph(
         content=[
-            TextRun("Result ", style=TextStyle(font_family="PT Serif", font_size=Length(12), bold=True)),
+            TextRun(
+                "Result ",
+                style=TextStyle(font_family="PT Serif", font_size=Length(12), bold=True, superscript=True),
+            ),
             Formula("x^2", FormulaFormat.LATEX, display=False),
-            Image("vector-1", alt_text="chart", box=Box(1, 2, 30, 40, rotation=5)),
+            Image(
+                "vector-1",
+                alt_text="chart",
+                box=Box(1, 2, 30, 40, rotation=5),
+                crop=ImageCrop(left=0.1, top=0.2, right=0.05),
+            ),
         ],
         style_id="body",
     )
     table = Table(rows=[TableRow(cells=[TableCell(blocks=[Paragraph(content=[TextRun("cell")])], column_span=2)])])
     return DocumentModel(
-        sections=[Section(blocks=[paragraph, table])],
+        sections=[
+            Section(
+                blocks=[paragraph, table],
+                first_page_headers=[Paragraph(content=[TextRun("First {{ title }}")])],
+                even_page_footers=[Paragraph(content=[TextRun("Even footer")])],
+            )
+        ],
         resources={resource.id: resource},
         styles={"body": TextStyle(language="ru-RU")},
         metadata={"title": "Тест"},

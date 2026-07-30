@@ -6,9 +6,7 @@
 """
 from __future__ import annotations
 
-from textalchemy.web import app as _app
 from textalchemy.web import routes  # noqa: F401 — регистрирует роуты
-
-app = _app.app
+from textalchemy.web.app import app
 
 __all__ = ["app"]

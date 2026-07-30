@@ -15,6 +15,7 @@ from textalchemy.core.document_model import (
     Formula,
     FormulaFormat,
     Image,
+    ImageCrop,
     Length,
     PageSettings,
     Paragraph,
@@ -113,6 +114,16 @@ def _box_from_dict(value: dict[str, Any] | None) -> Box | None:
     return Box(**value) if value is not None else None
 
 
+def _crop_to_dict(value: ImageCrop | None) -> dict[str, float] | None:
+    if value is None:
+        return None
+    return {"left": value.left, "top": value.top, "right": value.right, "bottom": value.bottom}
+
+
+def _crop_from_dict(value: dict[str, Any] | None) -> ImageCrop | None:
+    return ImageCrop(**value) if value is not None else None
+
+
 def _style_to_dict(value: TextStyle) -> dict[str, Any]:
     return {
         "font_family": value.font_family,
@@ -120,6 +131,8 @@ def _style_to_dict(value: TextStyle) -> dict[str, Any]:
         "bold": value.bold,
         "italic": value.italic,
         "underline": value.underline,
+        "superscript": value.superscript,
+        "subscript": value.subscript,
         "color": value.color,
         "background": value.background,
         "language": value.language,
@@ -134,6 +147,8 @@ def _style_from_dict(value: dict[str, Any]) -> TextStyle:
         bold=value.get("bold"),
         italic=value.get("italic"),
         underline=value.get("underline"),
+        superscript=value.get("superscript"),
+        subscript=value.get("subscript"),
         color=value.get("color"),
         background=value.get("background"),
         language=value.get("language"),
@@ -245,6 +260,7 @@ def _block_to_dict(value: Block) -> dict[str, Any]:
             "alt_text": value.alt_text,
             "box": _box_to_dict(value.box),
             "properties": value.properties,
+            "crop": _crop_to_dict(value.crop),
         }
     raise TypeError(f"unsupported block: {type(value).__name__}")
 
@@ -293,6 +309,7 @@ def _block_from_dict(value: dict[str, Any]) -> Block:
             alt_text=value.get("alt_text", ""),
             box=_box_from_dict(value.get("box")),
             properties=dict(value.get("properties", {})),
+            crop=_crop_from_dict(value.get("crop")),
         )
     raise ValueError(f"unsupported element type: {element_type!r}")
 
@@ -326,6 +343,10 @@ def _section_to_dict(value: Section) -> dict[str, Any]:
         "page": _page_to_dict(value.page),
         "headers": [_block_to_dict(block) for block in value.headers],
         "footers": [_block_to_dict(block) for block in value.footers],
+        "first_page_headers": [_block_to_dict(block) for block in value.first_page_headers],
+        "first_page_footers": [_block_to_dict(block) for block in value.first_page_footers],
+        "even_page_headers": [_block_to_dict(block) for block in value.even_page_headers],
+        "even_page_footers": [_block_to_dict(block) for block in value.even_page_footers],
         "properties": value.properties,
     }
 
@@ -336,6 +357,10 @@ def _section_from_dict(value: dict[str, Any]) -> Section:
         page=_page_from_dict(value.get("page", {})),
         headers=[_block_from_dict(block) for block in value.get("headers", [])],
         footers=[_block_from_dict(block) for block in value.get("footers", [])],
+        first_page_headers=[_block_from_dict(block) for block in value.get("first_page_headers", [])],
+        first_page_footers=[_block_from_dict(block) for block in value.get("first_page_footers", [])],
+        even_page_headers=[_block_from_dict(block) for block in value.get("even_page_headers", [])],
+        even_page_footers=[_block_from_dict(block) for block in value.get("even_page_footers", [])],
         properties=dict(value.get("properties", {})),
     )
 

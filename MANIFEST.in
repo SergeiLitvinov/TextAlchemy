@@ -1,2 +1,4 @@
-# Include package data
-recursive-include textalchemy * --exclude=__pycache__
+# Include Python sources and all shipped document/web assets from the src layout.
+graft src/textalchemy
+prune tests
+global-exclude __pycache__ *.py[cod]

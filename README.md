@@ -117,6 +117,8 @@ textalchemy emails scan.pdf -o result.docx --output-txt result.txt --debug
 |---------|----------|--------|
 | `textalchemy extract` | Извлечение текста/LaTeX из DOCX | `textalchemy extract file.docx --format latex` |
 | `textalchemy convert` | Пакетная конвертация PDF→DOCX (по умолчанию fan-out) | `textalchemy convert -i ./pdfs -o ./docs` |
+| `textalchemy convert-file` | Универсальная конвертация одного файла через лучший доступный маршрут | `textalchemy convert-file report.docx report.pdf --mode faithful` |
+| `textalchemy plan` | Подбор маршрута и оценка сохранности функций документа | `textalchemy plan docx pdf --mode faithful --json` |
 | `textalchemy pptx2html` | PPTX → автономный HTML | `textalchemy pptx2html -i deck.pptx -o ./out` |
 | `textalchemy match` | Сопоставить и переименовать PDF | `textalchemy match -s ./literature -b bib.txt` |
 | `textalchemy gost` | Форматирование в ГОСТ Р 7.0.100 | `textalchemy gost -i bib.txt -o gost.txt` |

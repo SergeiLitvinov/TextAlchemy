@@ -8,12 +8,15 @@ from textalchemy.cli import (
     cmd_bibtex,
     cmd_completion,
     cmd_convert,
+    cmd_convert_file,
     cmd_export,
     cmd_extract,
     cmd_generate,
     cmd_gost,
     cmd_init,
+    cmd_inspect,
     cmd_match,
+    cmd_plan,
     cmd_pptx2html,
     cmd_recognize,
     cmd_run,
@@ -107,6 +110,67 @@ def _setup_parser():
     p.add_argument("--data", help="Тестовые данные JSON/YAML/TOML")
     p.add_argument("--json", action="store_true", help="Вывод в JSON")
 
+    p = sub.add_parser("convert-file", help="Универсальная конвертация одного документа")
+    p.add_argument("input", help="Входной файл")
+    p.add_argument("output", help="Выходной файл или каталог")
+    formats = ["pdf", "docx", "pptx", "html", "latex", "model", "txt", "djvu", "epub"]
+    p.add_argument("--source-format", choices=formats, help="Формат входа, если его нельзя определить по расширению")
+    p.add_argument("--target-format", choices=formats, help="Формат выхода, если его нельзя определить по расширению")
+    p.add_argument("--mode", choices=["editable", "faithful", "balanced"], default="balanced")
+    p.add_argument(
+        "--feature",
+        action="append",
+        choices=[
+            "text",
+            "styles",
+            "raster_images",
+            "vector_graphics",
+            "formulas",
+            "tables",
+            "page_geometry",
+            "sections",
+            "running_content",
+            "notes",
+            "fields",
+        ],
+        help="Приоритетная функция документа; можно повторять",
+    )
+    p.add_argument("--max-steps", type=int, default=4)
+    p.add_argument("--json", action="store_true", help="Вывод в JSON")
+
+    p = sub.add_parser("inspect", help="Проверить структуру и качество DOCX, PDF или JSON-модели")
+    p.add_argument("input", help="Путь к DOCX, PDF или JSON-модели")
+    p.add_argument("--compare", help="Сравнить структуру с другим DOCX, PDF или JSON-моделью")
+    p.add_argument("-o", "--output", help="Сохранить JSON-отчёт в файл")
+    p.add_argument("--strict", action="store_true", help="Возвращать ошибку при предупреждениях")
+    p.add_argument("--json", action="store_true", help="Вывод в JSON")
+
+    p = sub.add_parser("plan", help="Подобрать маршрут конвертации и оценить ожидаемые потери")
+    formats = ["pdf", "docx", "pptx", "html", "latex", "model", "txt", "djvu", "epub"]
+    p.add_argument("source", choices=formats)
+    p.add_argument("target", choices=formats)
+    p.add_argument("--mode", choices=["editable", "faithful", "balanced"], default="balanced")
+    p.add_argument(
+        "--feature",
+        action="append",
+        choices=[
+            "text",
+            "styles",
+            "raster_images",
+            "vector_graphics",
+            "formulas",
+            "tables",
+            "page_geometry",
+            "sections",
+            "running_content",
+            "notes",
+            "fields",
+        ],
+        help="Приоритетная функция документа; можно повторять",
+    )
+    p.add_argument("--max-steps", type=int, default=4)
+    p.add_argument("--json", action="store_true", help="Вывод в JSON")
+
     p = sub.add_parser("recognize", help="OCR распознавание (печатный/рукописный текст)")
     p.add_argument("input", type=str, help="Путь к PDF или изображению")
     p.add_argument("--lang", default="rus+eng", help="Языки через + (rus+eng)")
@@ -171,6 +235,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return cmd_extract(args)
             case "convert":
                 return cmd_convert(args)
+            case "convert-file":
+                return cmd_convert_file(args)
             case "pptx2html":
                 return cmd_pptx2html(args)
             case "match":
@@ -185,6 +251,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return cmd_generate(args)
             case "template-check":
                 return cmd_template_check(args)
+            case "inspect":
+                return cmd_inspect(args)
+            case "plan":
+                return cmd_plan(args)
             case "recognize":
                 return cmd_recognize(args)
             case "bibtex":

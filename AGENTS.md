@@ -27,7 +27,7 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
   - `render_html.py` — `render.html.pptx`: `Document` (.pptx) → `ConversionResult` (HTML viewer).
   - `runner.py` — YAML/TOML/JSON pipeline runner.
 - `tests/` — pytest. Subpackage `tests/pipeline/` and `tests/convert/` mirror the source. Flat: `test_cli.py`, `test_web.py`, `test_database.py`.
-- `reference/` — legacy `.doc` and README drafts; not built into the package.
+- `tests/corpus/` — reproducible scientific DOCX corpus and structural golden data.
 
 ## Commands
 

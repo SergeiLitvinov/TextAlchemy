@@ -68,6 +68,11 @@ def test_cli_help_generate():
         main(["generate", "--help"])
 
 
+def test_cli_help_inspect():
+    with pytest.raises(SystemExit):
+        main(["inspect", "--help"])
+
+
 def test_cli_help_recognize():
     with pytest.raises(SystemExit):
         main(["recognize", "--help"])
@@ -200,15 +205,16 @@ def test_cli_match_dry_run(tmp_path):
     assert ret == 0
 
 
-def test_cli_match_no_bibliography(tmp_path):
+def test_cli_match_no_bibliography(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     src = tmp_path / "literature_files"
     src.mkdir()
     ret = main(["match", "-s", str(src)])
-    # may find a bibliography file in CWD or return error
-    assert ret in (0, 1)
+    assert ret == 1
 
 
-def test_cli_match_json_report(tmp_path):
+def test_cli_match_json_report(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     src = tmp_path / "literature_files"
     src.mkdir()
     bib = tmp_path / "bibliography.txt"
@@ -217,7 +223,8 @@ def test_cli_match_json_report(tmp_path):
     assert ret == 0
 
 
-def test_cli_match_no_files(tmp_path):
+def test_cli_match_no_files(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     bib = tmp_path / "bibliography.txt"
     bib.write_text("1. Author A. Title.", encoding="utf-8")
     ret = main(["match", "-s", str(tmp_path), "-b", str(bib)])
@@ -392,6 +399,107 @@ def test_cli_generate_pdf_from_same_template_data_and_schema(tmp_path, capsys):
     assert "PDF Report" in text
     assert "Item: Alpha" in text
     assert "Item: Beta" in text
+
+
+# ── inspect ────────────────────────────────────────
+
+def test_cli_inspect_docx_json_and_report_file(tmp_path, capsys):
+    from docx import Document
+
+    source = tmp_path / "source.docx"
+    output = tmp_path / "inspection.json"
+    document = Document()
+    document.add_heading("Inspection", level=1)
+    document.add_paragraph("Body text")
+    document.save(source)
+
+    ret = main(["inspect", str(source), "--json", "--output", str(output)])
+
+    payload = json.loads(capsys.readouterr().out)
+    saved = json.loads(output.read_text(encoding="utf-8"))
+    assert ret == 0
+    assert payload["valid"] is True
+    assert payload["source_format"] == "docx"
+    assert payload["metrics"]["paragraphs"] >= 2
+    assert saved == payload
+
+
+def test_cli_plan_conversion_route_json(capsys):
+    ret = main(["plan", "docx", "pdf", "--mode", "faithful", "--feature", "page_geometry", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert ret == 0
+    assert payload["success"] is True
+    assert [step["id"] for step in payload["steps"]] == ["docx.model", "model.pdf"]
+    assert payload["feature_support"]["page_geometry"] == "visual"
+
+
+def test_cli_plan_reports_missing_route(capsys):
+    ret = main(["plan", "pptx", "docx", "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert ret == 1
+    assert payload["success"] is False
+    assert payload["error"] == "conversion route not found"
+
+
+def test_cli_convert_file_docx_to_model(tmp_path, capsys):
+    from docx import Document
+
+    source = tmp_path / "source.docx"
+    output = tmp_path / "model.json"
+    document = Document()
+    document.add_paragraph("Executor CLI")
+    document.save(source)
+
+    ret = main(["convert-file", str(source), str(output), "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert ret == 0
+    assert payload["success"] is True
+    assert payload["metrics"]["executed_steps"] == ["docx.model"]
+    assert output.is_file()
+
+
+def test_cli_inspect_missing_file_is_machine_readable(tmp_path, capsys):
+    ret = main(["inspect", str(tmp_path / "missing.docx"), "--json"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert ret == 1
+    assert payload["valid"] is False
+    assert "missing.docx" in payload["error"]
+
+
+def test_cli_inspect_compare_reports_structural_loss(tmp_path, capsys):
+    from textalchemy.core.document_codec import save_document
+    from textalchemy.core.document_model import DocumentModel, Paragraph, Section, Table, TableRow, TextRun
+
+    source = tmp_path / "source.json"
+    target = tmp_path / "target.json"
+    save_document(
+        DocumentModel(
+            sections=[
+                Section(
+                    blocks=[
+                        Paragraph(content=[TextRun("Source text")]),
+                        Table(rows=[TableRow()]),
+                    ]
+                )
+            ]
+        ),
+        source,
+    )
+    save_document(DocumentModel(sections=[Section(blocks=[Paragraph(content=[TextRun("Short")])])]), target)
+
+    ret = main(["inspect", str(source), "--compare", str(target), "--json", "--strict"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert ret == 1
+    assert payload["comparison"]["has_losses"] is True
+    assert payload["comparison"]["retention"]["tables"]["ratio"] == 0
+    assert payload["comparison"]["geometry_summary"]["max_dimension_error_pt"] == 0
+    assert payload["comparison"]["resource_comparison"]["exact_hash_retention_ratio"] == 1
+    assert payload["comparison"]["font_comparison"]["exact_run_retention_ratio"] == 1
 
 
 # ── recognize ──────────────────────────────────────

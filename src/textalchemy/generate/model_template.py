@@ -105,9 +105,16 @@ def render_document_template(
     try:
         model.metadata = renderer.render_mapping(model.metadata, data)
         for section in model.sections:
-            section.blocks = renderer.render_blocks(section.blocks, data)
-            section.headers = renderer.render_blocks(section.headers, data)
-            section.footers = renderer.render_blocks(section.footers, data)
+            for collection_name in (
+                "blocks",
+                "headers",
+                "footers",
+                "first_page_headers",
+                "first_page_footers",
+                "even_page_headers",
+                "even_page_footers",
+            ):
+                setattr(section, collection_name, renderer.render_blocks(getattr(section, collection_name), data))
     except GenerateError:
         raise
     except Exception as error:
@@ -180,9 +187,16 @@ def inspect_document_template(template: DocumentModel, schema: Any = None) -> Te
     inspector.inspect_mapping(template.metadata, "metadata", set())
     for section_index, section in enumerate(template.sections):
         base = f"sections[{section_index}]"
-        inspector.inspect_blocks(section.blocks, f"{base}.blocks", set())
-        inspector.inspect_blocks(section.headers, f"{base}.headers", set())
-        inspector.inspect_blocks(section.footers, f"{base}.footers", set())
+        for collection_name in (
+            "blocks",
+            "headers",
+            "footers",
+            "first_page_headers",
+            "first_page_footers",
+            "even_page_headers",
+            "even_page_footers",
+        ):
+            inspector.inspect_blocks(getattr(section, collection_name), f"{base}.{collection_name}", set())
     if schema is not None:
         from textalchemy.generate.template_schema import TemplateSchema
 

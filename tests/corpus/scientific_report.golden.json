@@ -1,0 +1,42 @@
+{
+  "source_format": "docx",
+  "metadata": {
+    "title": "TextAlchemy scientific conversion corpus",
+    "author": "TextAlchemy"
+  },
+  "metrics": {
+    "sections": 2,
+    "tables": 2,
+    "formulas": 1,
+    "images": 2,
+    "cropped_images": 1,
+    "rotated_images": 1,
+    "floating_images": 1,
+    "wrap_polygon_images": 1,
+    "resources": 8,
+    "hyperlinks": 2,
+    "internal_hyperlinks": 1,
+    "bookmark_starts": 1,
+    "bookmark_ends": 1,
+    "merged_cells": 1,
+    "footnote_references": 1,
+    "endnote_references": 1,
+    "fields": 6,
+    "complex_fields": 3,
+    "numbered_paragraphs": 3
+  },
+  "formula_formats": {
+    "omml": 1
+  },
+  "page_sizes_pt": [
+    [612.0, 792.0],
+    [792.0, 612.0]
+  ],
+  "visual": {
+    "minimum_pages": 2,
+    "minimum_ink_ratio": 0.01,
+    "maximum_ink_ratio": 0.65,
+    "minimum_content_width_ratio": 0.35,
+    "minimum_content_height_ratio": 0.18
+  }
+}

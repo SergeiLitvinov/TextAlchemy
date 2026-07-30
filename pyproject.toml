@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Универсальный инструментарий обработки научно-учебных документов"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
 authors = [
     { name = "TextAlchemy Contributors" },
 ]

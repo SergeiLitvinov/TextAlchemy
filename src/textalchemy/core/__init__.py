@@ -1,5 +1,12 @@
 """Базовые типы и утилиты ядра."""
 
+from textalchemy.core.conversion_graph import (
+    CapabilityRegistry,
+    ConversionPlan,
+    ConverterCapabilities,
+    DocumentFeature,
+    FeatureSupport,
+)
 from textalchemy.core.diagnostics import ConversionIssue, ConversionReport, IssueSeverity
 from textalchemy.core.doc_types import DOC_TYPE_KEYWORDS, DOC_TYPES
 from textalchemy.core.document_adapters import document_to_text, text_to_document
@@ -18,6 +25,7 @@ from textalchemy.core.document_model import (
     Formula,
     FormulaFormat,
     Image,
+    ImageCrop,
     Length,
     PageSettings,
     Paragraph,
@@ -39,6 +47,13 @@ from textalchemy.core.exceptions import (
     TextAlchemyError,
 )
 from textalchemy.core.hashing import compute_file_hash
+from textalchemy.core.inspection import (
+    DocumentComparison,
+    DocumentInspection,
+    compare_inspections,
+    inspect_document_model,
+    inspect_path,
+)
 from textalchemy.core.types import (
     BibItem,
     Block,
@@ -79,6 +94,7 @@ __all__ = [
     "Formula",
     "FormulaFormat",
     "Image",
+    "ImageCrop",
     "Length",
     "PageSettings",
     "Paragraph",
@@ -100,4 +116,14 @@ __all__ = [
     "ConversionIssue",
     "ConversionReport",
     "IssueSeverity",
+    "CapabilityRegistry",
+    "ConversionPlan",
+    "ConverterCapabilities",
+    "DocumentFeature",
+    "FeatureSupport",
+    "DocumentInspection",
+    "DocumentComparison",
+    "compare_inspections",
+    "inspect_document_model",
+    "inspect_path",
 ]

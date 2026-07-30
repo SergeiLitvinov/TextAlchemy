@@ -50,12 +50,24 @@ class Box:
 
 
 @dataclass
+class ImageCrop:
+    """Обрезка изображения как доля от исходного размера для каждой стороны."""
+
+    left: float = 0.0
+    top: float = 0.0
+    right: float = 0.0
+    bottom: float = 0.0
+
+
+@dataclass
 class TextStyle:
     font_family: str | None = None
     font_size: Length | None = None
     bold: bool | None = None
     italic: bool | None = None
     underline: bool | None = None
+    superscript: bool | None = None
+    subscript: bool | None = None
     color: str | None = None
     background: str | None = None
     language: str | None = None
@@ -103,6 +115,7 @@ class Image:
     alt_text: str = ""
     box: Box | None = None
     properties: dict[str, Any] = field(default_factory=dict)
+    crop: ImageCrop | None = None
 
 
 Inline: TypeAlias = TextRun | Formula | Image
@@ -170,6 +183,10 @@ class Section:
     page: PageSettings = field(default_factory=PageSettings)
     headers: list[Block] = field(default_factory=list)
     footers: list[Block] = field(default_factory=list)
+    first_page_headers: list[Block] = field(default_factory=list)
+    first_page_footers: list[Block] = field(default_factory=list)
+    even_page_headers: list[Block] = field(default_factory=list)
+    even_page_footers: list[Block] = field(default_factory=list)
     properties: dict[str, Any] = field(default_factory=dict)
 
 
@@ -209,7 +226,15 @@ class DocumentModel:
                             check_block(child, f"{location}.rows[{row_index}].cells[{cell_index}].blocks[{block_index}]")
 
         for section_index, section in enumerate(self.sections):
-            for collection_name in ("blocks", "headers", "footers"):
+            for collection_name in (
+                "blocks",
+                "headers",
+                "footers",
+                "first_page_headers",
+                "first_page_footers",
+                "even_page_headers",
+                "even_page_footers",
+            ):
                 for block_index, block in enumerate(getattr(section, collection_name)):
                     check_block(block, f"sections[{section_index}].{collection_name}[{block_index}]")
         return errors
@@ -223,6 +248,7 @@ __all__ = [
     "Formula",
     "FormulaFormat",
     "Image",
+    "ImageCrop",
     "Inline",
     "Length",
     "PageSettings",

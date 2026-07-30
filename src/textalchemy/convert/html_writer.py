@@ -309,6 +309,10 @@ class _HtmlRenderer:
             values.append("font-style:italic")
         if style.underline is True:
             values.append("text-decoration:underline")
+        if style.superscript is True:
+            values.extend(("vertical-align:super", "font-size:smaller"))
+        elif style.subscript is True:
+            values.extend(("vertical-align:sub", "font-size:smaller"))
         if style.color and _COLOR_RE.match(style.color):
             values.append(f"color:{style.color}")
         if style.background and _COLOR_RE.match(style.background):
