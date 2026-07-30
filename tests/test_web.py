@@ -2,6 +2,9 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from textalchemy.core.diagnostics import ConversionReport
+from textalchemy.core.document_model import ConversionMode
+from textalchemy.core.types import DocFormat
 from textalchemy.web.main import app
 
 client = TestClient(app)
@@ -21,6 +24,8 @@ def test_extract_page():
 def test_convert_page():
     resp = client.get("/convert")
     assert resp.status_code == 200
+    assert "Максимально похожий вид" in resp.text
+    assert "Скачать результат" in resp.text
 
 
 def test_organize_page():
@@ -216,6 +221,103 @@ def test_api_convert_no_file():
 def test_api_convert_status_not_found():
     resp = client.get("/api/convert/status/nonexistent")
     assert resp.status_code == 404
+
+
+def test_api_convert_capabilities_are_runtime_plans(monkeypatch):
+    monkeypatch.setattr("textalchemy.convert.executor.requirement_available", lambda _requirement: True)
+    response = client.get("/api/convert/capabilities")
+    assert response.status_code == 200
+    sources = {source["format"]: source for source in response.json()["sources"]}
+    assert {"pdf", "docx", "pptx", "model"} <= sources.keys()
+
+    pdf_targets = {target["format"]: target for target in sources["pdf"]["targets"]}
+    assert "docx" in pdf_targets
+    assert "html" not in pdf_targets  # unsafe path-only intermediate routes are not advertised
+    assert set(pdf_targets["docx"]["modes"]) == {"balanced", "faithful", "editable"}
+
+    docx_targets = {target["format"]: target for target in sources["docx"]["targets"]}
+    assert {"pdf", "html", "latex", "model"} <= docx_targets.keys()
+    assert docx_targets["pdf"]["plans"]["faithful"]["steps"] == ["docx.model", "model.pdf"]
+
+
+def test_api_convert_returns_report_and_separate_artifact(monkeypatch):
+    captured = {}
+
+    def fake_execute(_executor, request):
+        captured["request"] = request
+        request.output_path.write_bytes(b"converted-document")
+        report = ConversionReport(request.output_path)
+        report.metrics["executed_steps"] = ["pdf.docx.test"]
+        return report
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    started = client.post(
+        "/api/convert",
+        files={"file": ("article.pdf", b"%PDF-test", "application/pdf")},
+        data={"source_format": "pdf", "target_format": "docx", "mode": "editable"},
+    )
+    assert started.status_code == 200
+    endpoints = started.json()
+
+    status = client.get(endpoints["status"])
+    assert status.status_code == 200
+    payload = status.json()
+    assert payload["status"] == "done"
+    assert payload["report"]["success"] is True
+    assert payload["report"]["metrics"]["executed_steps"] == ["pdf.docx.test"]
+    assert "content" not in payload
+
+    request = captured["request"]
+    assert request.source is DocFormat.PDF
+    assert request.target is DocFormat.DOCX
+    assert request.mode is ConversionMode.EDITABLE
+
+    result = client.get(endpoints["result"])
+    assert result.status_code == 200
+    assert result.content == b"converted-document"
+    assert "article.docx" in result.headers["content-disposition"]
+
+
+def test_api_convert_rejects_unknown_mode():
+    response = client.post(
+        "/api/convert",
+        files={"file": ("article.pdf", b"%PDF-test", "application/pdf")},
+        data={"source_format": "pdf", "target_format": "docx", "mode": "impossible"},
+    )
+    assert response.status_code == 400
+
+
+def test_api_convert_legacy_format_remains_supported(monkeypatch):
+    def fake_execute(_executor, request):
+        request.output_path.write_bytes(b"legacy-result")
+        return ConversionReport(request.output_path)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    response = client.post(
+        "/api/convert",
+        files={"file": ("article.pdf", b"%PDF-test", "application/pdf")},
+        data={"fmt": "pdf"},
+    )
+    assert response.status_code == 200
+    assert client.get(response.json()["status"]).json()["status"] == "done"
+
+
+def test_api_convert_serves_single_file_html(monkeypatch):
+    def fake_execute(_executor, request):
+        request.output_path.write_text("<html>converted</html>", encoding="utf-8")
+        return ConversionReport(request.output_path)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    response = client.post(
+        "/api/convert",
+        files={"file": ("article.docx", b"docx-test", "application/octet-stream")},
+        data={"source_format": "docx", "target_format": "html", "mode": "balanced"},
+    )
+    endpoints = response.json()
+    result = client.get(endpoints["result"])
+    assert result.status_code == 200
+    assert result.headers["content-type"].startswith("text/html")
+    assert result.content == b"<html>converted</html>"
 
 
 # ── Import ─────────────────────────────────────────

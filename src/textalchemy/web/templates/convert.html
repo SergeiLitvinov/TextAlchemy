@@ -1,157 +1,282 @@
 {% extends "base.html" %}
 {% set active = 'convert' %}
-{% block title %}TextAlchemy — Конверт{% endblock %}
+{% block title %}TextAlchemy — Конвертация{% endblock %}
 {% block content %}
-    <div class="card">
-        <h2>Конвертация</h2>
-        <div class="form-row">
-            <div class="form-group">
-                <label>Формат на входе</label>
-                <select id="input-fmt">
-                    <option value="pdf">PDF → DOCX</option>
-                    <option value="pptx">PPTX → HTML (zip)</option>
-                    <option value="latex">DOCX → LaTeX</option>
-                </select>
-            </div>
-            <div class="form-group" id="tool-group">
-                <label>Инструмент конвертации (PDF)</label>
-                <select id="tool">
-                    <option value="fanout">FanOut (все движки)</option>
-                    <option value="pdf2docx">pdf2docx</option>
-                    <option value="pymupdf">PyMuPDF</option>
-                    <option value="libreoffice">LibreOffice</option>
-                </select>
-            </div>
+<section class="convert-workspace">
+    <div class="card convert-intro">
+        <div>
+            <p class="eyebrow">Универсальный конвертор</p>
+            <h2>Сохранить документ, а не просто текст</h2>
+            <p class="lead">Загрузите документ — TextAlchemy определит формат, предложит доступные результаты и покажет качество преобразования.</p>
         </div>
-        <div class="file-drop" id="dropZone" style="margin-top:1rem;">
-            <div style="font-size:3rem;margin-bottom:0.5rem;">📄</div>
-            <strong id="drop-label">Перетащите PDF файл сюда</strong>
-            <div class="hint">или нажмите для выбора файла</div>
+
+        <div class="file-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput">
+            <div class="drop-icon" aria-hidden="true">↥</div>
+            <strong id="drop-label">Загрузите документ</strong>
+            <div class="hint" id="drop-hint">Определяем доступные форматы…</div>
             <input type="file" id="fileInput">
         </div>
-        <div id="progressWrap" style="display:none;margin-top:1rem">
-            <div style="height:8px;background:var(--border);border-radius:99px;overflow:hidden">
-                <div id="progressBar" style="height:100%;width:30%;background:var(--primary);transition:width .4s"></div>
+
+        <div id="conversionSetup" hidden>
+            <div class="selected-file">
+                <div>
+                    <span class="file-kind" id="sourceBadge">—</span>
+                    <strong id="sourceFilename">—</strong>
+                </div>
+                <button type="button" class="btn-link" id="replaceBtn">Выбрать другой</button>
             </div>
-            <div id="progressText" style="font-size:.8rem;color:var(--text-muted);margin-top:.35rem">Конвертация…</div>
+            <div class="form-grid conversion-options">
+                <div>
+                    <label for="target">Формат результата</label>
+                    <select id="target"></select>
+                    <p class="field-help" id="route-help"></p>
+                </div>
+                <div>
+                    <label for="mode">Приоритет</label>
+                    <select id="mode">
+                        <option value="balanced">Сбалансированный</option>
+                        <option value="faithful">Максимально похожий вид</option>
+                        <option value="editable">Удобство редактирования</option>
+                    </select>
+                    <p class="field-help" id="mode-help">Оптимальный баланс оформления и редактируемости.</p>
+                </div>
+            </div>
+            <button type="button" id="convertBtn">Начать конвертацию</button>
         </div>
-        <div id="status" class="status-bar" style="display:none;"></div>
+
+        <div id="progressWrap" class="conversion-progress" hidden>
+            <div class="progress-track"><div id="progressBar" class="progress-value"></div></div>
+            <div id="progressText" class="field-help">Подготовка…</div>
+        </div>
+        <div id="status" class="status-bar" hidden></div>
     </div>
+
+    <div class="card conversion-result" id="resultCard" hidden>
+        <div class="result-heading">
+            <div>
+                <p class="eyebrow">Результат</p>
+                <h2 id="resultTitle">Документ готов</h2>
+            </div>
+            <span class="quality-badge" id="qualityBadge">Без потерь</span>
+        </div>
+        <div class="result-summary">
+            <div><span>Файл</span><strong id="resultFilename">—</strong></div>
+            <div><span>Режим</span><strong id="resultMode">—</strong></div>
+            <div><span>Маршрут</span><strong id="resultRoute">—</strong></div>
+        </div>
+        <div id="issuesSection" hidden>
+            <h3>Что требует внимания</h3>
+            <ul class="issue-list" id="issueList"></ul>
+        </div>
+        <div class="form-actions result-actions">
+            <button type="button" id="downloadBtn">Скачать результат</button>
+            <button type="button" class="btn-secondary" id="anotherBtn">Конвертировать ещё</button>
+        </div>
+    </div>
+</section>
 {% endblock %}
 
 {% block scripts %}
 <script>
     const $ = (id) => document.getElementById(id);
-    const dropZone = $('dropZone');
-    const fileInput = $('fileInput');
-    const toolSelect = $('tool');
-    const fmtSelect = $('input-fmt');
-    const toolGroup = $('tool-group');
-    const dropLabel = $('drop-label');
+    const modeDescriptions = {
+        balanced: 'Оптимальный баланс оформления и редактируемости.',
+        faithful: 'Приоритет визуального сходства с оригиналом.',
+        editable: 'Приоритет структуры и удобства дальнейшего редактирования.',
+    };
+    let capabilities = {sources: []};
+    let pendingFile = null;
+    let selectedSource = null;
+    let activeTask = null;
 
-    function setStatus(msg, type) {
-        const el = $('status');
-        if (!msg) { el.style.display = 'none'; return; }
-        el.style.display = 'block';
-        el.className = 'status-bar ' + (type || 'info');
-        el.textContent = msg;
+    function setStatus(message, type) {
+        const element = $('status');
+        element.hidden = !message;
+        element.className = 'status-bar ' + (type || 'info');
+        element.textContent = message || '';
     }
 
-    function setProgress(on, pct, text) {
-        $('progressWrap').style.display = on ? 'block' : 'none';
-        if (on) {
-            $('progressBar').style.width = (pct || 30) + '%';
-            if (text) $('progressText').textContent = text;
+    function setProgress(visible, percent, message) {
+        $('progressWrap').hidden = !visible;
+        $('progressBar').style.width = `${percent}%`;
+        $('progressText').textContent = message;
+    }
+
+    async function loadCapabilities() {
+        try {
+            capabilities = await api('/api/convert/capabilities');
+            const extensions = capabilities.sources.flatMap((source) => source.extensions);
+            $('fileInput').accept = extensions.join(',');
+            $('drop-hint').textContent = extensions.map((item) => item.slice(1).toUpperCase()).join(', ') + ' · формат определится автоматически';
+        } catch (_) {
+            $('drop-hint').textContent = 'Не удалось получить список доступных форматов';
         }
     }
 
-    fmtSelect.addEventListener('change', () => {
-        const isPdf = fmtSelect.value === 'pdf';
-        const isLatex = fmtSelect.value === 'latex';
-        toolGroup.style.display = isPdf ? '' : 'none';
-        if (isLatex) {
-            dropLabel.textContent = 'Перетащите DOCX файл сюда';
-            fileInput.accept = '.docx';
-        } else if (isPdf) {
-            dropLabel.textContent = 'Перетащите PDF файл сюда';
-            fileInput.accept = '.pdf';
-        } else {
-            dropLabel.textContent = 'Перетащите PPTX файл сюда';
-            fileInput.accept = '.pptx';
-        }
-    });
+    function sourceForFile(file) {
+        const name = file.name.toLowerCase();
+        return capabilities.sources.find((source) => source.extensions.some((extension) => name.endsWith(extension)));
+    }
 
-    dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-    });
-    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
-
-    async function handleFile(file) {
-        const isPdf = fmtSelect.value === 'pdf';
-        const isLatex = fmtSelect.value === 'latex';
-        const ext = isLatex ? '.docx' : (isPdf ? '.pdf' : '.pptx');
-        if (!file.name.toLowerCase().endsWith(ext)) {
-            setStatus(`Пожалуйста, выберите ${ext.toUpperCase()} файл`, 'error');
+    function selectFile(file) {
+        const source = sourceForFile(file);
+        if (!source) {
+            setStatus('Для этого формата нет доступных маршрутов конвертации.', 'error');
             return;
         }
-        const form = new FormData();
-        form.append('file', file);
-        form.append('tool', toolSelect.value);
-        form.append('fmt', fmtSelect.value);
-        setProgress(true, 30, 'Отправка файла…');
-        try {
-            const data = await api('/api/convert', { method: 'POST', formData: form });
-            if (data.success) {
-                pollTask(data.status);
-            }
-        } catch (_) { setProgress(false); setStatus('', null); }
+        pendingFile = file;
+        selectedSource = source;
+        $('sourceBadge').textContent = source.label;
+        $('sourceFilename').textContent = file.name;
+        $('conversionSetup').hidden = false;
+        $('resultCard').hidden = true;
+        setStatus('', 'info');
+        const target = $('target');
+        target.innerHTML = source.targets.map((item) =>
+            `<option value="${esc(item.format)}">${esc(item.label)} (${esc(item.extension)})</option>`
+        ).join('');
+        updateTarget();
     }
+
+    function selectedTarget() {
+        return selectedSource?.targets.find((target) => target.format === $('target').value);
+    }
+
+    function updateTarget() {
+        const target = selectedTarget();
+        if (!target) return;
+        const modes = new Set(target.modes);
+        for (const option of $('mode').options) option.disabled = !modes.has(option.value);
+        if (!modes.has($('mode').value)) $('mode').value = target.modes[0];
+        updateModeHelp();
+    }
+
+    function updateModeHelp() {
+        const target = selectedTarget();
+        const plan = target?.plans[$('mode').value];
+        $('mode-help').textContent = modeDescriptions[$('mode').value];
+        $('route-help').textContent = plan?.descriptions.length
+            ? `Маршрут: ${plan.descriptions.join(' → ')}`
+            : 'Прямое преобразование без промежуточных этапов';
+    }
+
+    $('target').addEventListener('change', updateTarget);
+    $('mode').addEventListener('change', updateModeHelp);
+    $('dropZone').addEventListener('click', () => $('fileInput').click());
+    $('dropZone').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            $('fileInput').click();
+        }
+    });
+    $('dropZone').addEventListener('dragover', (event) => {
+        event.preventDefault();
+        $('dropZone').classList.add('dragover');
+    });
+    $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('dragover'));
+    $('dropZone').addEventListener('drop', (event) => {
+        event.preventDefault();
+        $('dropZone').classList.remove('dragover');
+        if (event.dataTransfer.files[0]) selectFile(event.dataTransfer.files[0]);
+    });
+    $('fileInput').addEventListener('change', () => {
+        if ($('fileInput').files[0]) selectFile($('fileInput').files[0]);
+    });
+    $('replaceBtn').addEventListener('click', () => $('fileInput').click());
+
+    $('convertBtn').addEventListener('click', async () => {
+        const target = selectedTarget();
+        if (!pendingFile || !selectedSource || !target) return;
+        const form = new FormData();
+        form.set('file', pendingFile);
+        form.set('source_format', 'auto');
+        form.set('target_format', target.format);
+        form.set('mode', $('mode').value);
+        $('resultCard').hidden = true;
+        setStatus('', 'info');
+        setProgress(true, 20, 'Загрузка документа…');
+        setLoading($('convertBtn'), true);
+        try {
+            activeTask = await api('/api/convert', {method: 'POST', formData: form});
+            setProgress(true, 45, 'Анализ структуры и выбор маршрута…');
+            pollTask(activeTask.status);
+        } catch (_) {
+            setProgress(false, 0, '');
+            setLoading($('convertBtn'), false);
+        }
+    });
 
     async function pollTask(url) {
         try {
-            const res = await fetch(url);
-            if (res.headers.get('Content-Type')?.includes('application/json')) {
-                const data = await res.json();
-                if (data.status === 'done') {
-                    setProgress(true, 90, 'Формирование файла…');
-                    await downloadResult(url);
-                    toast('Конвертация завершена', 'success');
-                } else if (data.status === 'error') {
-                    setProgress(false);
-                    setStatus(`Ошибка: ${data.error}`, 'error');
-                } else {
-                    setProgress(true, 60, 'Конвертация…');
-                    setTimeout(() => pollTask(url), 1000);
-                }
+            const data = await api(url);
+            if (data.status === 'done') {
+                setProgress(true, 100, 'Готово');
+                renderReport(data);
+                setLoading($('convertBtn'), false);
+                setTimeout(() => setProgress(false, 0, ''), 500);
+            } else if (data.status === 'error') {
+                setProgress(false, 0, '');
+                setLoading($('convertBtn'), false);
+                setStatus(`Не удалось конвертировать: ${data.error}`, 'error');
+                if (data.report) renderReport(data, true);
             } else {
-                await downloadResult(url, res);
-                setProgress(false);
-                setStatus('Готово! Файл загружен.', 'success');
+                setProgress(true, 70, 'Конвертация и проверка результата…');
+                setTimeout(() => pollTask(url), 900);
             }
-        } catch (e) {
-            setProgress(false);
-            setStatus(`Ошибка сети: ${e.message}`, 'error');
+        } catch (_) {
+            setProgress(false, 0, '');
+            setLoading($('convertBtn'), false);
         }
     }
 
-    async function downloadResult(url, res) {
-        const response = res || await fetch(url);
-        const blob = await response.blob();
-        const disposition = response.headers.get('Content-Disposition') || '';
-        const match = disposition.match(/filename="?(.+?)"?$/);
-        const fname = match ? match[1] : 'converted';
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = fname;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    function renderReport(data, failed) {
+        const report = data.report || {issues: [], metrics: {}};
+        const issues = report.issues || [];
+        const losses = issues.filter((item) => item.severity === 'loss');
+        const warnings = issues.filter((item) => item.severity === 'warning');
+        const plannedSteps = report.metrics?.plan?.steps || [];
+        const steps = plannedSteps.length
+            ? plannedSteps.map((step) => step.description || step.id)
+            : report.metrics?.executed_steps || [];
+        $('resultCard').hidden = false;
+        $('resultTitle').textContent = failed ? 'Конвертация требует внимания' : 'Документ готов';
+        $('resultFilename').textContent = data.filename || 'Результат не создан';
+        $('resultMode').textContent = $('mode').selectedOptions[0].textContent;
+        $('resultRoute').textContent = steps.length ? steps.join(' → ') : 'Прямое преобразование';
+        const badge = $('qualityBadge');
+        badge.className = 'quality-badge ' + (failed ? 'bad' : losses.length ? 'warn' : 'good');
+        badge.textContent = failed ? 'Ошибка' : losses.length ? `Потери: ${losses.length}` : warnings.length ? `Замечания: ${warnings.length}` : 'Без потерь';
+        $('issuesSection').hidden = issues.length === 0;
+        $('issueList').innerHTML = issues.map((issue) =>
+            `<li class="issue-${esc(issue.severity)}"><strong>${esc(issue.feature)}</strong><span>${esc(issue.message)}</span></li>`
+        ).join('');
+        $('downloadBtn').hidden = Boolean(failed);
+        $('resultCard').scrollIntoView({behavior: 'smooth', block: 'start'});
     }
+
+    $('downloadBtn').addEventListener('click', async () => {
+        if (!activeTask) return;
+        const response = await fetch(activeTask.result);
+        if (!response.ok) {
+            toast('Результат пока недоступен', 'error');
+            return;
+        }
+        const blob = await response.blob();
+        const anchor = document.createElement('a');
+        anchor.href = URL.createObjectURL(blob);
+        anchor.download = $('resultFilename').textContent;
+        anchor.click();
+        setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
+    });
+    $('anotherBtn').addEventListener('click', () => {
+        $('resultCard').hidden = true;
+        $('conversionSetup').hidden = true;
+        $('fileInput').value = '';
+        pendingFile = null;
+        selectedSource = null;
+        $('dropZone').scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    loadCapabilities();
 </script>
 {% endblock %}

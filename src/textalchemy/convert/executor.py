@@ -14,6 +14,7 @@ from textalchemy.convert.protocols import ConversionBackend, ConversionValue
 from textalchemy.core.conversion_graph import (
     DEFAULT_FEATURES,
     CapabilityRegistry,
+    ConversionPlan,
     ConverterCapabilities,
     DocumentFeature,
 )
@@ -55,6 +56,26 @@ class ConversionExecutor:
         self.backends = _built_in_backends() if handlers is None else handlers
         self.requirement_checker = requirement_checker or requirement_available
 
+    def plan(
+        self,
+        source: DocFormat,
+        target: DocFormat,
+        *,
+        mode: ConversionMode = ConversionMode.BALANCED,
+        features: frozenset[DocumentFeature] = DEFAULT_FEATURES,
+        max_steps: int = 4,
+    ) -> ConversionPlan | None:
+        """Построить маршрут, доступный в текущем runtime-окружении."""
+
+        return self.registry.plan(
+            source,
+            target,
+            mode=mode,
+            features=features,
+            max_steps=max_steps,
+            available=self._step_available,
+        )
+
     def execute(self, request: ConversionRequest) -> ConversionReport:
         report = ConversionReport(request.output_path)
         if not request.input_path.is_file():
@@ -68,13 +89,12 @@ class ConversionExecutor:
             features=request.features,
             max_steps=request.max_steps,
         )
-        plan = self.registry.plan(
+        plan = self.plan(
             request.source,
             request.target,
             mode=request.mode,
             features=request.features,
             max_steps=request.max_steps,
-            available=self._step_available,
         )
         if plan is None:
             if theoretical is None:
@@ -218,6 +238,23 @@ def _convert_pdf(source: Path, output: Path, tool: str) -> ConversionReport:
 
     report = create_converter(tool).convert(source, output)
     report.metrics["engine"] = tool
+    if report.success:
+        return report
+    primary_error = report.error or "conversion failed"
+    for fallback_tool in ("pymupdf", "pdf2docx"):
+        if fallback_tool == tool:
+            continue
+        output.unlink(missing_ok=True)
+        fallback = create_converter(fallback_tool).convert(source, output)
+        fallback.metrics["engine"] = fallback_tool
+        fallback.metrics["requested_engine"] = tool
+        if fallback.success:
+            fallback.add(
+                IssueSeverity.WARNING,
+                "engine-fallback",
+                f"{tool} failed ({primary_error}); used {fallback_tool}",
+            )
+            return fallback
     return report
 
 

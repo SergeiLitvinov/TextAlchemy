@@ -40,7 +40,7 @@ def test_mode_selects_editable_or_visual_pdf_backend():
     )
 
     assert editable is not None and editable.steps[0].id == "pdf.docx.pdf2docx"
-    assert faithful is not None and faithful.steps[0].id == "pdf.docx.libreoffice"
+    assert faithful is not None and faithful.steps[0].id == "pdf.docx.pymupdf"
 
 
 def test_planner_prefers_better_multistep_route():

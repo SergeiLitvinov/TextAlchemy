@@ -4,7 +4,8 @@ from pathlib import Path
 
 from docx import Document
 
-from textalchemy.convert.executor import ConversionExecutor, ConversionRequest, infer_format
+from textalchemy.convert.base import ConversionResult
+from textalchemy.convert.executor import ConversionExecutor, ConversionRequest, _convert_pdf, infer_format
 from textalchemy.core.conversion_graph import (
     CapabilityRegistry,
     ConverterCapabilities,
@@ -211,3 +212,45 @@ def test_empty_backend_mapping_disables_all_routes(tmp_path):
 def test_infer_format_supports_model_and_latex():
     assert infer_format("document.json") is DocFormat.MODEL
     assert infer_format("document.tex") is DocFormat.LATEX
+
+
+def test_executor_exposes_only_runtime_available_plan():
+    executor = ConversionExecutor(requirement_checker=lambda _requirement: True)
+
+    plan = executor.plan(
+        DocFormat.PDF,
+        DocFormat.DOCX,
+        mode=ConversionMode.FAITHFUL,
+        features=frozenset({DocumentFeature.PAGE_GEOMETRY}),
+    )
+
+    assert plan is not None
+    assert plan.steps[0].id == "pdf.docx.pymupdf"
+
+
+def test_pdf_backend_falls_back_after_runtime_failure(tmp_path, monkeypatch):
+    source = tmp_path / "source.pdf"
+    output = tmp_path / "output.docx"
+    source.write_bytes(b"pdf")
+
+    class FakeConverter:
+        def __init__(self, name):
+            self.name = name
+
+        def convert(self, input_path, output_path):
+            if self.name == "pdf2docx":
+                return ConversionResult(input_path, output_path, False, "broken parser")
+            Path(output_path).write_bytes(b"docx")
+            return ConversionResult(input_path, output_path, True)
+
+    monkeypatch.setattr(
+        "textalchemy.convert.pdf_to_docx.create_converter",
+        lambda name: FakeConverter(name),
+    )
+
+    report = _convert_pdf(source, output, "pdf2docx")
+
+    assert report.success
+    assert output.read_bytes() == b"docx"
+    assert report.metrics == {"engine": "pymupdf", "requested_engine": "pdf2docx"}
+    assert report.issues[0].feature == "engine-fallback"

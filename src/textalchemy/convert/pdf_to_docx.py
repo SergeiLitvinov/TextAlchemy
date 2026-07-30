@@ -113,6 +113,13 @@ class PyMuPdfConverter(BaseConverter):
 
 
 class LibreOfficeConverter(BaseConverter):
+    """Legacy facade retained for CLI compatibility.
+
+    LibreOffice imports PDF as a Draw document and does not expose a reliable
+    Draw/PDF → Writer DOCX export filter. Advertising it as a working backend
+    made runtime availability checks pass while real documents failed later.
+    """
+
     @property
     def name(self) -> str:
         return "libreoffice"
@@ -143,38 +150,21 @@ class LibreOfficeConverter(BaseConverter):
         input_path, output_path = prepared
         if not self.libreoffice_path:
             return ConversionResult(input_path, output_path, False, "LibreOffice not found")
-        try:
-            temp_odt = output_path.parent / (input_path.stem + ".odt")
-            lo_dir = Path(self.libreoffice_path).parent
-            env = os.environ.copy()
-            env["PATH"] = str(lo_dir) + ";" + env.get("PATH", "")
-
-            try:
-                cmd1 = [self.libreoffice_path, "--headless", "--writer",
-                        "--convert-to", "odt", "--outdir", str(output_path.parent.absolute()),
-                        str(input_path.absolute())]
-                r1 = subprocess.run(cmd1, capture_output=True, text=True, timeout=300, env=env)
-                if not temp_odt.exists():
-                    return ConversionResult(input_path, output_path, False, r1.stderr[:200])
-
-                cmd2 = [self.libreoffice_path, "--headless",
-                        "--convert-to", "docx:MS Word 2007 XML",
-                        "--outdir", str(output_path.parent.absolute()),
-                        str(temp_odt.absolute())]
-                subprocess.run(cmd2, capture_output=True, text=True, timeout=300, env=env)
-            finally:
-                temp_odt.unlink(missing_ok=True)
-        except subprocess.TimeoutExpired:
-            return ConversionResult(input_path, output_path, False, "Timeout")
-        except Exception as e:
-            return ConversionResult(input_path, output_path, False, str(e))
-        return ConversionResult(input_path, output_path, output_path.exists())
+        return ConversionResult(
+            input_path,
+            output_path,
+            False,
+            "LibreOffice does not provide a reliable PDF to Writer DOCX export filter; "
+            "use pdf2docx or pymupdf",
+        )
 
 
 class FanOutConverter(BaseConverter):
     """Пробует движки по очереди, пока один не выдаст валидный DOCX.
 
-    Цепочка по умолчанию: ``pdf2docx → pymupdf → libreoffice``. Первый успех побеждает.
+    Цепочка по умолчанию: ``pdf2docx → pymupdf``. Первый успех побеждает.
+    LibreOffice не включён: PDF импортируется как Draw и не имеет надёжного
+    фильтра экспорта в Writer DOCX.
     Используется, когда конкретный движок неизвестен или нужен best-effort.
     """
 
@@ -183,10 +173,9 @@ class FanOutConverter(BaseConverter):
         return "fanout"
 
     def __init__(self, tools: list[str] | None = None) -> None:
-        # pdf2docx сохраняет текст и разметку (не растровые вставки),
-        # поэтому он — приоритетный. pymupdf (с растровым фолбэком для
-        # сканов) оставлен последним.
-        self.tools = tools or ["pdf2docx", "libreoffice", "pymupdf"]
+        # pdf2docx сохраняет текст и разметку, поэтому он приоритетный.
+        # PyMuPDF остаётся надёжным fallback со снимками сканированных страниц.
+        self.tools = tools or ["pdf2docx", "pymupdf"]
 
     def convert(self, input_path: str | Path, output_path: str | Path) -> ConversionResult:
         prepared = self._prepare(input_path, output_path)

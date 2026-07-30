@@ -7,6 +7,7 @@ import pytest
 
 from textalchemy.convert import FanOutConverter
 from textalchemy.convert.pdf_to_docx import (
+    LibreOfficeConverter,
     PyMuPdfConverter,
     create_converter,
 )
@@ -117,6 +118,16 @@ def test_create_converter_pymupdf():
 def test_create_converter_unknown():
     with pytest.raises(Exception):
         create_converter("nonexistent_engine")
+
+
+def test_libreoffice_pdf_route_fails_fast_with_actionable_message(tmp_path):
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"pdf")
+
+    result = LibreOfficeConverter(libreoffice_path="soffice").convert(source, tmp_path / "output.docx")
+
+    assert not result.success
+    assert "does not provide a reliable" in (result.error or "")
 
 
 def test_convert_nonexistent():
