@@ -65,7 +65,8 @@ Final: \documentclass[12pt,a4paper]{article}...
 | Op | Вход | Выход | Описание |
 |---|---|---|---|---|
 | `ingest.file` | path | `Document` | Открыть файл, посчитать SHA-256 |
-| `extract.text` | `Document` | `Text` | Универсальный ридер (PDF/DOCX/TXT/DjVu) |
+| `extract.text` | `Document` | `Text` | Универсальный ридер (PDF/DOCX/TXT/DjVu/EPUB) |
+| `extract.pdf_model` | `Document` (PDF) | `DocumentModel` | PDF → богатая модель (геометрия, таблицы, изображения, вектор) + опционально OCR |
 | `extract.emails` | `Document` | `list[str]` | Извлечение email: текстовый слой PDF + OCR |
 | `match.bibliography` | `Text`, `Document`, BibItem[] | `Match` | Сопоставить документ со списком записей |
 | `match.files` | path, BibItem[] | Match[] | Батч-матчинг директории; копирует в `output_dir` |
@@ -76,6 +77,7 @@ Final: \documentclass[12pt,a4paper]{article}...
 | `render.latex` | `Text` | str | Text → LaTeX (статья, с преамблой) |
 | `render.latex.pandoc` | `Text` | str | Text → LaTeX через pandoc |
 | `render.docx` | `Text` | Path | Text → DOCX |
+| `render.docx_model` | `DocumentModel` | Path | DocumentModel → DOCX через `write_docx_model` |
 | `render.bibtex` | BibItem[] | str | BibItem[] → BibTeX |
 | `render.gost` | BibItem[] | str | BibItem[] → ГОСТ Р 7.0.100 |
 | `render.markdown` | BibItem[] | str | BibItem[] → Markdown |
@@ -83,6 +85,9 @@ Final: \documentclass[12pt,a4paper]{article}...
 | `render.emails.docx` | `list[str]` | Path | Email → Word-документ |
 | `render.emails.txt` | `list[str]` | Path | Email → текстовый файл |
 | `render.emails.debug` | `str` | Path | Отладочный текст распознавания → TXT |
+| `template.render` | `DocumentModel` | `DocumentModel` | Заполнить модель данными: переменные, условия, циклы |
+
+Полный список — `textalchemy run --list`.
 
 ### Контракт операций
 
@@ -99,16 +104,33 @@ Final: \documentclass[12pt,a4paper]{article}...
 Первый успешно вернувший непустой результат используется; предупреждения от
 предыдущих движков сохраняются в `Text.warnings`.
 
+Для богатой структуры (reading order, таблицы, классификация подписей/колонтитулов,
+растровые и векторные изображения) и объединения текстового слоя с OCR используется
+геометрический анализ PyMuPDF (`formats/pdf_geometry.py`, `pdf_layout.py`, `pdf_classify.py`)
+с последующим слиянием OCR (`formats/pdf_ocr_merge.py`). В конвейере это доступно как
+`extract.pdf_model` (→ `DocumentModel`) с параметрами `use_ocr`, `ocr_backend`, `handwriting`, `use_gpu`.
+
 ### Извлечение email
 
 `extract.emails` использует двухуровневый подход:
 1. **Текстовый слой PDF** — если на странице >50 символов текста, email ищутся regex без OCR.
 2. **OCR (Tesseract)** — для страниц без текстового слоя: OpenCV-предобработка (grayscale → medianBlur → adaptiveThreshold → morphology) + Tesseract через subprocess с таймаутом.
 
-Результат можно сохранить в DOCX (`render.emails.docx`), TXT (`render.emails.txt`) или отладочный файл (`render.emails.debug`).
+Результат сохраняется в DOCX (`render.emails.docx`), TXT (`render.emails.txt`) или отладочный файл (`render.emails.debug`) через конвейер:
 
-```bash
-textalchemy emails scan.pdf -o result.docx --output-txt result.txt --debug
+```yaml
+steps:
+  - op: ingest.file
+    output: doc
+    params: {path: scan.pdf}
+  - op: extract.emails
+    input: doc
+    output: emails
+  - op: render.emails.docx
+    input: emails
+    output: result
+    params: {output_path: result.docx}
+output: result
 ```
 
 ## Команды CLI
@@ -119,6 +141,7 @@ textalchemy emails scan.pdf -o result.docx --output-txt result.txt --debug
 | `textalchemy convert` | Пакетная конвертация PDF→DOCX (по умолчанию fan-out) | `textalchemy convert -i ./pdfs -o ./docs` |
 | `textalchemy convert-file` | Универсальная конвертация одного файла через лучший доступный маршрут | `textalchemy convert-file report.docx report.pdf --mode faithful` |
 | `textalchemy plan` | Подбор маршрута и оценка сохранности функций документа | `textalchemy plan docx pdf --mode faithful --json` |
+| `textalchemy inspect` | Отчёт о структуре и качестве DOCX/PDF/JSON-модели | `textalchemy inspect file.docx --json` |
 | `textalchemy pptx2html` | PPTX → автономный HTML | `textalchemy pptx2html -i deck.pptx -o ./out` |
 | `textalchemy match` | Сопоставить и переименовать PDF | `textalchemy match -s ./literature -b bib.txt` |
 | `textalchemy gost` | Форматирование в ГОСТ Р 7.0.100 | `textalchemy gost -i bib.txt -o gost.txt` |
@@ -127,10 +150,11 @@ textalchemy emails scan.pdf -o result.docx --output-txt result.txt --debug
 | `textalchemy bibtex` | Генерация .bib из PDF | `textalchemy bibtex -s ./pdfs -o out.bib` |
 | `textalchemy init` | Создать конфиг | `textalchemy init -o config.json` |
 | `textalchemy generate` | Генерация документов из шаблонов | `textalchemy generate report.docx output.docx -p title="Отчёт"` |
+| `textalchemy template-check` | Проверка DOCX-шаблона, схемы и данных без генерации | `textalchemy template-check report.docx --schema schema.json` |
 | `textalchemy recognize` | OCR распознавание | `textalchemy recognize scan.png --lang rus+eng` |
-| `textalchemy run` | Запуск pipeline из YAML/TOML | `textalchemy run pipeline.yaml` |
+| `textalchemy run` | Запуск pipeline из YAML/TOML/JSON | `textalchemy run pipeline.yaml` |
 | `textalchemy run --list` | Список зарегистрированных операций | — |
-| `textalchemy emails` | Извлечение email из PDF/DOCX/TXT + сохранение | `textalchemy emails in.pdf -o result.docx --debug` |
+| `textalchemy completion` | Скрипт автодополнения для bash/zsh/fish | `textalchemy completion bash` |
 | `textalchemy web` | Запуск веб-интерфейса | `textalchemy web --port 8080` |
 
 ## Веб-интерфейс
@@ -139,12 +163,12 @@ textalchemy emails scan.pdf -o result.docx --output-txt result.txt --debug
 |-----|----------|
 | `/` | Дашборд со статистикой |
 | `/bibliography` | CRUD библиографии + импорт |
-| `/matching` | Сопоставление файлов с библиографией |
-| `/rename` | Предпросмотр переименования |
+| `/matching` | Сопоставление файлов с библиографией + предпросмотр переименования |
 | `/reports` | Статистика и результаты |
 | `/export` | Экспорт JSON / Markdown / ГОСТ |
 | `/extract` | Извлечение текста из DOCX |
-| `/convert` | Конвертация PDF→DOCX |
+| `/convert` | Конвертация (маршрут по режиму качества) + отчёт |
+| `/pipeline` | Запуск конвейера по YAML/TOML |
 | `/recognize` | OCR распознавание |
 | `/generate` | Генерация из шаблонов |
 
@@ -152,27 +176,34 @@ textalchemy emails scan.pdf -o result.docx --output-txt result.txt --debug
 
 ```
 src/textalchemy/
-├── core/              # базовые типы (Document, Text, Match, Signal)
-│                      # + реестр операций @operation("id")
-├── formats/           # парсеры форматов: pdf, docx, txt (djvu)
+├── core/              # базовые типы (Document, Text, Match, Signal, BibItem)
+│                      # + DocumentModel (document_model.py), реестр @operation("id"),
+│                      #   граф конвертеров (conversion_graph.py), codec (document_codec.py)
+├── formats/           # атомарные ридеры: pdf, docx, txt, djvu, epub
+│                      #   + PDF-геометрия/семантика/классификация, images, OCR-merge
+├── ooxml/             # общий OPC package graph и relationships для DOCX/PPTX
 ├── pipeline/          # стадии конвейера
 │   ├── ingest.py      # @operation("ingest.file")
-│   ├── extract.py     # @operation("extract.text")
+│   ├── extract.py     # @operation("extract.text", "extract.pdf_model")
 │   ├── emails_op.py   # @operation("extract.emails", "render.emails.*")
 │   ├── match.py       # @operation("match.bibliography")
 │   ├── match_files.py # @operation("match.files") — батч-матчинг
 │   ├── bibliography.py# @operation("bibliography.parse/smart_parse")
 │   ├── name.py        # @operation("name.from_match")
-│   ├── render.py      # @operation("render.*")
+│   ├── render.py      # @operation("render.*", "render.docx_model")
+│   ├── render_html.py # @operation("render.html.pptx")
+│   ├── template.py    # @operation("template.render")
 │   ├── signals.py     # автор/title/год/doi сигналы для матчинга
 │   └── runner.py      # YAML/TOML/JSON → последовательность операций
-├── convert/           # PDF→DOCX (3 бэкенда + FanOut) + PPTX→HTML
-├── extract/           # legacy: docx→text/latex
+├── convert/           # PDF→DOCX (3 бэкенда + FanOut), DOCX→LaTeX, PPTX→HTML,
+│                      #   DocumentModel importer/exporter'ы, capability registry + executor
+├── quality/           # визуальные метрики и perceptual regression
+├── extract/           # legacy: docx→text/latex, emails, fix_encoding
 ├── organize/          # legacy: bibparser, match, gost
-├── recognize/         # OCR / layout / classifier / emails
-├── generate/          # шаблоны документов
-├── web/               # FastAPI + Jinja2
-├── cli/               # обработчики CLI
+├── recognize/         # OCR (3 бэкенда) / layout / classifier / emails
+├── generate/          # шаблоны документов (DSL + схема + model_template)
+├── web/               # FastAPI + Jinja2 (routes/, templates/, static/)
+├── cli/               # обработчики CLI (15 модулей)
 └── __main__.py        # argparse + dispatch
 ```
 
@@ -194,7 +225,7 @@ pip install -e ".[ocr,web,dev]"      # полная (OCR + веб + разраб
 ```bash
 uv sync --all-extras
 uv run ruff check        # линтинг
-uv run pytest tests/     # все тесты (427 шт.)
+uv run pytest tests/     # все тесты (633 шт.)
 uv run pytest --cov=textalchemy  # coverage
 uv run textalchemy run --list    # зарегистрированные операции
 ```

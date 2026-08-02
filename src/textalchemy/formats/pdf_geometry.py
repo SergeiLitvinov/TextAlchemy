@@ -94,6 +94,8 @@ class PdfPageGeometry:
     text_blocks: tuple[PdfTextBlockGeometry, ...] = ()
     image_blocks: tuple[PdfImageGeometry, ...] = ()
     tables: tuple[PdfTableGeometry, ...] = ()
+    extracted_images: tuple[Any, ...] = ()
+    vector_drawings: tuple[Any, ...] = ()
 
 
 @dataclass

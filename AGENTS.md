@@ -4,30 +4,42 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
 
 ## Layout
 
-- `src/textalchemy/__main__.py` — CLI entry: `_setup_parser()` + `main()` dispatch (`argparse` + `match`). Handlers live in `src/textalchemy/cli/` (12 modules: `convert_cmd.py`, `extract_cmd.py`, `match_cmd.py`, `bibliography_cmd.py`, `generate_cmd.py`, `recognize_cmd.py`, `bibtex_cmd.py`, `init_cmd.py`, `web_cmd.py`, `run_cmd.py`).
-- `src/textalchemy/convert/` — converters; each implements `BaseConverter` from `base.py` and returns `ConversionResult`.
-  - `pdf_to_docx.py` — PDF → DOCX (`pdf2docx`, `pymupdf`, `libreoffice`).
-  - `pptx_to_html/` — PPTX → self-contained HTML viewer (MathML via MathJax). Public API: `PptxToHtmlConverter`, `convert` (see `converter.py:84`). Shipped assets in `pptx_to_html/assets/{css,js}/` are copied to output by default.
-- `src/textalchemy/recognize/` — OCR subsystem:
-  - `ocr.py` — `OcrEngine` поддерживает три бэкенда: Tesseract, EasyOCR, PaddleOCR. Автоопределение доступного. Поддержка `handwriting` (рукописный текст) и `use_gpu`. Метод `recognize_pdf()` конвертит PDF → изображения через PyMuPDF с масштабированием.
-  - `classifier.py` — `DocumentClassifier` по ключевым словам (статья/диссертация/монография и т.д.).
-  - `layout.py` — `LayoutAnalyzer` базовый анализ областей на изображении (текст/таблица/колонтитул).
-- `src/textalchemy/{extract,organize,generate,web}/` — other subsystems.
+- `src/textalchemy/__main__.py` — CLI entry: `_setup_parser()` + `main()` dispatch (`argparse` + `match`). Handlers live in `src/textalchemy/cli/` (15 modules: `bibliography_cmd.py`, `bibtex_cmd.py`, `completion_cmd.py`, `convert_cmd.py`, `convert_file_cmd.py`, `extract_cmd.py`, `generate_cmd.py`, `init_cmd.py`, `inspect_cmd.py`, `match_cmd.py`, `plan_cmd.py`, `recognize_cmd.py`, `run_cmd.py`, `template_cmd.py`, `web_cmd.py`).
 - `src/textalchemy/core/` — base types (`Document`, `Text`, `Match`, `Signal`, `BibItem`) and the operation registry (`@operation`).
-- `src/textalchemy/formats/` — atomic format readers: `pdf` (chain `pdfplumber → pypdf → pymupdf`), `docx`, `txt`/`djvu`.
+  - `document_model.py` — rich intermediate model (`DocumentModel`, sections/paragraphs/tables/images/formulas, typed `*Properties`), `conversion_graph.py` — capability model + route planner, `document_codec.py` — versioned JSON serialization, `document_adapters.py`, `properties.py`, `diagnostics.py` (`ConversionReport`), `inspection.py` (structure/quality report for `textalchemy inspect`), `database.py`, `io.py`, `hashing.py`, `latex.py`, `config.py`, `exceptions.py`.
+- `src/textalchemy/formats/` — atomic format readers: `pdf` (chain `pdfplumber → pypdf → pymupdf`), `docx` (split into `docx_text/style/table/section/drawing/notes` + `docx.py` facade), `txt`/`djvu`, `epub`.
+  - PDF geometry/semantics: `pdf_geometry.py` (reading order, blocks, tables, images), `pdf_layout.py`, `pdf_classify.py`, `pdf_images.py` (raster + vector extraction), `pdf_ocr_merge.py` (text layer + OCR fusion), `pdf_ocr_types.py`, `pdf_semantic.py`, `pdf_ocr_merge.py`.
+- `src/textalchemy/ooxml/` — shared OPC `PackageGraph` and relationship handling for DOCX/PPTX round-trips.
 - `src/textalchemy/pipeline/` — pipeline stages as `@operation`s:
   - `ingest.py` — `ingest.file`: path → `Document`.
-  - `extract.py` — `extract.text`: `Document` → `Text` (universal reader).
+  - `extract.py` — `extract.text`: `Document` → `Text` (universal reader); `extract.pdf_model`: PDF → `DocumentModel` (geometry, tables, images, vectors, optional OCR merge).
+  - `emails_op.py` — `extract.emails`, `render.emails.{docx,txt,debug}`.
   - `signals.py` — author/title/year/doi/isbn signals with configurable weights.
   - `match.py` — `match.bibliography`: `Text`+`Document`+`BibItem[]` → `Match`.
   - `match_files.py` — `match.files`: directory + BibItem[] → `Match[]` (batch; copies matched files to `output_dir`).
   - `bibliography.py` — `bibliography.parse` (path → BibItem[]), `bibliography.smart_parse` (text → BibItem[]).
   - `name.py` — `name.from_match`: `Match` → filename.
-  - `render.py` — `render.latex`, `render.latex.pandoc`, `render.docx`, `render.bibtex`, `render.gost`, `render.markdown`, `render.json`.
+  - `render.py` — `render.latex`, `render.latex.pandoc`, `render.docx`, `render.docx_model` (DocumentModel → DOCX), `render.bibtex`, `render.gost`, `render.markdown`, `render.json`.
   - `render_html.py` — `render.html.pptx`: `Document` (.pptx) → `ConversionResult` (HTML viewer).
+  - `template.py` — `template.render`: fill `DocumentModel` with data (variables, conditions, loops).
   - `runner.py` — YAML/TOML/JSON pipeline runner.
-- `tests/` — pytest. Subpackage `tests/pipeline/` and `tests/convert/` mirror the source. Flat: `test_cli.py`, `test_web.py`, `test_database.py`.
-- `tests/corpus/` — reproducible scientific DOCX corpus and structural golden data.
+- `src/textalchemy/convert/` — conversion subsystem:
+  - `capabilities.py` / `executor.py` — built-in `ConverterCapabilities` + `ConversionExecutor` that plans a route through `DocumentModel` and executes it (no temp file); `protocols.py`, `backends.py`, `base.py` (`BaseConverter`/`ConversionReport`).
+  - `pdf_to_docx.py` — PDF → DOCX (`pdf2docx`, `pymupdf`, `libreoffice`, engine fallback).
+  - `docx_writer.py` + `docx_*_writer.py` — `DocumentModel` → DOCX; `html_writer.py` — → self-contained HTML; `pdf_writer.py` — → PDF (reportlab); `docx_to_latex.py` — DOCX → LaTeX.
+  - `pptx_to_html/` — PPTX → self-contained HTML viewer (MathML via MathJax). Public API: `PptxToHtmlConverter`, `convert` (see `converter.py:84`). Shipped assets in `pptx_to_html/assets/{css,js}/` are copied to output by default.
+- `src/textalchemy/recognize/` — OCR subsystem:
+  - `ocr.py` — `OcrEngine` поддерживает три бэкенда: Tesseract, EasyOCR, PaddleOCR. Автоопределение доступного. Поддержка `handwriting` (рукописный текст) и `use_gpu`. Методы `recognize_pdf()` и `recognize_pdf_geometry()`/`recognize_with_geometry()` (координаты блоков для OCR-merge с текстовым слоем PDF).
+  - `classifier.py` — `DocumentClassifier` по ключевым словам (статья/диссертация/монография и т.д.).
+  - `layout.py` — `LayoutAnalyzer` базовый анализ областей на изображении (текст/таблица/колонтитул).
+- `src/textalchemy/{extract,organize,generate,quality,web}/` — other subsystems:
+  - `extract/` — legacy: docx → text/LaTeX, emails, `fix_encoding.py`.
+  - `organize/` — legacy: bibliography parser, matching, GOST, filename, bibtex.
+  - `generate/` — template engine: `template.py` (DSL), `template_schema.py` (data schema), `model_template.py` (DocumentModel-driven DOCX/HTML/PDF generation).
+  - `quality/` — visual metrics and perceptual regression.
+  - `web/` — FastAPI app (`app.py`), route handlers in `web/routes/` (pages, bibliography, convert, extract, generate, matching, pipeline, recognize), Jinja2 templates + static assets.
+- `tests/` — pytest. Subpackages mirror the source: `test_core/`, `test_formats/`, `test_pipeline/`, `test_convert/`, `test_generate/`, `test_organize/`, `test_recognize/`, `test_extract/`, `test_quality/`. Flat: `test_cli.py`, `test_web.py`, `test_database.py`, `test_ooxml_package.py`, `test_template_cli.py`.
+- `tests/corpus/` — reproducible scientific DOCX/PDF/PPTX corpus and structural golden data.
 
 ## Commands
 
@@ -39,7 +51,7 @@ Always run via `uv` so the lockfile-resolved env is used.
 - Test: `uv run pytest tests/ -v --tb=short` (or `--cov=textalchemy` for coverage)
 - Single test: `uv run pytest tests/test_pipeline/test_runner.py::test_run_chained_ingest_extract -v`
 - Pipeline run: `uv run textalchemy run pipeline.yaml` (or `textalchemy run --list`, `--json` for JSON output)
-- Most commands support `--json` for structured machine-readable output (`extract`, `convert`, `pptx2html`, `gost`, `stats`, `generate`, `bibtex`, `recognize`, `match`, `run`)
+- Most commands support `--json` for structured machine-readable output (`extract`, `convert`, `convert-file`, `plan`, `inspect`, `template-check`, `pptx2html`, `gost`, `stats`, `generate`, `bibtex`, `recognize`, `match`, `run`)
 - Web UI: `uv run textalchemy web` (defaults 127.0.0.1:8000)
 - OCR: `uv run textalchemy recognize input.pdf --backend paddle --gpu --mode handwriting --output result.docx`
 - CLI entry: `textalchemy = textalchemy.__main__:main` (see `pyproject.toml`)
@@ -56,7 +68,7 @@ Every operation is `@operation("id", input_type=..., output_type=..., input_para
 
 1. **All parameters are keyword-only** — `def render_latex(*, text: Text, title: str = "Document"): ...`. The runner calls operations with `**kwargs` only, so positional-only parameters will fail.
 2. **`input_param` declares the input kwarg name** (default `"input"`). The runner resolves a step's `input: ctx_name` field into `params[input_param]`.
-3. **Return values are JSON-serializable OR `Path`/`Document`/`Text`/`Match`/`BibItem`** — anything else breaks `--json` output and `RunResult.to_dict()`.
+3. **Return values are JSON-serializable OR `Path`/`Document`/`Text`/`Match`/`BibItem`/`DocumentModel`** — anything else breaks `--json` output and `RunResult.to_dict()`. `DocumentModel` is serialized via `document_to_dict` (see `pipeline/runner.py:_safe`).
 4. **The function name in tests should be invoked as `func(name=value, ...)`** — never positionally.
 
 The registry exposes `all_operations()`, `get(id)`, `by_tag(tag)`, `isolated()` (context manager for tests). Use `from textalchemy.core.registry import isolated` to test the registry without polluting the global state — `reset()` is destructive and removes `pipeline.*` operations from the registry, breaking other tests.
