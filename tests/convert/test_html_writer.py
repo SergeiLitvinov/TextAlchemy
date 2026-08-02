@@ -137,3 +137,56 @@ def test_write_html_model_rejects_missing_image_resource(tmp_path):
 
     assert report.success is False
     assert any(issue.severity is IssueSeverity.ERROR and issue.feature == "image" for issue in report.issues)
+
+
+def test_write_html_model_renders_pptx_preset_shape_as_svg(tmp_path):
+    output = tmp_path / "shape.html"
+    paragraph = Paragraph(
+        content=[TextRun("Inside the box")],
+        box=Box(x=50, y=60, width=180, height=90, rotation=15),
+        properties={"pptx": {"shape": {"prst": "roundRect", "fill": "#4472C4", "line": {"color": "#000000", "width": 1.5}}}},
+    )
+    document = DocumentModel(sections=[Section(blocks=[paragraph])])
+
+    report = write_html_model(document, output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert "position:absolute" in html
+    assert "left:50pt" in html
+    assert "top:60pt" in html
+    assert "width:180pt" in html
+    assert "height:90pt" in html
+    assert "transform:rotate(15deg)" in html
+    assert "background-image:url(&quot;data:image/svg+xml" in html
+    assert "fill%3D%22%234472C4%22" in html
+    assert "stroke%3D%22%23000000%22" in html
+
+
+def test_write_html_model_reports_unknown_preset_shape(tmp_path):
+    output = tmp_path / "unknown-shape.html"
+    paragraph = Paragraph(
+        box=Box(x=0, y=0, width=100, height=50),
+        properties={"pptx": {"shape": {"prst": "someExoticShape", "fill": "#FF0000"}}},
+    )
+    document = DocumentModel(sections=[Section(blocks=[paragraph])])
+
+    report = write_html_model(document, output)
+
+    assert report.lossless is False
+    assert any(issue.severity is IssueSeverity.LOSS and issue.feature == "preset-shape" for issue in report.issues)
+    assert "background-image:url(&quot;data:image/svg+xml" not in output.read_text(encoding="utf-8")
+
+
+def test_write_html_model_skips_invisible_shape(tmp_path):
+    output = tmp_path / "invisible-shape.html"
+    paragraph = Paragraph(
+        box=Box(x=0, y=0, width=100, height=50),
+        properties={"pptx": {"shape": {"prst": "rect", "fill": "none"}}},
+    )
+    document = DocumentModel(sections=[Section(blocks=[paragraph])])
+
+    report = write_html_model(document, output)
+
+    assert report.lossless is True
+    assert "background-image:url(&quot;data:image/svg+xml" not in output.read_text(encoding="utf-8")

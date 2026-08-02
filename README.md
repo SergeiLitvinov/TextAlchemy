@@ -118,6 +118,9 @@ Final: \documentclass[12pt,a4paper]{article}...
 с форматированием и гиперссылками, OMML-формулы, изображения (в ресурсы модели),
 таблицы, диаграммы (данные в `properties["pptx"]["chart"]`), фон и заметки.
 Группы фигур разворачиваются с учётом трансформации `off/ext/chOff/chExt`.
+Автофигуры/коннекторы сохраняются в `properties["pptx"]["shape"]` (`prst`, заливка,
+обводка) и рендерятся общим HTML-рендерером как SVG-фон. Стили и геометрия
+placeholder-ов наследуются по цепочке слайд → layout → master (`p:txStyles`).
 
 Благодаря общему `DocumentModel` маршруты `PPTX → HTML/DOCX/PDF` проходят через
 capability-планировщик: `pptx.model → model.html` (общий HTML-рендерер),
@@ -238,7 +241,7 @@ pip install -e ".[ocr,web,dev]"      # полная (OCR + веб + разраб
 ```bash
 uv sync --all-extras
 uv run ruff check        # линтинг
-uv run pytest tests/     # все тесты (653 шт.)
+uv run pytest tests/     # все тесты (657 шт.)
 uv run pytest --cov=textalchemy  # coverage
 uv run textalchemy run --list    # зарегистрированные операции
 ```

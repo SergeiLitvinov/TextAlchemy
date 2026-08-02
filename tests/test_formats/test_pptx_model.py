@@ -231,6 +231,29 @@ class TestReadPptxModel:
         with pytest.raises(FileNotFoundError):
             read_pptx_model(tmp_path / "missing.pptx")
 
+    def test_placeholder_inherits_layout_geometry_and_style(self, tmp_path):
+        path = tmp_path / "placeholders.pptx"
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+        slide.placeholders[0].text_frame.text = "Slide title"
+        slide.placeholders[1].text_frame.text = "Body text"
+        presentation.save(path)
+
+        model = read_pptx_model(path)
+
+        blocks = _paragraphs(model.sections[0].blocks)
+        title = next(p for p in blocks if any(run.text == "Slide title" for run in p.content))
+        body = next(p for p in blocks if any(run.text == "Body text" for run in p.content))
+        title_run = next(r for r in title.content if r.text == "Slide title")
+        body_run = next(r for r in body.content if r.text == "Body text")
+        assert title.box.x == pytest.approx(36.0)
+        assert title.box.width == pytest.approx(648.0)
+        assert body.box.y == pytest.approx(126.0)
+        assert title_run.style.font_size.pt == pytest.approx(44.0)
+        assert body_run.style.font_size.pt == pytest.approx(32.0)
+        assert title_run.style.color == "#000000"
+        assert title.alignment == "center"
+
 
 def cell_plain(cell) -> str:
     return "".join(run.text for block in cell.blocks for run in block.content if hasattr(run, "text"))

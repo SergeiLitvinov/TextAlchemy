@@ -256,12 +256,17 @@ def test_pdf_backend_falls_back_after_runtime_failure(tmp_path, monkeypatch):
 
 def _rich_pptx(path: Path) -> Path:
     from pptx import Presentation
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_SHAPE
     from pptx.util import Inches
 
     presentation = Presentation()
     slide = presentation.slides.add_slide(presentation.slide_layouts[5])
     box = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(6), Inches(0.6))
     box.text_frame.text = "Model-based PPTX body"
+    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(2), Inches(2), Inches(2), Inches(1))
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = RGBColor(0x44, 0x72, 0xC4)
     presentation.save(path)
     return path
 
@@ -294,7 +299,10 @@ def test_executor_runs_pptx_model_html_route(tmp_path):
 
     assert report.success
     assert report.metrics["executed_steps"] == ["pptx.model", "model.html"]
-    assert "Model-based PPTX body" in output.read_text(encoding="utf-8")
+    html = output.read_text(encoding="utf-8")
+    assert "Model-based PPTX body" in html
+    assert "background-image:url(&quot;data:image/svg+xml" in html
+    assert "fill%3D%22%234472C4%22" in html
 
 
 def test_executor_runs_pptx_model_docx_route(tmp_path):

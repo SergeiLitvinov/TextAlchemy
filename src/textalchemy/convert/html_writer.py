@@ -6,8 +6,10 @@ import base64
 import re
 from html import escape
 from pathlib import Path
-from urllib.parse import urlsplit
+from typing import Any
+from urllib.parse import quote, urlsplit
 
+from textalchemy.convert.pptx_to_html._pptx_lib import PRST_GEOMETRY
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_model import (
     Block,
@@ -62,6 +64,7 @@ _MATHML_ELEMENTS = {
 _COLOR_RE = re.compile(r"^(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,24})$")
 _MEDIA_TYPE_RE = re.compile(r"^image/[a-zA-Z0-9.+-]+$")
 _HEADING_RE = re.compile(r"^(?:heading|заголовок)\s*([1-6])$", re.IGNORECASE)
+_PT_TO_PX = 96.0 / 72.0
 
 
 def write_html_model(document: DocumentModel, output_path: str | Path) -> ConversionReport:
@@ -187,6 +190,18 @@ class _HtmlRenderer:
         match = _HEADING_RE.match(style_name.replace("_", " "))
         tag = f"h{match.group(1)}" if match else "p"
         styles = self._box_style(paragraph.box, positioned=True)
+        pptx_props = paragraph.properties.get("pptx")
+        shape = pptx_props.get("shape") if isinstance(pptx_props, dict) else None
+        if isinstance(shape, dict) and paragraph.box is not None:
+            if not (paragraph.box.x or paragraph.box.y):
+                styles.extend(("position:absolute", "left:0pt", "top:0pt"))
+            uri = _shape_svg_uri(shape)
+            if uri is not None:
+                styles.append(f'background-image:url("{uri}")')
+                styles.append("background-size:100% 100%")
+                styles.append("background-repeat:no-repeat")
+            else:
+                self._report_missing_shape(shape, location)
         if paragraph.alignment in {"left", "right", "center", "justify"}:
             styles.append(f"text-align:{paragraph.alignment}")
         property_map = {
@@ -335,11 +350,48 @@ class _HtmlRenderer:
             values.append("transform-origin:center")
         return values
 
+    def _report_missing_shape(self, shape: dict[str, Any], location: str) -> None:
+        prst = shape.get("prst")
+        if prst and prst not in PRST_GEOMETRY:
+            self.report.add(IssueSeverity.LOSS, "preset-shape", f"preset shape {prst!r} is not rendered", location)
+        elif shape.get("fill") == "blip":
+            self.report.add(IssueSeverity.LOSS, "shape-fill", "blipFill shape background is not rendered", location)
+
 
 def _style_attribute(styles: list[str]) -> str:
     if not styles:
         return ""
     return f' style="{escape(";".join(styles), quote=True)}"'
+
+
+def _shape_svg_uri(shape: dict[str, Any]) -> str | None:
+    """Вернуть data-URI SVG-фона автофигуры (viewBox 0..100) или None."""
+    entry = PRST_GEOMETRY.get(shape.get("prst"))
+    if entry is None:
+        return None
+    path_d, stroke_only = entry
+    fill = shape.get("fill")
+    fill_attr = "none" if stroke_only or fill in (None, "none", "blip") else fill
+    if fill_attr and not _COLOR_RE.match(fill_attr):
+        fill_attr = "none"
+    line = shape.get("line") or {}
+    stroke = line.get("color")
+    if stroke and not _COLOR_RE.match(stroke):
+        stroke = None
+    if fill_attr == "none" and stroke is None:
+        return None
+    parts = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">']
+    attributes = f' fill="{fill_attr}"'
+    if stroke is not None:
+        attributes += f' stroke="{stroke}"'
+        width = line.get("width")
+        if isinstance(width, (int, float)) and width > 0:
+            attributes += f' stroke-width="{width * _PT_TO_PX:.3g}px" vector-effect="non-scaling-stroke"'
+    elif stroke_only:
+        attributes += ' stroke="#444444" stroke-width="1.5px"'
+    parts.append(f'<path d="{path_d}"{attributes}/>')
+    parts.append("</svg>")
+    return "data:image/svg+xml," + quote("".join(parts), safe="")
 
 
 def _css_string(value: str) -> str:

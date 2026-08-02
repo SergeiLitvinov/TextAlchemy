@@ -143,6 +143,8 @@ class _ImporterState:
 
     model: DocumentModel
     slide_index: int = 0
+    layout_element: Optional[Any] = None
+    master_element: Optional[Any] = None
 
     def add_image_resource(self, media_type: str, data: bytes, filename: str | None) -> str:
         resource_id = f"slide{self.slide_index}_img{len(self.model.resources) + 1}"
@@ -156,6 +158,136 @@ class _ImporterState:
             )
         )
         return resource_id
+
+
+@dataclass
+class _LevelDefaults:
+    """Стиль уровня из ``p:txStyles`` (layout/master) для placeholder-текста."""
+
+    alignment: str | None = None
+    style: TextStyle | None = None
+
+
+_PLACEHOLDER_CATEGORY = {
+    "title": "title",
+    "ctrTitle": "title",
+    "subTitle": "title",
+    "body": "body",
+    "sldNum": "body",
+    "dt": "body",
+    "ftr": "body",
+    "hdr": "body",
+    "pic": "body",
+}
+
+
+def _placeholder_info(element) -> Optional[tuple[str, str]]:
+    ph = element.find(f".//{_p('ph')}")
+    if ph is None:
+        return None
+    return ph.get("type", "body"), ph.get("idx", "0")
+
+
+def _placeholder_category(ph_type: str) -> str:
+    return _PLACEHOLDER_CATEGORY.get(ph_type, "other")
+
+
+def _walk_layout_placeholder(
+    sp_tree, transform: _Transform, ph_type: str, ph_idx: str
+) -> Optional[tuple[float, float, float, float, float]]:
+    """Найти в spTree placeholder с подходящим типом/idx и вернуть его xfrm в EMU."""
+    for child in sp_tree:
+        tag = _local_name(child)
+        if tag == "grpSp":
+            result = _walk_layout_placeholder(child, _group_child_transform(child, transform), ph_type, ph_idx)
+            if result is not None:
+                return result
+        elif tag == "sp":
+            ph = _placeholder_info(child)
+            if ph is None or ph[0] != ph_type or ph[1] != ph_idx:
+                continue
+            xfrm = _shape_xfrm(child)
+            if xfrm is None:
+                continue
+            left, top, width, height = _apply_transform(transform, *xfrm[:4])
+            return (left, top, width, height, transform.rotation + xfrm[4])
+    return None
+
+
+def _placeholder_geometry(element, state: _ImporterState) -> Optional[tuple[float, float, float, float, float]]:
+    """Вернуть xfrm placeholder из slide → layout → master (в EMU)."""
+    ph = _placeholder_info(element)
+    if ph is None:
+        return None
+    for sp_tree in (state.layout_element, state.master_element):
+        if sp_tree is None:
+            continue
+        result = _walk_layout_placeholder(sp_tree, _Transform(), ph[0], ph[1])
+        if result is not None:
+            return result
+    return None
+
+
+def _merge_tx_styles(element, context: dict[str, dict[int, _LevelDefaults]]) -> None:
+    """Наложить стили уровней из ``p:txStyles`` (title/body/other) на контекст."""
+    tx_styles = element.find(_p("txStyles"))
+    if tx_styles is None:
+        return
+    for category, tag in (("title", "titleStyle"), ("body", "bodyStyle"), ("other", "otherStyle")):
+        style_el = tx_styles.find(_p(tag))
+        if style_el is None:
+            continue
+        for level in range(1, 6):
+            lvl_el = style_el.find(_a(f"lvl{level}pPr"))
+            if lvl_el is None:
+                continue
+            defaults = context.setdefault(category, {}).setdefault(level, _LevelDefaults())
+            if defaults.alignment is None:
+                align = lvl_el.get("algn")
+                if align:
+                    defaults.alignment = _ALIGN_MAP.get(align, align)
+            if defaults.style is None or not _style_is_set(defaults.style):
+                def_rpr = lvl_el.find(_a("defRPr"))
+                if def_rpr is not None:
+                    defaults.style = _run_style(def_rpr)
+
+
+def _style_is_set(style: TextStyle) -> bool:
+    return any(
+        (
+            style.font_family,
+            style.font_size,
+            style.bold is not None,
+            style.italic is not None,
+            style.underline is not None,
+            style.color,
+        )
+    )
+
+
+def _slide_style_context(slide) -> dict[str, dict[int, _LevelDefaults]]:
+    """Собрать контекст стилей placeholder из layout и master (layout приоритетнее)."""
+    context: dict[str, dict[int, _LevelDefaults]] = {}
+    try:
+        layout = slide.slide_layout
+    except Exception:  # noqa: BLE001
+        return context
+    if layout is None:
+        return context
+    _merge_tx_styles(layout._element, context)
+    try:
+        master = layout.slide_master
+    except Exception:  # noqa: BLE001
+        master = None
+    if master is not None:
+        _merge_tx_styles(master._element, context)
+    return context
+
+
+def _level_defaults(style_context, category: str | None, level: int) -> Optional[_LevelDefaults]:
+    if category is None:
+        return None
+    return (style_context.get(category) or {}).get(max(1, min(5, level + 1)))
 
 
 def read_pptx(path: Union[str, Path], *, include_tables: bool = True) -> Text:
@@ -232,10 +364,13 @@ def read_pptx_model(
     state = _ImporterState(model=model)
     for slide_index, slide in enumerate(presentation.slides, start=1):
         state.slide_index = slide_index
+        state.layout_element = _layout_sp_tree(slide)
+        state.master_element = _master_sp_tree(slide)
         blocks: list[Any] = []
+        style_context = _slide_style_context(slide)
         sp_tree = _slide_sp_tree(slide)
         if sp_tree is not None:
-            _collect_sp_tree(sp_tree, slide.part, state, blocks, _Transform())
+            _collect_sp_tree(sp_tree, slide.part, state, blocks, _Transform(), style_context)
         section = Section(blocks=blocks, page=page)
         background = _background_fill(slide)
         if background is not None:
@@ -256,21 +391,46 @@ def _slide_sp_tree(slide):
     return c_sld.find(_p("spTree"))
 
 
-def _collect_sp_tree(sp_tree, slide_part, state: _ImporterState, blocks: list[Any], transform: _Transform) -> None:
+def _layout_sp_tree(slide):
+    try:
+        layout = slide.slide_layout
+    except Exception:  # noqa: BLE001
+        return None
+    if layout is None:
+        return None
+    return layout._element.find(f".//{_p('spTree')}")
+
+
+def _master_sp_tree(slide):
+    try:
+        layout = slide.slide_layout
+        master = layout.slide_master
+    except Exception:  # noqa: BLE001
+        return None
+    if master is None:
+        return None
+    return master._element.find(f".//{_p('spTree')}")
+
+
+def _collect_sp_tree(sp_tree, slide_part, state: _ImporterState, blocks: list[Any], transform: _Transform, style_context) -> None:
     for child in sp_tree:
         tag = _local_name(child)
         if tag == "AlternateContent":
-            _collect_alternate_content(child, slide_part, state, blocks, transform)
+            _collect_alternate_content(child, slide_part, state, blocks, transform, style_context)
         elif tag in _SHAPE_TAGS:
-            _collect_shape_element(child, slide_part, state, blocks, transform)
+            _collect_shape_element(child, slide_part, state, blocks, transform, style_context)
 
 
-def _collect_shape_element(element, slide_part, state: _ImporterState, blocks: list[Any], transform: _Transform) -> None:
+def _collect_shape_element(
+    element, slide_part, state: _ImporterState, blocks: list[Any], transform: _Transform, style_context
+) -> None:
     tag = _local_name(element)
     if tag == "grpSp":
-        _collect_sp_tree(element, slide_part, state, blocks, _group_child_transform(element, transform))
+        _collect_sp_tree(element, slide_part, state, blocks, _group_child_transform(element, transform), style_context)
         return
     xfrm = _shape_xfrm(element)
+    if xfrm is None:
+        xfrm = _placeholder_geometry(element, state)
     if xfrm is None:
         return
     left, top, width, height = _apply_transform(transform, *xfrm[:4])
@@ -284,7 +444,7 @@ def _collect_shape_element(element, slide_part, state: _ImporterState, blocks: l
         rotation=transform.rotation + xfrm[4],
     )
     if tag == "sp":
-        _handle_text_shape(element, slide_part, state, blocks, box)
+        _handle_text_shape(element, slide_part, state, blocks, box, style_context)
     elif tag == "cxnSp":
         blocks.append(_shape_paragraph_from_element(element, box, slide_part))
     elif tag == "pic":
@@ -293,13 +453,15 @@ def _collect_shape_element(element, slide_part, state: _ImporterState, blocks: l
         _handle_graphic_frame(element, slide_part, state, blocks, box)
 
 
-def _collect_alternate_content(element, slide_part, state: _ImporterState, blocks: list[Any], transform: _Transform) -> None:
+def _collect_alternate_content(
+    element, slide_part, state: _ImporterState, blocks: list[Any], transform: _Transform, style_context
+) -> None:
     choice = element.find(f"{{{_MC_NS}}}Choice")
     if choice is None:
         return
     for child in choice:
         if _local_name(child) in _SHAPE_TAGS:
-            _collect_shape_element(child, slide_part, state, blocks, transform)
+            _collect_shape_element(child, slide_part, state, blocks, transform, style_context)
 
 
 def _apply_transform(transform: _Transform, x: float, y: float, cx: float, cy: float) -> tuple[float, float, float, float]:
@@ -365,15 +527,25 @@ def _group_child_transform(group_element, parent: _Transform) -> _Transform:
     return _Transform(ox=ox, oy=oy, sx=parent.sx * sx, sy=parent.sy * sy, rotation=rotation)
 
 
-def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[Any], box: Box) -> None:
+def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[Any], box: Box, style_context=None) -> None:
     tx_body = element.find(_p("txBody"))
     paragraphs = tx_body.findall(_a("p")) if tx_body is not None else []
     shape_meta = _shape_metadata(element, box)
+    ph = _placeholder_info(element)
+    category = _placeholder_category(ph[0]) if ph else None
     content: list[Any] = []
     paras_meta: list[dict[str, Any]] = []
     for index, p_el in enumerate(paragraphs):
-        paras_meta.append(_paragraph_metadata(p_el))
-        _append_paragraph_runs(p_el, content, slide_part)
+        meta = _paragraph_metadata(p_el)
+        defaults = _level_defaults(style_context, category, int(meta.get("level", 0)))
+        if defaults is not None:
+            if meta.get("alignment") is None and defaults.alignment:
+                meta["alignment"] = defaults.alignment
+            if defaults.style is not None and defaults.style.font_size:
+                meta["default_font_size_pt"] = defaults.style.font_size.pt
+        paras_meta.append(meta)
+        inherited = defaults.style if defaults is not None else None
+        _append_paragraph_runs(p_el, content, slide_part, inherited)
         if index < len(paragraphs) - 1:
             content.append(TextRun(text="\n"))
     alignment = paras_meta[0].get("alignment") if paras_meta else None
@@ -400,11 +572,11 @@ def _shape_paragraph_from_element(element, box: Box, slide_part) -> Paragraph:
     return Paragraph(content=content, box=box, properties={"pptx": {"shape": _shape_metadata(element, box)}})
 
 
-def _append_paragraph_runs(p_el, content: list[Any], slide_part) -> None:
+def _append_paragraph_runs(p_el, content: list[Any], slide_part, inherited: Optional[TextStyle] = None) -> None:
     for child in p_el:
         tag = _local_name(child)
         if tag == "r":
-            run = _parse_run(child, slide_part)
+            run = _parse_run(child, slide_part, inherited)
             if run is not None and (run.text or run.link):
                 content.append(run)
         elif tag == "br":
@@ -422,10 +594,10 @@ def _append_paragraph_runs(p_el, content: list[Any], slide_part) -> None:
                 content.append(TextRun(text=child.text))
 
 
-def _parse_run(r_el, slide_part) -> Optional[TextRun]:
+def _parse_run(r_el, slide_part, inherited: Optional[TextStyle] = None) -> Optional[TextRun]:
     text = "".join(t.text or "" for t in r_el.findall(_a("t")))
     r_pr = r_el.find(_a("rPr"))
-    style = _run_style(r_pr)
+    style = _run_style(r_pr) if r_pr is not None else (inherited or TextStyle())
     link = None
     if r_pr is not None:
         link_el = r_pr.find(_a("hlinkClick"))
