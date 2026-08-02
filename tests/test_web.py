@@ -1,9 +1,11 @@
+import importlib
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
 from textalchemy import __version__
 from textalchemy.core.artifacts import ArtifactWorkspace
+from textalchemy.core.database import Database
 from textalchemy.core.diagnostics import ConversionReport
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.types import DocFormat
@@ -81,6 +83,39 @@ def test_api_info():
     assert "name" in data
     assert "version" in data
     assert "modules" in data
+
+
+def test_legacy_bibliography_migration_reports_invalid_json(monkeypatch, tmp_path, caplog):
+    web_app = importlib.import_module("textalchemy.web.app")
+    legacy = tmp_path / "bibliography.json"
+    legacy.write_text("{broken", encoding="utf-8")
+    database = Database(tmp_path / "migration.db")
+    monkeypatch.setattr(web_app, "data_dir", tmp_path)
+    monkeypatch.setattr(web_app, "db", database)
+
+    with caplog.at_level("ERROR", logger="textalchemy.web.app"):
+        web_app._migrate_json_to_db()
+
+    assert legacy.exists()
+    assert database.all_items() == []
+    assert "Failed to migrate legacy bibliography" in caplog.text
+    database.engine.dispose()
+
+
+def test_legacy_bibliography_migration_is_successful(monkeypatch, tmp_path):
+    web_app = importlib.import_module("textalchemy.web.app")
+    legacy = tmp_path / "bibliography.json"
+    legacy.write_text('[{"title": "Migrated"}]', encoding="utf-8")
+    database = Database(tmp_path / "migration.db")
+    monkeypatch.setattr(web_app, "data_dir", tmp_path)
+    monkeypatch.setattr(web_app, "db", database)
+
+    web_app._migrate_json_to_db()
+
+    assert not legacy.exists()
+    assert (tmp_path / "bibliography.json.imported").exists()
+    assert [item.title for item in database.all_items()] == ["Migrated"]
+    database.engine.dispose()
 
 
 def test_api_bibliography():

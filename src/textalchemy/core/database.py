@@ -108,6 +108,18 @@ class Database:
             sess.commit()
         return item
 
+    def add_items(self, items: list[BibItem]) -> list[BibItem]:
+        """Add bibliography items in one transaction."""
+
+        records = [BibRecord.from_bibitem(item) for item in items]
+        with self.session() as sess:
+            sess.add_all(records)
+            sess.flush()
+            for item, record in zip(items, records, strict=True):
+                item.index = int(record.id)  # type: ignore[arg-type]
+            sess.commit()
+        return items
+
     def update_item(self, item_id: int, item: BibItem) -> bool:
         with self.session() as sess:
             rec = sess.query(BibRecord).filter_by(id=item_id).first()

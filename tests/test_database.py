@@ -104,6 +104,15 @@ class TestDatabase:
         assert result.index is not None
         assert result.index > 0
 
+    def test_add_items_uses_one_batch_and_assigns_ids(self, db):
+        items = [BibItem(title="First"), BibItem(title="Second")]
+
+        result = db.add_items(items)
+
+        assert result is items
+        assert [item.index for item in items] == [1, 2]
+        assert [item.title for item in db.all_items()] == ["First", "Second"]
+
     def test_add_and_get_item(self, db, sample_item):
         added = db.add_item(sample_item)
         retrieved = db.get_item(added.index)

@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ from textalchemy.core.database import Database
 from textalchemy.organize.bibliography import BibItem
 
 _VERSION = __version__
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="TextAlchemy",
@@ -65,18 +67,19 @@ def _ensure_data():
 
 
 def _migrate_json_to_db():
-    """Import JSON file to DB on first run, then remove JSON."""
+    """Import a legacy JSON bibliography, preserving and diagnosing failures."""
     p = data_dir / "bibliography.json"
     if not p.exists() or db.all_items():
         return
     try:
         raw = json.loads(p.read_text(encoding="utf-8"))
-        for d in raw:
-            item = _dict_to_bibitem(d)
-            db.add_item(item)
+        if not isinstance(raw, list) or not all(isinstance(item, dict) for item in raw):
+            raise ValueError("bibliography.json must contain a list of objects")
+        items = [_dict_to_bibitem(item) for item in raw]
+        db.add_items(items)
         p.rename(data_dir / "bibliography.json.imported")
-    except OSError:
-        pass
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        logger.exception("Failed to migrate legacy bibliography from %s; source file was preserved", p)
 
 
 def _load_bib() -> list[dict[str, Any]]:
