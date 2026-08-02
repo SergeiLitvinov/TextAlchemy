@@ -91,6 +91,39 @@ def test_write_html_model_preserves_safe_mathml_without_loss(tmp_path):
     assert "<msup>" in output.read_text(encoding="utf-8")
 
 
+def test_write_html_model_converts_omml_to_mathml(tmp_path):
+    output = tmp_path / "omml.html"
+    omml = (
+        '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+        '<m:sSup><m:e><m:r><m:t>x</m:t></m:r></m:e>'
+        "<m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:oMath>"
+    )
+    document = DocumentModel(sections=[Section(blocks=[Formula(omml, FormulaFormat.OMML, fallback_text="x^2")])])
+
+    report = write_html_model(document, output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert "<msup>" in html
+    assert "<mi>x</mi>" in html
+    assert "<mn>2</mn>" in html
+    assert "x^2" not in html
+
+
+def test_write_html_model_reports_broken_omml(tmp_path):
+    output = tmp_path / "broken-omml.html"
+    document = DocumentModel(
+        sections=[Section(blocks=[Formula("not-a-formula", FormulaFormat.OMML, fallback_text="fallback text")])]
+    )
+
+    report = write_html_model(document, output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is False
+    assert any(issue.severity is IssueSeverity.LOSS and issue.feature == "formula" for issue in report.issues)
+    assert "fallback text" in html
+
+
 def test_write_html_model_reports_formula_fallback_and_running_header(tmp_path):
     output = tmp_path / "losses.html"
     document = DocumentModel(
@@ -187,6 +220,12 @@ def test_write_html_model_skips_invisible_shape(tmp_path):
     document = DocumentModel(sections=[Section(blocks=[paragraph])])
 
     report = write_html_model(document, output)
+    html = output.read_text(encoding="utf-8")
 
     assert report.lossless is True
-    assert "background-image:url(&quot;data:image/svg+xml" not in output.read_text(encoding="utf-8")
+    assert "background-image:url(&quot;data:image/svg+xml" not in html
+    assert "position:absolute" in html
+    assert "left:0pt" in html
+    assert "top:0pt" in html
+    assert "width:100pt" in html
+    assert "height:50pt" in html

@@ -324,3 +324,50 @@ def test_executor_runs_pptx_model_docx_route(tmp_path):
     assert output.is_file()
     document = Document(str(output))
     assert "Model-based PPTX body" in "\n".join(p.text for p in document.paragraphs)
+
+
+def _formula_pptx(path: Path) -> Path:
+    from lxml import etree
+    from pptx import Presentation
+    from pptx.dml.color import RGBColor
+    from pptx.enum.shapes import MSO_SHAPE
+    from pptx.util import Inches
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+    math_box = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(4), Inches(0.6))
+    omath = etree.fromstring(
+        b'<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
+        b"<m:sSup><m:e><m:r><m:t>x</m:t></m:r></m:e>"
+        b"<m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:oMath>"
+    )
+    math_box.text_frame.paragraphs[0]._p.append(omath)
+    shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(2), Inches(2), Inches(2), Inches(1))
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = RGBColor(0x44, 0x72, 0xC4)
+    presentation.save(path)
+    return path
+
+
+def test_executor_pptx_omml_formula_renders_mathml_and_positioning(tmp_path):
+    source = _formula_pptx(tmp_path / "formula.pptx")
+    output = tmp_path / "result.html"
+
+    report = ConversionExecutor().execute(
+        ConversionRequest(
+            source,
+            output,
+            DocFormat.PPTX,
+            DocFormat.HTML,
+            features=frozenset({DocumentFeature.TEXT}),
+        )
+    )
+
+    assert report.success
+    html = output.read_text(encoding="utf-8")
+    assert "<msup>" in html
+    assert "<mi>x</mi>" in html
+    assert "position:absolute" in html
+    assert "left:144pt" in html
+    assert "top:144pt" in html
+    assert "background-image:url(&quot;data:image/svg+xml" in html

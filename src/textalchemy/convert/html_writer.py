@@ -246,12 +246,12 @@ class _HtmlRenderer:
 
     def _formula(self, formula: Formula, location: str, *, block_level: bool) -> str:
         classes = "ta-formula ta-formula-display" if formula.display or block_level else "ta-formula"
-        if formula.format is FormulaFormat.MATHML:
+        if formula.format in (FormulaFormat.MATHML, FormulaFormat.OMML):
             try:
-                mathml = _safe_mathml(formula.value)
+                mathml = _safe_mathml(_formula_to_mathml(formula))
                 return f'<span class="{classes}">{mathml}</span>'
             except ValueError as error:
-                self.report.add(IssueSeverity.LOSS, "formula", f"invalid MathML replaced by fallback: {error}", location)
+                self.report.add(IssueSeverity.LOSS, "formula", f"invalid formula replaced by fallback: {error}", location)
         else:
             self.report.add(
                 IssueSeverity.LOSS,
@@ -401,6 +401,18 @@ def _css_string(value: str) -> str:
 def _safe_link(value: str) -> str | None:
     scheme = urlsplit(value).scheme.lower()
     return value if scheme in {"", "http", "https", "mailto", "tel", "ftp"} else None
+
+
+def _formula_to_mathml(formula: Formula) -> str:
+    """Привести формулу к MathML: для OMML — конвертация из офисного разметки."""
+    if formula.format is FormulaFormat.MATHML:
+        return formula.value
+    from textalchemy.convert.pptx_to_html._omml import convert_omml
+
+    mathml = convert_omml(formula.value)
+    if not mathml or "<math" not in mathml or "merror" in mathml:
+        raise ValueError("OMML contains no convertible formula")
+    return mathml
 
 
 def _has_content(blocks: list[Block]) -> bool:
