@@ -160,8 +160,12 @@ class _HtmlRenderer:
         header = self._blocks(section.headers, f"sections[{index}].headers")
         main = self._blocks(section.blocks, f"sections[{index}].blocks")
         footer = self._blocks(section.footers, f"sections[{index}].footers")
+        section_styles: list[str] = []
+        background = section.properties.get("background_fill")
+        if isinstance(background, str) and _COLOR_RE.match(background):
+            section_styles.append(f"background-color:{background}")
         return (
-            f'<section class="ta-section ta-section-{index}">'
+            f'<section class="ta-section ta-section-{index}"{_style_attribute(section_styles)}>'
             f'<header class="ta-header">{header}</header>'
             f'<main class="ta-main">{main}</main>'
             f'<footer class="ta-footer">{footer}</footer>'

@@ -11,6 +11,7 @@ from textalchemy.core.document_model import (
     FormulaFormat,
     Image,
     Length,
+    PageSettings,
     Paragraph,
     Resource,
     ResourceKind,
@@ -229,3 +230,32 @@ def test_write_html_model_skips_invisible_shape(tmp_path):
     assert "top:0pt" in html
     assert "width:100pt" in html
     assert "height:50pt" in html
+
+
+def test_write_html_model_preserves_slide_canvas_and_background(tmp_path):
+    output = tmp_path / "slide.html"
+    document = DocumentModel(
+        sections=[
+            Section(
+                blocks=[Paragraph(content=[TextRun("Title")], box=Box(x=72, y=36, width=360, height=40))],
+                page=PageSettings(
+                    width=Length(960),
+                    height=Length(540),
+                    margin_top=Length(0),
+                    margin_right=Length(0),
+                    margin_bottom=Length(0),
+                    margin_left=Length(0),
+                ),
+                properties={"background_fill": "#F2F2F2"},
+            )
+        ]
+    )
+
+    report = write_html_model(document, output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert ".ta-section-0 { page: ta-page-0; width: 960pt; min-height: 540pt; padding: 0pt 0pt 0pt 0pt; }" in html
+    assert '<section class="ta-section ta-section-0" style="background-color:#F2F2F2">' in html
+    assert "left:72pt" in html
+    assert "top:36pt" in html

@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from textalchemy import __version__
 from textalchemy.__main__ import main
 
 
@@ -12,10 +13,11 @@ def test_cli_no_args(capsys):
     assert "usage" in captured.out or "usage" in captured.err
 
 
-def test_cli_version():
+def test_cli_version(capsys):
     with pytest.raises(SystemExit) as exc:
         main(["--version"])
     assert exc.value.code == 0
+    assert __version__ in capsys.readouterr().out
 
 
 def test_cli_help_extract():

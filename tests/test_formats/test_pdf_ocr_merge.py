@@ -157,6 +157,25 @@ def test_pdf_geometry_still_produces_tables_with_ocr_merge(tmp_path):
     assert text.blocks[0].meta["source"] == "text_layer"
 
 
+def test_ocr_branch_preserves_tables_and_semantic_classification(tmp_path):
+    from tests.corpus.multiformat import build_multiformat_corpus
+
+    pdf = build_multiformat_corpus(tmp_path)["pdf"]
+    geometry = read_pdf_geometry(pdf)
+    ocr_pages = [
+        OcrPageResult(
+            blocks=[OcrBlockGeometry(text="OCR margin note", bbox=(36, 610, 150, 625), confidence=0.88, page=1)]
+        ),
+        OcrPageResult(),
+    ]
+
+    text = merge_pdf_with_ocr(geometry, ocr_pages=ocr_pages)
+
+    assert any(block.type is BlockType.TABLE for block in text.blocks)
+    assert any(block.type is BlockType.CAPTION and block.text.startswith("Figure 1") for block in text.blocks)
+    assert any(block.meta.get("source") == "ocr" and block.meta.get("confidence") == 0.88 for block in text.blocks)
+
+
 def test_read_pdf_with_ocr_no_engine(tmp_path):
     """read_pdf_with_ocr with ocr_engine=None should work as pure geometry."""
     _make_simple_pdf(tmp_path / "simple.pdf", [("No OCR engine", 40, 60)])

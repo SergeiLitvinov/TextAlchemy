@@ -203,6 +203,10 @@ class TestReadPptxModel:
         section = model.sections[0]
         assert section.properties["background_fill"] == "#F2F2F2"
         assert section.properties["notes"] == "Speaker notes for test."
+        assert section.page.margin_top.pt == 0
+        assert section.page.margin_right.pt == 0
+        assert section.page.margin_bottom.pt == 0
+        assert section.page.margin_left.pt == 0
 
     def test_reads_plain_text(self, tmp_path):
         path = tmp_path / "rich.pptx"

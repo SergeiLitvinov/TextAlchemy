@@ -8,11 +8,14 @@ import zipfile
 from pathlib import Path
 
 import fitz
+import pytest
 from lxml import etree
 from pptx import Presentation
 
 from tests.corpus.multiformat import EMF_SIGNATURE, build_multiformat_corpus, sha256
+from textalchemy.core.document_model import Paragraph, Table
 from textalchemy.formats.pdf import read_pdf_geometry
+from textalchemy.formats.pptx import read_pptx_model
 
 CORPUS_DIR = Path(__file__).parents[1] / "corpus"
 GOLDEN = json.loads((CORPUS_DIR / "multiformat.golden.json").read_text(encoding="utf-8"))
@@ -88,6 +91,45 @@ def test_pptx_corpus_matches_ooxml_and_semantic_golden(tmp_path):
     assert "scientific-diagram.emf" in relationships
     assert 'ContentType="image/x-emf"' in content_types
     assert emf == artifacts["emf"].read_bytes()
+
+
+def test_pptx_model_matches_visual_positioning_golden(tmp_path):
+    pptx = build_multiformat_corpus(tmp_path)["pptx"]
+    model = read_pptx_model(pptx)
+
+    page_sizes = [[section.page.width.pt, section.page.height.pt] for section in model.sections]
+    for actual, expected in zip(page_sizes, GOLDEN["pptx"]["model_page_sizes_pt"], strict=True):
+        assert actual == pytest.approx(expected, abs=0.01)
+    assert all(
+        margin.pt == 0
+        for section in model.sections
+        for margin in (
+            section.page.margin_top,
+            section.page.margin_right,
+            section.page.margin_bottom,
+            section.page.margin_left,
+        )
+    )
+
+    first_slide, second_slide = model.sections
+    title = next(
+        block
+        for block in first_slide.blocks
+        if isinstance(block, Paragraph) and block.plain_text.startswith("Scientific")
+    )
+    table = next(block for block in first_slide.blocks if isinstance(block, Table))
+    formula_text = next(
+        block for block in second_slide.blocks if isinstance(block, Paragraph) and block.plain_text.startswith("E = mc")
+    )
+    expected = GOLDEN["pptx"]["model_key_boxes_pt"]
+    assert _box_values(title) == pytest.approx(expected["title"], abs=0.01)
+    assert _box_values(table) == pytest.approx(expected["table"], abs=0.01)
+    assert _box_values(formula_text) == pytest.approx(expected["formula_text"], abs=0.01)
+
+
+def _box_values(block):
+    assert block.box is not None
+    return [block.box.x, block.box.y, block.box.width, block.box.height]
 
 
 def test_libreoffice_profile_matches_provenance_manifest():

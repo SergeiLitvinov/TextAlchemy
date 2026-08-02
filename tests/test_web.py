@@ -2,12 +2,17 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+from textalchemy import __version__
 from textalchemy.core.diagnostics import ConversionReport
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.types import DocFormat
 from textalchemy.web.main import app
 
 client = TestClient(app)
+
+
+def test_web_version_uses_package_metadata():
+    assert app.version == __version__
 
 
 def test_dashboard():

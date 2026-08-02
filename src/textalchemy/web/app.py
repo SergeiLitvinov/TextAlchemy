@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-import importlib.metadata
 import json
 import time
 from pathlib import Path
@@ -17,10 +16,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jinja2 import Environment, FileSystemLoader
 
+from textalchemy import __version__
 from textalchemy.core.database import Database
 from textalchemy.organize.bibliography import BibItem
 
-_VERSION = importlib.metadata.version("textalchemy")
+_VERSION = __version__
 
 app = FastAPI(
     title="TextAlchemy",

@@ -359,7 +359,16 @@ def read_pptx_model(
     )
     slide_width = _emu_to_pt(presentation.slide_width)
     slide_height = _emu_to_pt(presentation.slide_height)
-    page = PageSettings(width=Length(slide_width), height=Length(slide_height))
+    # PPTX geometry is expressed from the physical slide origin. Document-like
+    # default margins would shift every absolutely positioned shape in HTML/PDF.
+    page = PageSettings(
+        width=Length(slide_width),
+        height=Length(slide_height),
+        margin_top=Length(0),
+        margin_right=Length(0),
+        margin_bottom=Length(0),
+        margin_left=Length(0),
+    )
 
     state = _ImporterState(model=model)
     for slide_index, slide in enumerate(presentation.slides, start=1):

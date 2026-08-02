@@ -15,6 +15,8 @@ from textalchemy.core.document_model import (
     Box,
     ConversionMode,
     DocumentModel,
+    Formula,
+    FormulaFormat,
     Length,
     PageSettings,
     Paragraph,
@@ -33,7 +35,7 @@ from textalchemy.core.document_model import (
     Table as RichTable,
 )
 from textalchemy.core.registry import operation
-from textalchemy.core.types import DocFormat, Document, Text
+from textalchemy.core.types import BlockType, DocFormat, Document, Text
 
 
 @operation(
@@ -120,6 +122,7 @@ def extract_pdf_model(
     path = str(doc.path)
     geometry = read_pdf_geometry(path)
     engine = "pymupdf+document-model"
+    ocr_pages = None
 
     # Optionally merge with OCR
     if use_ocr:
@@ -132,7 +135,6 @@ def extract_pdf_model(
         if ocr_engine.is_available:
             try:
                 ocr_pages = ocr_engine.recognize_pdf_geometry(path, handwriting=handwriting)
-                geometry = _merge_ocr_into_geometry(geometry, ocr_pages)
                 engine = "pymupdf+ocr+document-model"
             except Exception as exc:  # noqa: BLE001
                 geometry.warnings.append(f"OCR failed: {exc}")
@@ -143,6 +145,10 @@ def extract_pdf_model(
     vectors, vec_warnings = extract_pdf_vector_drawings(path)
     geometry = enrich_geometry_with_images(geometry, images, vectors)
 
+    from textalchemy.formats.pdf_ocr_merge import merge_pdf_with_ocr
+
+    semantic = merge_pdf_with_ocr(geometry, ocr_pages)
+
     all_warnings: list[str] = list(geometry.warnings) + img_warnings + vec_warnings
 
     sections: list[Section] = []
@@ -150,26 +156,46 @@ def extract_pdf_model(
 
     for page in geometry.pages:
         blocks: list[RichBlock] = []
+        headers: list[RichBlock] = []
+        footers: list[RichBlock] = []
+        source_blocks = {block.number: block for block in page.text_blocks}
 
-        for tb in page.text_blocks:
-            text = tb.text
-            if not text.strip():
+        for semantic_block in (block for block in semantic.blocks if block.page == page.number):
+            box = _pdf_box(semantic_block.meta.get("bbox"))
+            properties = {
+                "legacy_type": semantic_block.type.value,
+                "page": page.number,
+                **semantic_block.meta,
+            }
+            if semantic_block.type is BlockType.TABLE:
+                rows = [
+                    TableRow(cells=[TableCell(blocks=[Paragraph(content=[TextRun(text=str(value))])]) for value in row])
+                    for row in semantic_block.meta.get("rows", [])
+                ]
+                blocks.append(RichTable(rows=rows, box=box, properties={"pdf": properties}))
                 continue
-            runs: list[TextRun] = []
-            for line in tb.lines:
-                for span in line.spans:
-                    style = TextStyle(
-                        font_family=span.font or None,
-                        font_size=Length(span.size) if span.size else None,
-                        bold=bool(span.flags & 2),
-                        italic=bool(span.flags & 1),
-                    )
-                    runs.append(TextRun(text=span.text, style=style))
-            if not runs:
-                runs.append(TextRun(text=text))
-            bbox = tb.bbox
-            box = Box(x=bbox[0], y=bbox[1], width=bbox[2] - bbox[0], height=bbox[3] - bbox[1]) if len(bbox) == 4 else None
-            blocks.append(Paragraph(content=runs, box=box))
+
+            source_number = semantic_block.meta.get("source_block")
+            source_block = source_blocks.get(int(source_number)) if source_number is not None else None
+            runs = _pdf_text_runs(source_block, semantic_block.text, semantic_block.meta)
+            if semantic_block.type is BlockType.EQUATION:
+                rich_block: RichBlock = Formula(
+                    value=semantic_block.text,
+                    format=FormulaFormat.LATEX,
+                    display=True,
+                    fallback_text=semantic_block.text,
+                    box=box,
+                    properties=properties,
+                )
+            else:
+                rich_block = Paragraph(content=runs, box=box, properties=properties)
+            role = semantic_block.meta.get("semantic_role")
+            if role == "header":
+                headers.append(rich_block)
+            elif role == "footer":
+                footers.append(rich_block)
+            else:
+                blocks.append(rich_block)
 
         for img in page.extracted_images:
             resource_id = f"p{page.number}_img{img.xref}"
@@ -202,18 +228,11 @@ def extract_pdf_model(
             alt = f"Vector drawing {vec.number} on page {vec.page}"
             blocks.append(Paragraph(content=[RichImage(resource_id=resource_id, box=box, alt_text=alt)]))
 
-        for table in page.tables:
-            rich_rows: list[TableRow] = []
-            for row_data in table.rows:
-                cells = [TableCell(blocks=[Paragraph(content=[TextRun(text=cell_text)])]) for cell_text in row_data]
-                rich_rows.append(TableRow(cells=cells))
-            bbox = table.bbox
-            box = Box(x=bbox[0], y=bbox[1], width=bbox[2] - bbox[0], height=bbox[3] - bbox[1]) if len(bbox) == 4 else None
-            blocks.append(RichTable(rows=rich_rows, box=box))
-
         sections.append(
             Section(
                 blocks=blocks,
+                headers=headers,
+                footers=footers,
                 page=PageSettings(
                     width=Length(page.width),
                     height=Length(page.height),
@@ -231,6 +250,48 @@ def extract_pdf_model(
         source_format="pdf",
         mode=ConversionMode.BALANCED,
     )
+
+
+def _pdf_box(value: Any) -> Box | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 4:
+        return None
+    x0, y0, x1, y1 = (float(item) for item in value)
+    return Box(x=x0, y=y0, width=max(0.0, x1 - x0), height=max(0.0, y1 - y0))
+
+
+def _pdf_text_runs(source_block: Any, fallback_text: str, meta: dict[str, Any]) -> list[TextRun]:
+    if source_block is not None:
+        runs: list[TextRun] = []
+        for line_index, line in enumerate(source_block.lines):
+            if line_index:
+                runs.append(TextRun(text="\n"))
+            for span in line.spans:
+                flags = int(span.flags)
+                runs.append(
+                    TextRun(
+                        text=span.text,
+                        style=TextStyle(
+                            font_family=span.font or None,
+                            font_size=Length(span.size) if span.size else None,
+                            bold=bool(flags & 16),
+                            italic=bool(flags & 2),
+                            superscript=bool(flags & 1),
+                        ),
+                    )
+                )
+        if runs:
+            return runs
+    font_spans = meta.get("font_spans") or []
+    first = font_spans[0] if font_spans else {}
+    flags = int(first.get("flags", 0))
+    style = TextStyle(
+        font_family=first.get("font") or None,
+        font_size=Length(float(first["size"])) if first.get("size") else None,
+        bold=bool(flags & 16),
+        italic=bool(flags & 2),
+        superscript=bool(flags & 1),
+    )
+    return [TextRun(text=fallback_text, style=style)]
 
 
 @operation(
@@ -265,65 +326,3 @@ def extract_pptx_model(
     from textalchemy.formats.pptx import read_pptx_model
 
     return read_pptx_model(doc.path, mode=mode)
-
-
-def _merge_ocr_into_geometry(
-    geometry: "PdfGeometryDocument",  # noqa: F821
-    ocr_pages: "list[OcrPageResult]",  # noqa: F821
-) -> "PdfGeometryDocument":  # noqa: F821
-    """Merge OCR results into PDF geometry text blocks per page."""
-    from textalchemy.formats.pdf_geometry import (
-        PdfGeometryDocument as GeoDoc,
-    )
-    from textalchemy.formats.pdf_geometry import (
-        PdfLineGeometry,
-        PdfPageGeometry,
-        PdfSpanGeometry,
-        PdfTextBlockGeometry,
-    )
-    from textalchemy.formats.pdf_ocr_merge import _merge_text_layer_and_ocr_page
-    from textalchemy.formats.pdf_ocr_types import OcrPageResult
-
-    new_pages: list[PdfPageGeometry] = []
-    for page_index, page in enumerate(geometry.pages):
-        ocr_page = ocr_pages[page_index] if page_index < len(ocr_pages) else OcrPageResult()
-
-        merged = _merge_text_layer_and_ocr_page(
-            list(page.text_blocks),
-            list(page.tables),
-            ocr_page,
-            page.number,
-            page.width,
-            page.height,
-        )
-
-        text_blocks: list[PdfTextBlockGeometry] = []
-        for idx, mb in enumerate(merged):
-            span = PdfSpanGeometry(
-                text=mb.text,
-                bbox=mb.bbox,
-                origin=(mb.bbox[0], mb.bbox[1]),
-            )
-            line = PdfLineGeometry(spans=(span,), bbox=mb.bbox)
-            text_blocks.append(PdfTextBlockGeometry(lines=(line,), bbox=mb.bbox, number=idx))
-
-        new_pages.append(
-            PdfPageGeometry(
-                number=page.number,
-                width=page.width,
-                height=page.height,
-                rotation=page.rotation,
-                text_blocks=tuple(text_blocks),
-                image_blocks=page.image_blocks,
-                tables=page.tables,
-                extracted_images=page.extracted_images,
-                vector_drawings=page.vector_drawings,
-            )
-        )
-
-    return GeoDoc(
-        pages=new_pages,
-        metadata=geometry.metadata,
-        engine=geometry.engine,
-        warnings=list(geometry.warnings),
-    )

@@ -107,8 +107,36 @@ class TestExtractPdfModel:
         blocks = model.sections[0].blocks
         tables = [b for b in blocks if isinstance(b, Table)]
         paragraphs = [b for b in blocks if isinstance(b, Paragraph) and any(isinstance(r, TextRun) for r in b.content)]
-        assert len(tables) >= 0
+        assert len(tables) == 1
         assert len(paragraphs) >= 1
+        paragraph_text = " ".join(run.text for block in paragraphs for run in block.content if isinstance(run, TextRun))
+        assert "A1" not in paragraph_text
+        assert isinstance(blocks[0], Paragraph)
+        assert isinstance(blocks[1], Table)
+
+    def test_maps_pymupdf_font_flags_correctly(self, tmp_path):
+        path = tmp_path / "font-flags.pdf"
+        pdf = fitz.open()
+        page = pdf.new_page(width=300, height=400)
+        page.insert_text((36, 48), "Bold", fontname="Helvetica-Bold", fontsize=12)
+        page.insert_text((36, 72), "Italic", fontname="Helvetica-Oblique", fontsize=12)
+        pdf.save(path)
+        pdf.close()
+
+        model = extract_pdf_model(doc=ingest_file(path=path))
+        runs = [
+            run
+            for block in model.sections[0].blocks
+            if isinstance(block, Paragraph)
+            for run in block.content
+            if isinstance(run, TextRun)
+        ]
+        bold = next(run for run in runs if run.text == "Bold")
+        italic = next(run for run in runs if run.text == "Italic")
+        assert bold.style.bold is True
+        assert bold.style.italic is False
+        assert italic.style.bold is False
+        assert italic.style.italic is True
 
     def test_no_document_raises_type_error(self):
         with pytest.raises(TypeError):
@@ -247,6 +275,13 @@ class TestExtractPdfModelWithOcr:
         )
         assert "OCR discovered text" in text
         assert "Existing text layer" in text
+        ocr_paragraph = next(
+            block
+            for block in blocks
+            if isinstance(block, Paragraph) and "OCR discovered text" in block.plain_text
+        )
+        assert ocr_paragraph.properties["source"] == "ocr"
+        assert ocr_paragraph.properties["confidence"] == 0.85
 
     def test_use_ocr_no_engine_falls_back_gracefully(self, tmp_path):
         pdf = _make_pdf(tmp_path / "ocr_fallback.pdf", "Fallback text")

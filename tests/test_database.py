@@ -139,6 +139,9 @@ class TestDatabase:
             doi="10.2000/updated",
             isbn="978-5-1111-1111-1",
             url="https://updated.com",
+            journal="Новый журнал",
+            publisher="Новое издательство",
+            city="Москва",
             raw_text="Updated raw text",
         )
         success = db.update_item(added.index, updated)
@@ -150,6 +153,9 @@ class TestDatabase:
         assert retrieved.title == "Обновлённая работа"
         assert retrieved.year == 2025
         assert retrieved.doc_type == "book"
+        assert retrieved.journal == "Новый журнал"
+        assert retrieved.publisher == "Новое издательство"
+        assert retrieved.city == "Москва"
 
     def test_update_item_not_found(self, db, sample_item):
         success = db.update_item(999, sample_item)
