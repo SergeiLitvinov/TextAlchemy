@@ -189,6 +189,7 @@ def _load_initial(request: ConversionRequest) -> Path | DocumentModel:
 def _built_in_backends() -> dict[str, ConversionBackend]:
     return {
         "docx.model": ImporterBackend("docx.model", _read_docx),
+        "pptx.model": ImporterBackend("pptx.model", _read_pptx),
         "model.docx": ExporterBackend("model.docx", _write_docx),
         "model.html": ExporterBackend("model.html", _write_html),
         "model.pdf": ExporterBackend("model.pdf", _write_pdf),
@@ -213,6 +214,12 @@ def _read_docx(source: Path) -> DocumentModel:
     from textalchemy.formats.docx import read_docx_model
 
     return read_docx_model(source)
+
+
+def _read_pptx(source: Path) -> DocumentModel:
+    from textalchemy.formats.pptx import read_pptx_model
+
+    return read_pptx_model(source)
 
 
 def _write_docx(model: DocumentModel, output: Path) -> ConversionReport:

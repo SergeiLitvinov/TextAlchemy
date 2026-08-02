@@ -72,7 +72,7 @@ def extract_text(*, doc: Document) -> Text:
     )
 
 
-__all__ = ["extract_text", "extract_pdf_model"]
+__all__ = ["extract_text", "extract_pdf_model", "extract_pptx_model"]
 
 
 @operation(
@@ -231,6 +231,40 @@ def extract_pdf_model(
         source_format="pdf",
         mode=ConversionMode.BALANCED,
     )
+
+
+@operation(
+    "extract.pptx_model",
+    input_type="Document",
+    output_type="DocumentModel",
+    input_param="doc",
+    description="PPTX → DocumentModel (слайды, фигуры, таблицы, изображения, диаграммы, формулы).",
+    tags=["extract", "pptx", "document-model"],
+)
+def extract_pptx_model(
+    *,
+    doc: Document,
+    mode: ConversionMode = ConversionMode.BALANCED,
+) -> DocumentModel:
+    """Импортировать PPTX в богатую модель через ``read_pptx_model``.
+
+    Args:
+        doc: Документ PPTX.
+        mode: Режим конвертации (editable/faithful/balanced).
+
+    Returns:
+        ``DocumentModel`` со слайдами в качестве секций.
+    """
+    if doc.format != DocFormat.PPTX:
+        return DocumentModel(
+            sections=[],
+            source_format=doc.format.value,
+            metadata={"engine": "none", "warnings": [f"extract.pptx_model: not a PPTX: {doc.format.value!r}"]},
+        )
+
+    from textalchemy.formats.pptx import read_pptx_model
+
+    return read_pptx_model(doc.path, mode=mode)
 
 
 def _merge_ocr_into_geometry(

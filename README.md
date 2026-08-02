@@ -67,6 +67,7 @@ Final: \documentclass[12pt,a4paper]{article}...
 | `ingest.file` | path | `Document` | Открыть файл, посчитать SHA-256 |
 | `extract.text` | `Document` | `Text` | Универсальный ридер (PDF/DOCX/TXT/DjVu/EPUB) |
 | `extract.pdf_model` | `Document` (PDF) | `DocumentModel` | PDF → богатая модель (геометрия, таблицы, изображения, вектор) + опционально OCR |
+| `extract.pptx_model` | `Document` (.pptx) | `DocumentModel` | PPTX → богатая модель (слайды, фигуры, таблицы, изображения, диаграммы, формулы OMML) |
 | `extract.emails` | `Document` | `list[str]` | Извлечение email: текстовый слой PDF + OCR |
 | `match.bibliography` | `Text`, `Document`, BibItem[] | `Match` | Сопоставить документ со списком записей |
 | `match.files` | path, BibItem[] | Match[] | Батч-матчинг директории; копирует в `output_dir` |
@@ -109,6 +110,19 @@ Final: \documentclass[12pt,a4paper]{article}...
 геометрический анализ PyMuPDF (`formats/pdf_geometry.py`, `pdf_layout.py`, `pdf_classify.py`)
 с последующим слиянием OCR (`formats/pdf_ocr_merge.py`). В конвейере это доступно как
 `extract.pdf_model` (→ `DocumentModel`) с параметрами `use_ocr`, `ocr_backend`, `handwriting`, `use_gpu`.
+
+### PPTX-импорт на общей модели
+
+`extract.pptx_model` (→ `DocumentModel`) переводит презентацию в богатую модель:
+слайды → секции, фигуры → блоки с абсолютной геометрией (EMU → pt), текст → абзацы
+с форматированием и гиперссылками, OMML-формулы, изображения (в ресурсы модели),
+таблицы, диаграммы (данные в `properties["pptx"]["chart"]`), фон и заметки.
+Группы фигур разворачиваются с учётом трансформации `off/ext/chOff/chExt`.
+
+Благодаря общему `DocumentModel` маршруты `PPTX → HTML/DOCX/PDF` проходят через
+capability-планировщик: `pptx.model → model.html` (общий HTML-рендерер),
+`pptx.model → model.docx` и т.д. Легаси-конвертер `pptx.html` остаётся как
+fallback-маршрут повышенной стоимости.
 
 ### Извлечение email
 
@@ -184,7 +198,7 @@ src/textalchemy/
 ├── ooxml/             # общий OPC package graph и relationships для DOCX/PPTX
 ├── pipeline/          # стадии конвейера
 │   ├── ingest.py      # @operation("ingest.file")
-│   ├── extract.py     # @operation("extract.text", "extract.pdf_model")
+│   ├── extract.py     # @operation("extract.text", "extract.pdf_model", "extract.pptx_model")
 │   ├── emails_op.py   # @operation("extract.emails", "render.emails.*")
 │   ├── match.py       # @operation("match.bibliography")
 │   ├── match_files.py # @operation("match.files") — батч-матчинг
@@ -196,8 +210,7 @@ src/textalchemy/
 │   ├── signals.py     # автор/title/год/doi сигналы для матчинга
 │   └── runner.py      # YAML/TOML/JSON → последовательность операций
 ├── convert/           # PDF→DOCX (3 бэкенда + FanOut), DOCX→LaTeX, PPTX→HTML,
-│                      #   DocumentModel importer/exporter'ы, capability registry + executor
-├── quality/           # визуальные метрики и perceptual regression
+│                      #   DocumentModel importer/exporter'ы, capability registry + executor├── quality/           # визуальные метрики и perceptual regression
 ├── extract/           # legacy: docx→text/latex, emails, fix_encoding
 ├── organize/          # legacy: bibparser, match, gost
 ├── recognize/         # OCR (3 бэкенда) / layout / classifier / emails
@@ -225,7 +238,7 @@ pip install -e ".[ocr,web,dev]"      # полная (OCR + веб + разраб
 ```bash
 uv sync --all-extras
 uv run ruff check        # линтинг
-uv run pytest tests/     # все тесты (633 шт.)
+uv run pytest tests/     # все тесты (653 шт.)
 uv run pytest --cov=textalchemy  # coverage
 uv run textalchemy run --list    # зарегистрированные операции
 ```

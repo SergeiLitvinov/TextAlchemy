@@ -25,9 +25,7 @@ def test_executor_converts_docx_to_model_without_intermediate_file(tmp_path):
     document.add_paragraph("Universal route")
     document.save(source)
 
-    report = ConversionExecutor().execute(
-        ConversionRequest(source, output, DocFormat.DOCX, DocFormat.MODEL)
-    )
+    report = ConversionExecutor().execute(ConversionRequest(source, output, DocFormat.DOCX, DocFormat.MODEL))
 
     assert report.success
     assert report.metrics["executed_steps"] == ["docx.model"]
@@ -254,3 +252,67 @@ def test_pdf_backend_falls_back_after_runtime_failure(tmp_path, monkeypatch):
     assert output.read_bytes() == b"docx"
     assert report.metrics == {"engine": "pymupdf", "requested_engine": "pdf2docx"}
     assert report.issues[0].feature == "engine-fallback"
+
+
+def _rich_pptx(path: Path) -> Path:
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+    box = slide.shapes.add_textbox(Inches(1), Inches(0.5), Inches(6), Inches(0.6))
+    box.text_frame.text = "Model-based PPTX body"
+    presentation.save(path)
+    return path
+
+
+def test_executor_converts_pptx_to_model(tmp_path):
+    source = _rich_pptx(tmp_path / "source.pptx")
+    output = tmp_path / "model.json"
+
+    report = ConversionExecutor().execute(ConversionRequest(source, output, DocFormat.PPTX, DocFormat.MODEL))
+
+    assert report.success
+    assert report.metrics["executed_steps"] == ["pptx.model"]
+    model = load_document(output)
+    assert model.source_format == "pptx"
+
+
+def test_executor_runs_pptx_model_html_route(tmp_path):
+    source = _rich_pptx(tmp_path / "source.pptx")
+    output = tmp_path / "result.html"
+
+    report = ConversionExecutor().execute(
+        ConversionRequest(
+            source,
+            output,
+            DocFormat.PPTX,
+            DocFormat.HTML,
+            features=frozenset({DocumentFeature.TEXT}),
+        )
+    )
+
+    assert report.success
+    assert report.metrics["executed_steps"] == ["pptx.model", "model.html"]
+    assert "Model-based PPTX body" in output.read_text(encoding="utf-8")
+
+
+def test_executor_runs_pptx_model_docx_route(tmp_path):
+    source = _rich_pptx(tmp_path / "source.pptx")
+    output = tmp_path / "result.docx"
+
+    report = ConversionExecutor().execute(
+        ConversionRequest(
+            source,
+            output,
+            DocFormat.PPTX,
+            DocFormat.DOCX,
+            features=frozenset({DocumentFeature.TEXT}),
+        )
+    )
+
+    assert report.success
+    assert report.metrics["executed_steps"] == ["pptx.model", "model.docx"]
+    assert output.is_file()
+    document = Document(str(output))
+    assert "Model-based PPTX body" in "\n".join(p.text for p in document.paragraphs)

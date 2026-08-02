@@ -80,6 +80,7 @@ def test_cli_help_recognize():
 
 # ── init ───────────────────────────────────────────
 
+
 def test_cli_init(tmp_path):
     out = tmp_path / "test_config.json"
     ret = main(["init", "-o", str(out)])
@@ -91,12 +92,14 @@ def test_cli_init(tmp_path):
 
 # ── extract ────────────────────────────────────────
 
+
 def test_cli_extract_no_input(capsys):
     ret = main(["extract", "nonexistent.docx"])
     assert ret != 0
 
 
 # ── convert ────────────────────────────────────────
+
 
 def test_cli_convert_no_input(capsys):
     ret = main(["convert", "-i", "nonexistent_dir"])
@@ -118,6 +121,7 @@ def test_cli_convert_dry_run_json(tmp_path):
 
 
 # ── stats ──────────────────────────────────────────
+
 
 def test_cli_stats(capsys):
     ret = main(["stats"])
@@ -143,6 +147,7 @@ def test_cli_stats_with_bibliography(tmp_path):
 
 
 # ── export ─────────────────────────────────────────
+
 
 def test_cli_export_json(tmp_path):
     bib = tmp_path / "input.txt"
@@ -173,6 +178,7 @@ def test_cli_export_gost(tmp_path):
 
 # ── gost ───────────────────────────────────────────
 
+
 def test_cli_gost(tmp_path):
     bib = tmp_path / "input.txt"
     bib.write_text("1. Author A. Title.", encoding="utf-8")
@@ -195,6 +201,7 @@ def test_cli_gost_json(tmp_path, capsys):
 
 
 # ── match ──────────────────────────────────────────
+
 
 def test_cli_match_dry_run(tmp_path):
     src = tmp_path / "literature_files"
@@ -232,6 +239,7 @@ def test_cli_match_no_files(tmp_path, monkeypatch):
 
 
 # ── generate ───────────────────────────────────────
+
 
 def test_cli_generate_list(capsys):
     ret = main(["generate", "--list"])
@@ -403,6 +411,7 @@ def test_cli_generate_pdf_from_same_template_data_and_schema(tmp_path, capsys):
 
 # ── inspect ────────────────────────────────────────
 
+
 def test_cli_inspect_docx_json_and_report_file(tmp_path, capsys):
     from docx import Document
 
@@ -435,7 +444,7 @@ def test_cli_plan_conversion_route_json(capsys):
 
 
 def test_cli_plan_reports_missing_route(capsys):
-    ret = main(["plan", "pptx", "docx", "--json"])
+    ret = main(["plan", "epub", "docx", "--json"])
 
     payload = json.loads(capsys.readouterr().out)
     assert ret == 1
@@ -504,6 +513,7 @@ def test_cli_inspect_compare_reports_structural_loss(tmp_path, capsys):
 
 # ── recognize ──────────────────────────────────────
 
+
 def test_cli_recognize_no_file(capsys):
     ret = main(["recognize", "nonexistent.pdf"])
     assert ret == 1
@@ -524,6 +534,7 @@ def test_cli_recognize_with_output(tmp_path):
 
 
 # ── bibtex ─────────────────────────────────────────
+
 
 def test_cli_bibtex(tmp_path):
     src = tmp_path / "literature_files"
@@ -549,6 +560,7 @@ def test_cli_bibtex_json(tmp_path, capsys):
 
 # ── unknown command ────────────────────────────────
 
+
 def test_cli_unknown_command():
     with pytest.raises(SystemExit) as exc:
         main(["nonexistent"])
@@ -556,6 +568,7 @@ def test_cli_unknown_command():
 
 
 # ── completion ──────────────────────────────────────
+
 
 def test_cli_completion_bash():
     ret = main(["completion", "bash"])
