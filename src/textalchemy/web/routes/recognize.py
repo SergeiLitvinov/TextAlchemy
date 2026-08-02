@@ -1,14 +1,11 @@
 """API OCR-распознавания."""
 from __future__ import annotations
 
-import shutil
-import tempfile
-from pathlib import Path
-
 from fastapi import File, Form, UploadFile
 
 from textalchemy.recognize import OcrEngine
 from textalchemy.web.app import app
+from textalchemy.web.workspace import create_web_workspace, save_upload
 
 
 @app.post("/api/recognize")
@@ -19,10 +16,9 @@ async def api_recognize(
     mode: str = Form("printed"),
 ):
     fname = file.filename or "document.pdf"
-    workdir = Path(tempfile.mkdtemp(prefix="textalchemy_web_"))
-    tmp = workdir / fname
-    tmp.write_bytes(await file.read())
+    workspace = create_web_workspace()
     try:
+        tmp = await save_upload(workspace, file, fallback=fname)
         engine = OcrEngine(languages=lang.split("+"), use_gpu=gpu)
         if engine.is_available:
             handwriting = mode == "handwriting"
@@ -34,4 +30,4 @@ async def api_recognize(
     except Exception as e:  # noqa: BLE001
         return {"success": False, "error": str(e)}
     finally:
-        shutil.rmtree(workdir, ignore_errors=True)
+        workspace.cleanup()

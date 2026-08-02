@@ -3,6 +3,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from textalchemy import __version__
+from textalchemy.core.artifacts import ArtifactWorkspace
 from textalchemy.core.diagnostics import ConversionReport
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.types import DocFormat
@@ -290,6 +291,46 @@ def test_api_convert_rejects_unknown_mode():
         data={"source_format": "pdf", "target_format": "docx", "mode": "impossible"},
     )
     assert response.status_code == 400
+
+
+def test_api_convert_rejects_oversized_upload_and_cleans_workspace(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "textalchemy.web.routes.convert.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path, max_bytes=5),
+    )
+
+    response = client.post(
+        "/api/convert",
+        files={"file": ("article.pdf", b"123456", "application/pdf")},
+        data={"source_format": "pdf", "target_format": "docx"},
+    )
+
+    assert response.status_code == 413
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_api_convert_sanitizes_uploaded_path(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_execute(_executor, request):
+        captured["source"] = request.input_path
+        request.output_path.write_bytes(b"converted")
+        return ConversionReport(request.output_path)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    monkeypatch.setattr(
+        "textalchemy.web.routes.convert.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+    response = client.post(
+        "/api/convert",
+        files={"file": (r"..\..\article.pdf", b"%PDF-test", "application/pdf")},
+        data={"source_format": "pdf", "target_format": "docx"},
+    )
+
+    assert response.status_code == 200
+    assert captured["source"].name == "article.pdf"
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_api_convert_legacy_format_remains_supported(monkeypatch):

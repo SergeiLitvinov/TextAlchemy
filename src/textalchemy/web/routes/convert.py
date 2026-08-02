@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import base64
 import shutil
-import tempfile
 import uuid
 from pathlib import Path
 
@@ -12,10 +11,12 @@ from fastapi import BackgroundTasks, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
 from textalchemy.convert.executor import ConversionExecutor, ConversionRequest, infer_format
+from textalchemy.core.artifacts import ArtifactWorkspace
 from textalchemy.core.conversion_graph import ConversionPlan
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.types import DocFormat
 from textalchemy.web.app import _register_task, _tasks, app
+from textalchemy.web.workspace import create_web_workspace, save_upload
 
 _LEGACY_CONVERSIONS = {
     "pdf": (DocFormat.PDF, DocFormat.DOCX),
@@ -142,8 +143,8 @@ def _run_convert(
     source: DocFormat,
     target: DocFormat,
     mode: ConversionMode,
+    workspace: ArtifactWorkspace,
 ) -> None:
-    workdir = source_path.parent
     try:
         report = ConversionExecutor().execute(
             ConversionRequest(
@@ -162,6 +163,7 @@ def _run_convert(
             )
             _register_task(task_id, {"status": "error", "error": error, "report": report_payload})
             return
+        workspace.validate_artifact(output_path)
         content, filename, media_type = _artifact_payload(output_path, source_path.stem, target)
         _register_task(
             task_id,
@@ -177,7 +179,7 @@ def _run_convert(
     except Exception as error:  # noqa: BLE001 - background task must expose a stable status
         _register_task(task_id, {"status": "error", "error": str(error), "report": None})
     finally:
-        shutil.rmtree(workdir, ignore_errors=True)
+        workspace.cleanup()
 
 
 @app.get("/api/convert/capabilities")
@@ -196,10 +198,9 @@ async def api_convert(
     tool: str = Form(""),  # retained for compatibility with older clients
 ):
     del tool
-    workdir = Path(tempfile.mkdtemp(prefix="textalchemy_web_"))
-    source_path = workdir / Path(file.filename or "document").name
-    source_path.write_bytes(await file.read())
+    workspace = create_web_workspace()
     try:
+        source_path = await save_upload(workspace, file, fallback="document")
         source, target = _resolve_conversion(
             source_path,
             source_format=source_format,
@@ -207,25 +208,28 @@ async def api_convert(
             legacy_format=fmt,
         )
         conversion_mode = ConversionMode(mode)
+    except HTTPException:
+        workspace.cleanup()
+        raise
     except ValueError as error:
-        shutil.rmtree(workdir, ignore_errors=True)
+        workspace.cleanup()
         raise HTTPException(status_code=400, detail=str(error)) from error
 
     plan = ConversionExecutor().plan(source, target, mode=conversion_mode)
     if plan is None or not _web_plan_supported(plan):
-        shutil.rmtree(workdir, ignore_errors=True)
+        workspace.cleanup()
         raise HTTPException(
             status_code=400,
             detail=f"Маршрут {source.value} → {target.value} ({conversion_mode.value}) недоступен",
         )
 
     if target not in _OUTPUT_SUFFIXES:
-        shutil.rmtree(workdir, ignore_errors=True)
+        workspace.cleanup()
         raise HTTPException(status_code=400, detail=f"Формат результата {target.value} пока недоступен в Web UI")
     output_path = (
-        workdir / f"{source_path.stem}-html"
+        workspace.artifact_path(f"{source_path.stem}-html")
         if source is DocFormat.PPTX and target is DocFormat.HTML
-        else workdir / f"{source_path.stem}{_OUTPUT_SUFFIXES[target]}"
+        else workspace.artifact_path(f"{source_path.stem}{_OUTPUT_SUFFIXES[target]}")
     )
     task_id = str(uuid.uuid4())
     _register_task(
@@ -239,7 +243,7 @@ async def api_convert(
             "mode": conversion_mode.value,
         },
     )
-    background_tasks.add_task(_run_convert, task_id, source_path, output_path, source, target, conversion_mode)
+    background_tasks.add_task(_run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace)
     return {
         "success": True,
         "task_id": task_id,

@@ -1,5 +1,6 @@
 """Базовые типы и утилиты ядра."""
 
+from textalchemy.core.artifacts import ArtifactLimitError, ArtifactWorkspace
 from textalchemy.core.conversion_graph import (
     CapabilityRegistry,
     ConversionPlan,
@@ -79,6 +80,8 @@ from textalchemy.core.types import (
 )
 
 __all__ = [
+    "ArtifactLimitError",
+    "ArtifactWorkspace",
     "DocFormat",
     "BlockType",
     "Document",

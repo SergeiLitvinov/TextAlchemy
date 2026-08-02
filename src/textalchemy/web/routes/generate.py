@@ -2,8 +2,6 @@
 from __future__ import annotations
 
 import json
-import shutil
-import tempfile
 from pathlib import Path
 
 from fastapi import BackgroundTasks, Form
@@ -11,6 +9,7 @@ from fastapi.responses import FileResponse
 
 from textalchemy.generate import generate_document, list_templates
 from textalchemy.web.app import app
+from textalchemy.web.workspace import create_web_workspace
 
 
 @app.get("/api/generate/templates")
@@ -30,16 +29,17 @@ async def api_generate(
         parsed = json.loads(params) if params else {}
     except json.JSONDecodeError as e:
         return {"success": False, "error": f"Некорректный JSON параметров: {e}"}
-    workdir = Path(tempfile.mkdtemp(prefix="textalchemy_web_"))
-    out_path = workdir / Path(output).name
+    workspace = create_web_workspace()
+    out_path = workspace.artifact_path(Path(output).name, fallback="output.docx")
     try:
         result = generate_document(template, out_path, parsed)
-        background_tasks.add_task(shutil.rmtree, workdir, ignore_errors=True)
+        workspace.validate_artifact(result)
+        background_tasks.add_task(workspace.cleanup)
         return FileResponse(
             str(result),
             filename=out_path.name,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
     except Exception as e:  # noqa: BLE001
-        shutil.rmtree(workdir, ignore_errors=True)
+        workspace.cleanup()
         return {"success": False, "error": str(e)}
