@@ -241,7 +241,7 @@ pip install -e ".[ocr,web,dev]"      # полная (OCR + веб + разраб
 ```bash
 uv sync --all-extras
 uv run ruff check        # линтинг
-uv run pytest tests/     # все тесты (660 шт.)
+uv run pytest tests/     # все тесты (665 шт.)
 uv run pytest --cov=textalchemy  # coverage
 uv run textalchemy run --list    # зарегистрированные операции
 ```

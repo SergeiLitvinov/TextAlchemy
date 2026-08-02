@@ -38,7 +38,23 @@ from textalchemy.core.exceptions import GenerateError
 
 _CONTROL_RE = re.compile(r"^\s*{%\s*(if|for|else|endif|endfor)\b(.*?)%}\s*$", re.DOTALL)
 _VALUE_RE = re.compile(r"^\s*{{\s*([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*}}\s*$")
+_TEMPLATE_BUILTINS = frozenset({"toc", "bibliography", "id", "ref"})
+_TOKEN_RE = re.compile(r"⟪TA:(REF|ID|TOC|BIB)(?:\|([^⟫]+))?⟫")
+_KIND_LABELS = {"fig": "Рис. ", "tbl": "Табл. ", "sec": ""}
 T = TypeVar("T")
+
+
+def _token(kind: str, payload: str = "") -> str:
+    return f"⟪TA:{kind}|{payload}⟫" if payload else f"⟪TA:{kind}⟫"
+
+
+def _template_helpers() -> dict[str, Any]:
+    return {
+        "toc": lambda: _token("TOC"),
+        "bibliography": lambda: _token("BIB"),
+        "id": lambda label: _token("ID", str(label)),
+        "ref": lambda label: _token("REF", str(label)),
+    }
 
 
 @dataclass(frozen=True)
@@ -101,10 +117,12 @@ def render_document_template(
         autoescape=False,
         undefined=StrictUndefined if strict else Undefined,
     )
+    context = dict(data)
+    context.update(_template_helpers())
     model = copy.deepcopy(template)
     renderer = _Renderer(model, environment)
     try:
-        model.metadata = renderer.render_mapping(model.metadata, data)
+        model.metadata = renderer.render_mapping(model.metadata, context)
         for section in model.sections:
             for collection_name in (
                 "blocks",
@@ -115,7 +133,8 @@ def render_document_template(
                 "even_page_headers",
                 "even_page_footers",
             ):
-                setattr(section, collection_name, renderer.render_blocks(getattr(section, collection_name), data))
+                setattr(section, collection_name, renderer.render_blocks(getattr(section, collection_name), context))
+        _apply_auto_content(model, data)
     except GenerateError:
         raise
     except Exception as error:
@@ -301,7 +320,7 @@ class _Inspector:
         except TemplateSyntaxError as error:
             self.errors.append(f"{location}: {error.message}")
             return
-        for name in sorted(meta.find_undeclared_variables(syntax) - bound):
+        for name in sorted(meta.find_undeclared_variables(syntax) - bound - _TEMPLATE_BUILTINS):
             self.references.setdefault(name, []).append(location)
 
     def inspect_mapping(self, value: Any, location: str, bound: set[str]) -> None:
@@ -506,6 +525,204 @@ def _guess_media_type(filename: str) -> str:
     if not media_type or not media_type.startswith("image/"):
         raise GenerateError(f"Cannot determine image media type for {filename!r}")
     return media_type
+
+
+def _apply_auto_content(model: DocumentModel, data: dict[str, Any]) -> None:
+    """Разрешить ``{{ toc() }}``, ``{{ bibliography() }}``, ``{{ id(...) }}`` и ``{{ ref(...) }}``.
+
+    Запускается после основного рендера, когда структура документа (заголовки,
+    подписи) уже известна: маркеры становятся токенами, которые здесь заменяются
+    оглавлением, списком литературы и номерами перекрёстных ссылок.
+    """
+    targets: dict[str, str] = {}
+    references: dict[str, str] = {}
+    counters: dict[str, int] = {}
+    toc_markers: list[Paragraph] = []
+    bib_markers: list[Paragraph] = []
+    headings: list[tuple[int, str, int]] = []
+    for section_index, section in enumerate(model.sections, start=1):
+        _scan_auto_blocks(section.blocks, section_index, targets, references, counters, toc_markers, bib_markers, headings)
+    for section in model.sections:
+        _resolve_ref_blocks(section.blocks, targets, references)
+    toc_paragraphs = _build_toc(headings) if toc_markers else []
+    bib_paragraphs = _build_bibliography(data) if bib_markers else []
+    for section in model.sections:
+        section.blocks = _replace_markers(section.blocks, toc_markers, toc_paragraphs, bib_markers, bib_paragraphs)
+
+
+def _scan_auto_blocks(
+    blocks: list[Block],
+    section_index: int,
+    targets: dict[str, str],
+    references: dict[str, str],
+    counters: dict[str, int],
+    toc_markers: list[Paragraph],
+    bib_markers: list[Paragraph],
+    headings: list[tuple[int, str, int]],
+) -> None:
+    for block in blocks:
+        if isinstance(block, Table):
+            for row in block.rows:
+                for cell in row.cells:
+                    _scan_auto_blocks(
+                        cell.blocks, section_index, targets, references, counters, toc_markers, bib_markers, headings
+                    )
+            continue
+        if not isinstance(block, Paragraph):
+            continue
+        for run in block.content:
+            if isinstance(run, TextRun):
+                _record_id_targets(run.text, targets, references, counters)
+        plain = _TOKEN_RE.sub(_plain_replacer(targets, references), block.plain_text).strip()
+        marker = _TOKEN_RE.fullmatch(plain)
+        if marker is not None:
+            if marker.group(1) == "TOC":
+                toc_markers.append(block)
+            elif marker.group(1) == "BIB":
+                bib_markers.append(block)
+            continue
+        level = _heading_level(block)
+        if level is not None:
+            headings.append((level, plain, section_index))
+
+
+def _record_id_targets(text: str, targets: dict[str, str], references: dict[str, str], counters: dict[str, int]) -> None:
+    for match in _TOKEN_RE.finditer(text):
+        if match.group(1) != "ID" or not match.group(2):
+            continue
+        label = match.group(2)
+        if label in targets:
+            continue
+        kind = label.split(":", 1)[0] if ":" in label else "item"
+        number = counters.get(kind, 0) + 1
+        counters[kind] = number
+        targets[label] = str(number)
+        references[label] = f"{_KIND_LABELS.get(kind, '')}{number}"
+
+
+def _plain_replacer(targets: dict[str, str], references: dict[str, str]):
+    def replace(match: re.Match[str]) -> str:
+        label = match.group(2)
+        if match.group(1) == "ID" and label and label in targets:
+            return targets[label]
+        if label and label in references:
+            return references[label]
+        return match.group(0)
+
+    return replace
+
+
+def _resolve_ref_blocks(blocks: list[Block], targets: dict[str, str], references: dict[str, str]) -> None:
+    for block in blocks:
+        if isinstance(block, Table):
+            for row in block.rows:
+                for cell in row.cells:
+                    _resolve_ref_blocks(cell.blocks, targets, references)
+            continue
+        if not isinstance(block, Paragraph):
+            continue
+        for run in block.content:
+            if not isinstance(run, TextRun) or "TA:" not in run.text:
+                continue
+            run.text = _resolve_ref_text(run.text, targets, references)
+
+
+def _resolve_ref_text(text: str, targets: dict[str, str], references: dict[str, str]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        label = match.group(2)
+        if match.group(1) == "REF" and (label is None or label not in references):
+            raise GenerateError(f"Undefined cross-reference {label!r}")
+        if match.group(1) == "ID" and label and label in targets:
+            return targets[label]
+        if label and label in references:
+            return references[label]
+        return match.group(0)
+
+    return _TOKEN_RE.sub(replace, text)
+
+
+def _heading_level(block: Paragraph) -> int | None:
+    properties = block.properties or {}
+    level = properties.get("heading_level")
+    if isinstance(level, int) and 1 <= level <= 6:
+        return level
+    style = str(properties.get("style_name") or properties.get("style_id") or "").replace("_", " ")
+    match = re.match(r"^(?:heading|заголовок)\s*([1-6])$", style, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _build_toc(headings: list[tuple[int, str, int]]) -> list[Paragraph]:
+    paragraphs: list[Paragraph] = []
+    for level, text, page in headings:
+        indent = "    " * (level - 1)
+        dots = "." * max(4, 72 - len(text) - len(str(page)))
+        paragraphs.append(
+            Paragraph(
+                content=[TextRun(text=f"{indent}{text} {dots} {page}")],
+                properties={"toc_entry": {"level": level, "page": page}},
+            )
+        )
+    return paragraphs
+
+
+def _build_bibliography(data: dict[str, Any]) -> list[Paragraph]:
+    raw = data.get("bibliography") or data.get("references") or []
+    from textalchemy.organize.bibliography import BibItem
+
+    items: list[Any] = []
+    for item in raw:
+        if isinstance(item, BibItem):
+            items.append(item)
+        elif isinstance(item, dict):
+            items.append(BibItem.from_dict(item))
+    paragraphs: list[Paragraph] = []
+    for index, item in enumerate(items, start=1):
+        paragraphs.append(
+            Paragraph(
+                content=[TextRun(text=f"[{index}] {_format_reference(item)}")],
+                properties={"bibliography_item": {"index": index}},
+            )
+        )
+    if not items:
+        paragraphs.append(Paragraph(content=[TextRun("(список литературы пуст)")]))
+    return paragraphs
+
+
+def _format_reference(item: Any) -> str:
+    try:
+        from textalchemy.organize.gost import GostFormatter
+
+        text = GostFormatter().format_item(item).strip()
+    except Exception:  # noqa: BLE001
+        text = ""
+    if text:
+        return text
+    parts = []
+    if getattr(item, "authors", None):
+        parts.append(", ".join(item.authors))
+    if getattr(item, "title", None):
+        parts.append(item.title)
+    if getattr(item, "year", None):
+        parts.append(str(item.year))
+    return " ".join(parts)
+
+
+def _replace_markers(
+    blocks: list[Block],
+    toc_markers: list[Paragraph],
+    toc_paragraphs: list[Paragraph],
+    bib_markers: list[Paragraph],
+    bib_paragraphs: list[Paragraph],
+) -> list[Block]:
+    result: list[Block] = []
+    for block in blocks:
+        if block in toc_markers:
+            result.extend(copy.deepcopy(toc_paragraphs))
+        elif block in bib_markers:
+            result.extend(copy.deepcopy(bib_paragraphs))
+        else:
+            result.append(block)
+    return result
 
 
 __all__ = [

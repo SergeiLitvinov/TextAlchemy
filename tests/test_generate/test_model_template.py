@@ -133,3 +133,108 @@ def test_generate_docx_template_end_to_end(tmp_path):
 
     assert report.success is True
     assert [paragraph.text for paragraph in generated.paragraphs] == ["Report", "Item: A", "Item: B"]
+
+
+def test_render_bibliography_placeholder_builds_numbered_list():
+    template = DocumentModel(sections=[Section(blocks=[_paragraph("{{ bibliography() }}")])])
+
+    result = render_document_template(
+        template,
+        {
+            "bibliography": [
+                {"authors": ["Иванов, И. И."], "title": "Анализ данных", "year": 2024},
+                {"authors": ["Петров, П. П."], "title": "Методы", "year": 2023},
+            ]
+        },
+    )
+
+    blocks = result.sections[0].blocks
+    assert len(blocks) == 2
+    assert blocks[0].plain_text.startswith("[1]")
+    assert "Анализ данных" in blocks[0].plain_text
+    assert blocks[1].plain_text.startswith("[2]")
+    assert "Методы" in blocks[1].plain_text
+    assert blocks[0].properties["bibliography_item"]["index"] == 1
+
+
+def test_render_toc_placeholder_lists_headings_with_levels():
+    template = DocumentModel(
+        sections=[
+            Section(blocks=[_paragraph("{{ toc() }}")]),
+            Section(blocks=[Paragraph(content=[TextRun("Введение")], properties={"heading_level": 1}), _paragraph("text")]),
+            Section(blocks=[Paragraph(content=[TextRun("Раздел")], properties={"heading_level": 2}), _paragraph("text")]),
+        ]
+    )
+
+    result = render_document_template(template, {})
+
+    toc = [block for block in result.sections[0].blocks if "Введение" in block.plain_text or "Раздел" in block.plain_text]
+    assert len(toc) == 2
+    assert toc[0].plain_text.startswith("Введение")
+    assert toc[0].plain_text.endswith("2")
+    assert toc[1].plain_text.startswith("    Раздел")
+    assert toc[1].plain_text.endswith("3")
+    assert toc[0].properties["toc_entry"]["level"] == 1
+
+
+def test_render_cross_references_number_figures_tables_and_captions():
+    template = DocumentModel(
+        sections=[
+            Section(
+                blocks=[
+                    _paragraph("см. {{ ref('fig:logo') }}"),
+                    _paragraph("Рис. {{ id('fig:logo') }} Логотип"),
+                    _paragraph("{{ ref('tbl:data') }}"),
+                    _paragraph("Таблица {{ id('tbl:data') }} данные"),
+                    _paragraph("в таб. {{ ref('fig:logo') }} и {{ ref('tbl:data') }}"),
+                ]
+            )
+        ]
+    )
+
+    result = render_document_template(template, {})
+
+    assert [block.plain_text for block in result.sections[0].blocks] == [
+        "см. Рис. 1",
+        "Рис. 1 Логотип",
+        "Табл. 1",
+        "Таблица 1 данные",
+        "в таб. Рис. 1 и Табл. 1",
+    ]
+
+
+def test_render_cross_reference_inside_table_cell():
+    template = DocumentModel(
+        sections=[
+            Section(
+                blocks=[
+                    Table(
+                        rows=[
+                            TableRow(
+                                cells=[
+                                    TableCell(
+                                        blocks=[
+                                            _paragraph("Иллюстрация {{ id('fig:map') }}"),
+                                            _paragraph("см. {{ ref('fig:map') }}"),
+                                        ]
+                                    )
+                                ]
+                            )
+                        ]
+                    )
+                ]
+            )
+        ]
+    )
+
+    result = render_document_template(template, {})
+
+    cell = result.sections[0].blocks[0].rows[0].cells[0]
+    assert [block.plain_text for block in cell.blocks] == ["Иллюстрация 1", "см. Рис. 1"]
+
+
+def test_render_undefined_cross_reference_is_rejected():
+    template = DocumentModel(sections=[Section(blocks=[_paragraph("см. {{ ref('fig:missing') }}")])])
+
+    with pytest.raises(GenerateError, match="fig:missing"):
+        render_document_template(template, {})
