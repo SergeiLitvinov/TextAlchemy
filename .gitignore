@@ -49,6 +49,9 @@ test_config.json
 .textalchemy/
 .uv-cache/
 
+# Playwright MCP scratch files
+.playwright-mcp/
+
 # OS
 .DS_Store
 Thumbs.db

@@ -278,6 +278,112 @@ select, input[type="text"], input[type="number"] { margin-bottom: 0.75rem; }
 
 .file-drop { margin-bottom: 1rem; }
 
+/* ── Пакетная конвертация и история ──────────────── */
+.batch-file-list {
+    list-style: none;
+    margin: 0.5rem 0 0.25rem;
+    display: grid;
+    gap: 0.35rem;
+    width: 100%;
+}
+
+.batch-file-list li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.85rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px dashed var(--border);
+}
+
+.batch-file-list .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.batch-file-list small { color: var(--text-muted); flex: none; }
+
+.batch-progress-list {
+    list-style: none;
+    margin: 0.25rem 0;
+    display: grid;
+    gap: 0.4rem;
+}
+
+.batch-progress-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--bg);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--border);
+    font-size: 0.875rem;
+}
+
+.batch-progress-item .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.batch-progress-item small { color: var(--text-muted); flex: 1 0 100%; margin-top: 0.15rem; }
+
+.batch-progress-item.running { border-left-color: var(--primary); }
+.batch-progress-item.done { border-left-color: #16a34a; }
+.batch-progress-item.error { border-left-color: #dc2626; }
+.batch-progress-item.expired { border-left-color: var(--border); }
+
+.job-state {
+    flex: none;
+    padding: 0.2rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    background: var(--border);
+}
+
+.job-state.running { color: #1e40af; background: #dbeafe; }
+.job-state.done { color: #166534; background: #dcfce7; }
+.job-state.error { color: #991b1b; background: #fee2e2; }
+
+.conversion-history .job-entry {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 0.6rem;
+    background: var(--surface);
+}
+
+.conversion-history .job-entry summary {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.conversion-history .job-entry summary::-webkit-details-marker { display: none; }
+
+.conversion-history .job-title {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.conversion-history .job-mode { color: var(--text-muted); flex: none; }
+
+.conversion-history .job-detail {
+    padding: 0 1rem 1rem;
+    border-top: 1px dashed var(--border);
+}
+
+.conversion-history .job-detail .batch-progress-list { padding-top: 0.75rem; }
+
 @media (prefers-color-scheme: dark) {
     :root {
         --bg: #0f172a;

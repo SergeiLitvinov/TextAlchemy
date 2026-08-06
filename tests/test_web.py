@@ -499,6 +499,128 @@ def test_api_convert_serves_single_file_html(monkeypatch):
     assert result.content == b"<html>converted</html>"
 
 
+# ── Convert: batch queue + history ──────────────────
+
+def _batch_files():
+    return [
+        ("files", ("a.pdf", b"%PDF-a", "application/pdf")),
+        ("files", ("b.pdf", b"%PDF-b", "application/pdf")),
+    ]
+
+
+def test_api_convert_batch_runs_each_file_and_cleans(monkeypatch, tmp_path):
+    def fake_execute(_executor, request):
+        request.output_path.write_bytes(b"converted-" + request.input_path.name.encode())
+        return ConversionReport(request.output_path)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    monkeypatch.setattr(
+        "textalchemy.web.routes.convert.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+    response = client.post("/api/convert/batch", files=_batch_files(), data={"target_format": "docx"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["success"] is True
+    assert len(body["tasks"]) == 2
+    assert {task["name"] for task in body["tasks"]} == {"a.pdf", "b.pdf"}
+    assert {task["source_format"] for task in body["tasks"]} == {"pdf"}
+
+    job = client.get(f"/api/convert/jobs/{body['job_id']}").json()
+    assert [task["status"] for task in job["tasks"]] == ["done", "done"]
+    for task in job["tasks"]:
+        result = client.get(task["result_url"])
+        assert result.status_code == 200
+        assert result.content == b"converted-" + task["name"].encode()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_api_convert_batch_requires_files():
+    response = client.post("/api/convert/batch", data={"target_format": "docx"})
+    assert response.status_code in (400, 422)
+
+
+def test_api_convert_batch_limits_file_count():
+    files = [("files", (f"file{i}.pdf", b"%PDF", "application/pdf")) for i in range(21)]
+    response = client.post("/api/convert/batch", files=files)
+    assert response.status_code == 400
+    assert "максимум" in response.json()["detail"]
+
+
+def test_api_convert_batch_rejects_unavailable_target_and_cleans(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "textalchemy.web.routes.convert.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+    response = client.post("/api/convert/batch", files=_batch_files(), data={"target_format": "pptx"})
+    assert response.status_code == 400
+    assert "недоступен" in response.json()["detail"]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_api_convert_batch_rejects_unknown_mode():
+    response = client.post("/api/convert/batch", files=_batch_files(), data={"mode": "impossible"})
+    assert response.status_code == 400
+
+
+def test_api_convert_jobs_lists_history(monkeypatch):
+    def fake_execute(_executor, request):
+        request.output_path.write_bytes(b"converted")
+        return ConversionReport(request.output_path)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    created = client.post("/api/convert/batch", files=_batch_files()).json()
+
+    history = client.get("/api/convert/jobs").json()
+    assert history["jobs"]
+    latest = history["jobs"][0]
+    assert latest["job_id"] == created["job_id"]
+    assert latest["counts"]["done"] == 2
+    assert latest["files"] == ["a.pdf", "b.pdf"]
+
+
+def test_api_convert_job_not_found():
+    assert client.get("/api/convert/jobs/nope").status_code == 404
+    assert client.delete("/api/convert/jobs/nope").status_code == 404
+    assert client.post("/api/convert/jobs/nope/rerun").status_code == 404
+
+
+def test_api_convert_job_delete_removes_tasks(monkeypatch):
+    def fake_execute(_executor, request):
+        request.output_path.write_bytes(b"converted")
+        return ConversionReport(request.output_path)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    created = client.post("/api/convert/batch", files=_batch_files()).json()
+
+    response = client.delete(f"/api/convert/jobs/{created['job_id']}")
+    assert response.status_code == 200
+    assert client.get(f"/api/convert/jobs/{created['job_id']}").status_code == 404
+    for task in created["tasks"]:
+        assert client.get(task["status"]).status_code == 404
+
+
+def test_api_convert_job_rerun_uses_stored_sources(monkeypatch):
+    calls = []
+
+    def fake_execute(_executor, request):
+        calls.append(request.input_path.name)
+        request.output_path.write_bytes(b"converted")
+        return ConversionReport(request.output_path)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    created = client.post("/api/convert/batch", files=_batch_files()).json()
+    assert len(calls) == 2
+
+    rerun = client.post(f"/api/convert/jobs/{created['job_id']}/rerun")
+    assert rerun.status_code == 200
+    assert len(rerun.json()["launched"]) == 2
+    assert len(calls) == 4
+
+    job = client.get(f"/api/convert/jobs/{created['job_id']}").json()
+    assert [task["status"] for task in job["tasks"]] == ["done", "done"]
+
+
 # ── Import ─────────────────────────────────────────
 
 def test_api_import_no_file():

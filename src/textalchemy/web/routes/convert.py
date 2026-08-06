@@ -57,6 +57,17 @@ _SOURCE_EXTENSIONS = {
     DocFormat.MODEL: (".json",),
 }
 _MODE_ORDER = (ConversionMode.BALANCED, ConversionMode.FAITHFUL, ConversionMode.EDITABLE)
+_BATCH_LIMIT = 20
+_JOBS_HISTORY_LIMIT = 20
+
+
+def _public_task_payload(task: dict[str, object]) -> dict[str, object]:
+    """Публичная проекция метаданных задачи (без артефактов и служебных полей)."""
+    return {
+        key: value
+        for key, value in task.items()
+        if key not in {"artifact", "content", "_ts", "media_type", "filename"}
+    } | ({"filename": task["filename"]} if task.get("filename") else {})
 
 
 def _resolve_conversion(
@@ -150,10 +161,13 @@ def _run_convert(
     target: DocFormat,
     mode: ConversionMode,
     workspace: ArtifactWorkspace,
+    keep_source: bool = False,
 ) -> None:
     source_inspection = None
     inspection_error = None
     try:
+        if keep_source:
+            tasks_store.store_source(task_id, source_path, source_path.name)
         try:
             source_inspection = inspect_path(source_path)
         except Exception as error:  # noqa: BLE001 - inspection must not block conversion
@@ -315,11 +329,7 @@ async def api_convert_status(task_id: str):
     task = tasks_store.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return {
-        key: value
-        for key, value in task.items()
-        if key not in {"artifact", "content", "_ts", "media_type", "filename"}
-    } | ({"filename": task["filename"]} if task.get("filename") else {})
+    return _public_task_payload(task)
 
 
 @app.get("/api/convert/result/{task_id}")
@@ -346,3 +356,194 @@ async def api_convert_result(task_id: str):
         media_type=task["media_type"],
         headers={"Content-Disposition": disposition},
     )
+
+
+def _output_path_for(workspace: ArtifactWorkspace, source_path: Path, source: DocFormat, target: DocFormat) -> Path:
+    if source is DocFormat.PPTX and target is DocFormat.HTML:
+        return workspace.artifact_path(f"{source_path.stem}-html")
+    return workspace.artifact_path(f"{source_path.stem}{_OUTPUT_SUFFIXES[target]}")
+
+
+@app.post("/api/convert/batch")
+async def api_convert_batch(
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(...),
+    target_format: str = Form(""),
+    mode: str = Form("balanced"),
+):
+    try:
+        conversion_mode = ConversionMode(mode)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if not files:
+        raise HTTPException(status_code=400, detail="Не передано ни одного файла")
+    if len(files) > _BATCH_LIMIT:
+        raise HTTPException(status_code=400, detail=f"Слишком много файлов: максимум {_BATCH_LIMIT}")
+    executor = ConversionExecutor()
+    workspaces: list[ArtifactWorkspace] = []
+    prepared: list[tuple[ArtifactWorkspace, Path, DocFormat, DocFormat]] = []
+    try:
+        for upload in files:
+            workspace = create_web_workspace()
+            workspaces.append(workspace)
+            source_path = await save_upload(workspace, upload, fallback="document")
+            source, target = _resolve_conversion(source_path, source_format="auto", target_format=target_format, legacy_format="")
+            if target not in _OUTPUT_SUFFIXES:
+                raise HTTPException(status_code=400, detail=f"Формат результата {target.value} пока недоступен в Web UI")
+            plan = executor.plan(source, target, mode=conversion_mode)
+            if plan is None or not _web_plan_supported(plan):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Маршрут {source.value} → {target.value} ({conversion_mode.value}) недоступен",
+                )
+            prepared.append((workspace, source_path, source, target))
+    except HTTPException:
+        for workspace in workspaces:
+            workspace.cleanup()
+        raise
+
+    tasks: list[dict[str, object]] = []
+    for workspace, source_path, source, target in prepared:
+        task_id = str(uuid.uuid4())
+        _register_task(
+            task_id,
+            {
+                "status": "running",
+                "error": None,
+                "report": None,
+                "source_format": source.value,
+                "target_format": target.value,
+                "mode": conversion_mode.value,
+            },
+        )
+        output_path = _output_path_for(workspace, source_path, source, target)
+        background_tasks.add_task(
+            _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True
+        )
+        tasks.append(
+            {
+                "name": source_path.name,
+                "task_id": task_id,
+                "source_format": source.value,
+                "target_format": target.value,
+                "status": f"/api/convert/status/{task_id}",
+                "result": f"/api/convert/result/{task_id}",
+            }
+        )
+    job_id = str(uuid.uuid4())
+    tasks_store.set_job(
+        job_id,
+        {
+            "job_id": job_id,
+            "target_format": target_format,
+            "mode": conversion_mode.value,
+            "files": tasks,
+        },
+    )
+    return {"success": True, "job_id": job_id, "tasks": tasks}
+
+
+@app.get("/api/convert/jobs")
+async def api_convert_jobs():
+    jobs = tasks_store.list_jobs(limit=_JOBS_HISTORY_LIMIT)
+    result = []
+    for job in jobs:
+        files = job.get("files", [])
+        counts = {"running": 0, "done": 0, "error": 0, "expired": 0}
+        for item in files:
+            task = tasks_store.get(item["task_id"])
+            status = task["status"] if task else "expired"
+            counts[status] = counts.get(status, 0) + 1
+        result.append(
+            {
+                "job_id": job["job_id"],
+                "created": job.get("_ts"),
+                "target_format": job.get("target_format"),
+                "mode": job.get("mode"),
+                "files": [item["name"] for item in files],
+                "counts": counts,
+            }
+        )
+    return {"jobs": result}
+
+
+@app.get("/api/convert/jobs/{job_id}")
+async def api_convert_job(job_id: str):
+    job = tasks_store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    entries = []
+    for item in job.get("files", []):
+        task = tasks_store.get(item["task_id"])
+        entry: dict[str, object] = {
+            "name": item["name"],
+            "task_id": item["task_id"],
+            "status_url": item.get("status"),
+            "result_url": item.get("result"),
+        }
+        if task is None:
+            entry["status"] = "expired"
+            entry["error"] = "Истёк срок хранения результата"
+        else:
+            entry.update(_public_task_payload(task))
+        entries.append(entry)
+    return {"job_id": job_id, "target_format": job.get("target_format"), "mode": job.get("mode"), "tasks": entries}
+
+
+@app.delete("/api/convert/jobs/{job_id}")
+async def api_convert_job_delete(job_id: str):
+    job = tasks_store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    for item in job.get("files", []):
+        tasks_store.delete(item["task_id"])
+    tasks_store.delete_job(job_id)
+    return {"success": True, "job_id": job_id}
+
+
+@app.post("/api/convert/jobs/{job_id}/rerun")
+async def api_convert_job_rerun(job_id: str, background_tasks: BackgroundTasks):
+    job = tasks_store.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    try:
+        conversion_mode = ConversionMode(job["mode"])
+    except (KeyError, ValueError):
+        conversion_mode = ConversionMode.BALANCED
+    executor = ConversionExecutor()
+    workspaces: list[ArtifactWorkspace] = []
+    launched: list[str] = []
+    try:
+        for item in job.get("files", []):
+            task_id = item["task_id"]
+            source_path = tasks_store.source_path(task_id)
+            if source_path is None:
+                continue
+            source = DocFormat(item["source_format"])
+            target = DocFormat(item["target_format"])
+            plan = executor.plan(source, target, mode=conversion_mode)
+            if plan is None or not _web_plan_supported(plan):
+                continue
+            workspace = create_web_workspace()
+            workspaces.append(workspace)
+            output_path = _output_path_for(workspace, source_path, source, target)
+            _register_task(
+                task_id,
+                {
+                    "status": "running",
+                    "error": None,
+                    "report": None,
+                    "source_format": source.value,
+                    "target_format": target.value,
+                    "mode": conversion_mode.value,
+                },
+            )
+            background_tasks.add_task(
+                _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, False
+            )
+            launched.append(task_id)
+    except HTTPException:
+        for workspace in workspaces:
+            workspace.cleanup()
+        raise
+    return {"success": True, "job_id": job_id, "launched": launched}
