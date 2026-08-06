@@ -33,6 +33,7 @@ jobs:
         run: uv run ruff check
 
       - name: Test with pytest
+        # Порог покрытия задан в pyproject.toml (`addopts = --cov-fail-under=80`).
         run: uv run pytest tests/ --cov=textalchemy --cov-report=xml
 
       - name: Upload coverage

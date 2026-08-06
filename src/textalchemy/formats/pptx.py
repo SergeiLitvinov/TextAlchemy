@@ -18,11 +18,15 @@ python-pptx, чтобы не потерять контейнеры ``mc:Alternat
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, Union
 
-from lxml import etree
+try:
+    from lxml import etree  # type: ignore[import-not-found]
+except ImportError:  # pragma: no cover - python-pptx тянет lxml транзитивно
+    etree = None  # type: ignore[assignment]
 
 from textalchemy.core.document_model import (
     Box,
@@ -45,6 +49,7 @@ from textalchemy.core.document_model import (
 from textalchemy.core.document_model import (
     Table as RichTable,
 )
+from textalchemy.core.io import check_archive_safety
 from textalchemy.core.types import Block, BlockType, DocFormat, Table, Text
 
 EMU_PER_PT = 12700.0
@@ -127,14 +132,39 @@ def _emu_to_pt(value: Optional[float]) -> float:
 
 
 @dataclass(frozen=True)
-class _Transform:
-    """Отображение координат пространства фигуры в абсолютные EMU."""
+class _Matrix:
+    """2D affine matrix using the SVG/CSS ``a,b,c,d,e,f`` convention."""
 
-    ox: float = 0.0
-    oy: float = 0.0
-    sx: float = 1.0
-    sy: float = 1.0
+    a: float = 1.0
+    b: float = 0.0
+    c: float = 0.0
+    d: float = 1.0
+    e: float = 0.0
+    f: float = 0.0
+
+    def then(self, child: "_Matrix") -> "_Matrix":
+        """Compose this parent matrix with a child/local matrix."""
+
+        return _Matrix(
+            a=self.a * child.a + self.c * child.b,
+            b=self.b * child.a + self.d * child.b,
+            c=self.a * child.c + self.c * child.d,
+            d=self.b * child.c + self.d * child.d,
+            e=self.a * child.e + self.c * child.f + self.e,
+            f=self.b * child.e + self.d * child.f + self.f,
+        )
+
+    def point(self, x: float, y: float) -> tuple[float, float]:
+        return self.a * x + self.c * y + self.e, self.b * x + self.d * y + self.f
+
+
+@dataclass(frozen=True)
+class _Transform:
+    """Mapping from a group child coordinate space to absolute slide EMU."""
+
+    matrix: _Matrix = _Matrix()
     rotation: float = 0.0
+    requires_affine: bool = False
 
 
 @dataclass
@@ -194,7 +224,7 @@ def _placeholder_category(ph_type: str) -> str:
 
 def _walk_layout_placeholder(
     sp_tree, transform: _Transform, ph_type: str, ph_idx: str
-) -> Optional[tuple[float, float, float, float, float]]:
+) -> Optional[tuple[float, float, float, float, float, bool, bool]]:
     """Найти в spTree placeholder с подходящим типом/idx и вернуть его xfrm в EMU."""
     for child in sp_tree:
         tag = _local_name(child)
@@ -210,11 +240,11 @@ def _walk_layout_placeholder(
             if xfrm is None:
                 continue
             left, top, width, height = _apply_transform(transform, *xfrm[:4])
-            return (left, top, width, height, transform.rotation + xfrm[4])
+            return (left, top, width, height, transform.rotation + xfrm[4], xfrm[5], xfrm[6])
     return None
 
 
-def _placeholder_geometry(element, state: _ImporterState) -> Optional[tuple[float, float, float, float, float]]:
+def _placeholder_geometry(element, state: _ImporterState) -> Optional[tuple[float, float, float, float, float, bool, bool]]:
     """Вернуть xfrm placeholder из slide → layout → master (в EMU)."""
     ph = _placeholder_info(element)
     if ph is None:
@@ -300,6 +330,7 @@ def read_pptx(path: Union[str, Path], *, include_tables: bool = True) -> Text:
     source = Path(path)
     if not source.is_file():
         raise FileNotFoundError(source)
+    check_archive_safety(source)
     presentation = Presentation(str(source))
     blocks: list[Block] = []
     tables: list[Table] = []
@@ -351,6 +382,7 @@ def read_pptx_model(
     source = Path(path)
     if not source.is_file():
         raise FileNotFoundError(source)
+    check_archive_safety(source)
     presentation = Presentation(str(source))
     model = DocumentModel(
         mode=mode,
@@ -452,6 +484,8 @@ def _collect_shape_element(
         height=_emu_to_pt(height),
         rotation=transform.rotation + xfrm[4],
     )
+    affine = _shape_affine_metadata(transform, xfrm)
+    first_block = len(blocks)
     if tag == "sp":
         _handle_text_shape(element, slide_part, state, blocks, box, style_context)
     elif tag == "cxnSp":
@@ -460,6 +494,9 @@ def _collect_shape_element(
         _handle_picture(element, slide_part, state, blocks, box)
     elif tag == "graphicFrame":
         _handle_graphic_frame(element, slide_part, state, blocks, box)
+    if affine is not None:
+        for block in blocks[first_block:]:
+            _set_pptx_affine(block, affine)
 
 
 def _collect_alternate_content(
@@ -474,11 +511,103 @@ def _collect_alternate_content(
 
 
 def _apply_transform(transform: _Transform, x: float, y: float, cx: float, cy: float) -> tuple[float, float, float, float]:
-    return transform.ox + x * transform.sx, transform.oy + y * transform.sy, cx * transform.sx, cy * transform.sy
+    points = (
+        transform.matrix.point(x, y),
+        transform.matrix.point(x + cx, y),
+        transform.matrix.point(x, y + cy),
+        transform.matrix.point(x + cx, y + cy),
+    )
+    xs = [point[0] for point in points]
+    ys = [point[1] for point in points]
+    return min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys)
 
 
-def _shape_xfrm(element) -> Optional[tuple[float, float, float, float, float]]:
-    """Вернуть (x, y, cx, cy, rot) фигуры в EMU из XML."""
+def _shape_affine_metadata(
+    transform: _Transform,
+    xfrm: tuple[float, float, float, float, float, bool, bool],
+) -> dict[str, Any] | None:
+    x, y, width, height, rotation, flip_h, flip_v = xfrm
+    nonuniform_parent = not _is_uniform_axis_scale(transform.matrix)
+    if not (transform.requires_affine or flip_h or flip_v or (rotation and nonuniform_parent)):
+        return None
+    local = (
+        _translate(x + width / 2, y + height / 2)
+        .then(_rotation_flip(rotation, flip_h=flip_h, flip_v=flip_v))
+        .then(_translate(-width / 2, -height / 2))
+    )
+    total = transform.matrix.then(local)
+    return {
+        "matrix": [total.a, total.b, total.c, total.d, _emu_to_pt(total.e), _emu_to_pt(total.f)],
+        "width_pt": _emu_to_pt(width),
+        "height_pt": _emu_to_pt(height),
+        "rotation": transform.rotation + rotation,
+        "flip_horizontal": flip_h,
+        "flip_vertical": flip_v,
+    }
+
+
+def _set_pptx_affine(block: Any, affine: dict[str, Any]) -> None:
+    properties = getattr(block, "properties", None)
+    if properties is None:
+        return
+    pptx = properties.get("pptx")
+    if not isinstance(pptx, dict):
+        pptx = {}
+        properties["pptx"] = pptx
+    pptx["transform"] = affine
+
+
+def _translate(x: float, y: float) -> _Matrix:
+    return _Matrix(e=x, f=y)
+
+
+def _scale(x: float, y: float) -> _Matrix:
+    return _Matrix(a=x, d=y)
+
+
+def _rotation_flip(rotation: float, *, flip_h: bool, flip_v: bool) -> _Matrix:
+    radians = math.radians(rotation)
+    cosine = math.cos(radians)
+    sine = math.sin(radians)
+    horizontal = -1.0 if flip_h else 1.0
+    vertical = -1.0 if flip_v else 1.0
+    return _Matrix(
+        a=cosine * horizontal,
+        b=sine * horizontal,
+        c=-sine * vertical,
+        d=cosine * vertical,
+    )
+
+
+def _around_center(
+    center_x: float,
+    center_y: float,
+    *,
+    rotation: float,
+    flip_h: bool,
+    flip_v: bool,
+) -> _Matrix:
+    return (
+        _translate(center_x, center_y)
+        .then(_rotation_flip(rotation, flip_h=flip_h, flip_v=flip_v))
+        .then(_translate(-center_x, -center_y))
+    )
+
+
+def _is_uniform_axis_scale(matrix: _Matrix) -> bool:
+    return (
+        math.isclose(matrix.b, 0.0, abs_tol=1e-9)
+        and math.isclose(matrix.c, 0.0, abs_tol=1e-9)
+        and math.isclose(abs(matrix.a), abs(matrix.d), rel_tol=1e-9, abs_tol=1e-9)
+    )
+
+
+def _xml_bool(value: str | None) -> bool:
+    return value in {"1", "true", "on"}
+
+
+def _shape_xfrm(element) -> Optional[tuple[float, float, float, float, float, bool, bool]]:
+    """Return ``x, y, cx, cy, rotation, flipH, flipV`` from DrawingML."""
     xfrm = None
     tag = _local_name(element)
     if tag == "graphicFrame":
@@ -499,6 +628,8 @@ def _shape_xfrm(element) -> Optional[tuple[float, float, float, float, float]]:
         float(ext.get("cx", 0)),
         float(ext.get("cy", 0)),
         float(xfrm.get("rot", 0)) / 60000.0,
+        _xml_bool(xfrm.get("flipH")),
+        _xml_bool(xfrm.get("flipV")),
     )
 
 
@@ -529,11 +660,23 @@ def _group_child_transform(group_element, parent: _Transform) -> _Transform:
     ccy = float(ch_ext.get("cy", gcy))
     sx = gcx / ccx if ccx else 1.0
     sy = gcy / ccy if ccy else 1.0
-    rotation = parent.rotation + (float(xfrm.get("rot", 0)) / 60000.0)
-    # Абсолютная точка = точка группы + (child - chOff) * масштаб.
-    ox = parent.ox + gx * parent.sx - cox * parent.sx * sx
-    oy = parent.oy + gy * parent.sy - coy * parent.sy * sy
-    return _Transform(ox=ox, oy=oy, sx=parent.sx * sx, sy=parent.sy * sy, rotation=rotation)
+    rotation = float(xfrm.get("rot", 0)) / 60000.0
+    flip_h = _xml_bool(xfrm.get("flipH"))
+    flip_v = _xml_bool(xfrm.get("flipV"))
+    mapping = _translate(gx, gy).then(_scale(sx, sy)).then(_translate(-cox, -coy))
+    orientation = _around_center(
+        gx + gcx / 2,
+        gy + gcy / 2,
+        rotation=rotation,
+        flip_h=flip_h,
+        flip_v=flip_v,
+    )
+    local = orientation.then(mapping)
+    return _Transform(
+        matrix=parent.matrix.then(local),
+        rotation=parent.rotation + rotation,
+        requires_affine=parent.requires_affine or bool(rotation) or flip_h or flip_v,
+    )
 
 
 def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[Any], box: Box, style_context=None) -> None:
@@ -882,20 +1025,43 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
     if chart is None:
         return {}
     data: dict[str, Any] = {}
-    title_el = chart.find(_c("title"))
-    if title_el is not None:
-        values = _pt_values(title_el)
-        if values:
-            data["title"] = values[0]
+    title = _chart_element_title(chart)
+    if title:
+        data["title"] = title
+    legend = chart.find(_c("legend"))
+    if legend is not None:
+        legend_position = legend.find(_c("legendPos"))
+        data["legend"] = True
+        if legend_position is not None and legend_position.get("val"):
+            data["legend_position"] = legend_position.get("val")
     plot_area = chart.find(_c("plotArea"))
     if plot_area is not None:
+        category_axis = plot_area.find(_c("catAx"))
+        if category_axis is None:
+            category_axis = plot_area.find(_c("dateAx"))
+        value_axis = plot_area.find(_c("valAx"))
+        category_axis_title = _chart_element_title(category_axis)
+        value_axis_title = _chart_element_title(value_axis)
+        if category_axis_title:
+            data["category_axis_title"] = category_axis_title
+        if value_axis_title:
+            data["value_axis_title"] = value_axis_title
         chart_type = None
+        chart_node = None
         for child in plot_area:
             tag = _local_name(child)
             if tag.endswith("Chart"):
                 chart_type = tag
+                chart_node = child
                 break
         data["chart_type"] = chart_type
+        if chart_node is not None:
+            bar_direction = chart_node.find(_c("barDir"))
+            grouping = chart_node.find(_c("grouping"))
+            if bar_direction is not None and bar_direction.get("val"):
+                data["bar_direction"] = bar_direction.get("val")
+            if grouping is not None and grouping.get("val"):
+                data["grouping"] = grouping.get("val")
         series: list[dict[str, Any]] = []
         categories: list[str] = []
         for ser in plot_area.iter(_c("ser")):
@@ -908,12 +1074,35 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
                     categories = cats
             val = ser.find(_c("val"))
             values = _pt_values(val) if val is not None else []
-            series.append({"name": name, "values": values})
+            item: dict[str, Any] = {"name": name, "values": values}
+            color = _chart_series_color(ser)
+            if color is not None:
+                item["color"] = color
+            series.append(item)
         if categories:
             data["categories"] = categories
         if series:
             data["series"] = series
     return data
+
+
+def _chart_element_title(element) -> str | None:
+    if element is None:
+        return None
+    title = element.find(_c("title"))
+    values = _pt_values(title) if title is not None else []
+    if values:
+        return values[0]
+    text = "".join(node.text or "" for node in title.iter(_a("t"))) if title is not None else ""
+    return text or None
+
+
+def _chart_series_color(series) -> str | None:
+    shape_properties = series.find(_c("spPr"))
+    if shape_properties is None:
+        return None
+    solid = shape_properties.find(_a("solidFill"))
+    return _resolve_color_node(solid) if solid is not None else None
 
 
 def _pt_values(node) -> list[str]:

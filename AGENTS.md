@@ -46,9 +46,10 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
 Always run via `uv` so the lockfile-resolved env is used.
 
 - Install (full): `uv sync --all-extras`
+- Minimal install: `uv sync` (core: yaml, platformdirs, pypdf, jinja2, tqdm). Heavy deps live in extras — `pdf` (pymupdf, pdf2docx), `docx` (python-docx), `pptx` (python-pptx, lxml, Pillow), `epub` (ebooklib, bs4), `web` (fastapi, uvicorn, python-multipart, sqlalchemy), `ocr` (pytesseract, easyocr, paddleocr, paddlepaddle). Readers/converters lazy-import their backends and never force them at `import textalchemy`.
 - Lint: `uv run ruff check` (config: line-length 130, rules E/F/I/N/W, `pyproject.toml`)
 - Format: `uv run ruff check --fix && uv run ruff format`
-- Test: `uv run pytest tests/ -v --tb=short` (or `--cov=textalchemy` for coverage)
+- Test: `uv run pytest tests/ -v --tb=short` (or `--cov=textalchemy` for coverage). Coverage threshold `--cov-fail-under=80` is enforced whenever `--cov` is active (see `pyproject.toml`).
 - Single test: `uv run pytest tests/test_pipeline/test_runner.py::test_run_chained_ingest_extract -v`
 - Pipeline run: `uv run textalchemy run pipeline.yaml` (or `textalchemy run --list`, `--json` for JSON output)
 - Most commands support `--json` for structured machine-readable output (`extract`, `convert`, `convert-file`, `plan`, `inspect`, `template-check`, `pptx2html`, `gost`, `stats`, `generate`, `bibtex`, `recognize`, `match`, `run`)
@@ -131,8 +132,8 @@ Run `textalchemy run --list` to see all registered operations.
 - `pptx_to_html` ships with `assets/` (css, js) and uses `Path(__file__).parent / "assets"` at runtime — do not rename the package or move assets without updating both `MANIFEST.in` and `converter.py:_copy_static_assets`.
 - `argparse` with no subcommand returns `1` and prints help; tests assert this.
 - `match` and `stats` default to `./literature_files` and `./renamed` and may pick up a bibliography file from CWD if `-b` is omitted — pass explicit paths in CI.
-- `pyproject.toml` does not declare a `[project.optional-dependencies]` entry for `pptx`; `python-pptx` and `lxml` are in core `dependencies`.
-- OCR optional dependencies (`[project.optional-dependencies] ocr`) include `pytesseract`, `easyocr`, `paddleocr`, `paddlepaddle`. Install full with `uv sync --all-extras`. PaddleOCR requires torch/PaddlePaddle (heavy).
+- `textalchemy.convert` stays importable without python-pptx: the `pptx_to_html` package (python-pptx + Pillow) is resolved lazily via `__getattr__` in `convert/__init__.py`, and `html_writer._preset_geometry()` lazy-imports `_pptx_lib`. `formats/pptx.py` guards `lxml` with try/except (python-pptx pulls it transitively); `extract/latex.py` lazy-imports python-docx.
+- OCR optional dependencies (`[project.optional-dependencies] ocr`) include `pytesseract`, `easyocr`, `paddleocr`, `paddlepaddle`. Install full with `uv sync --all-extras`. PaddleOCR requires torch/PaddlePaddle (heavy); `paddlepaddle` is marker-gated off on Python 3.14 (no wheels yet).
 - `MANIFEST.in` is required for sdist builds: the package ships non-Python assets under `src/textalchemy/**/{assets,templates,static,lua-filters}/`.
 - No typecheck or pre-commit is wired into local commands beyond `ruff`; pre-commit is configured (`.pre-commit-config.yaml`) but optional.
 - On Windows, `__main__.py` reconfigures stdout/stderr to UTF-8 (so `→` in op descriptions doesn't blow up `charmap`). Don't remove this.

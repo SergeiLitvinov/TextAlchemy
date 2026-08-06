@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +19,7 @@ from jinja2 import Environment, FileSystemLoader
 from textalchemy import __version__
 from textalchemy.core.database import Database
 from textalchemy.organize.bibliography import BibItem
+from textalchemy.web.tasks import TaskStore
 
 _VERSION = __version__
 logger = logging.getLogger(__name__)
@@ -145,24 +145,18 @@ def _save_config(cfg):
 
 
 # ── Background task management ───────────────────────────────────────────────
-_tasks: dict[str, dict[str, Any]] = {}
-# Задачи хранятся в памяти; очищаем завершённые старше N секунд, чтобы не течь.
+# Задачи и их артефакты живут на диске в data_dir/tasks (переживают перезапуск,
+# не держат байты результата в памяти). Просроченные удаляются по TTL.
 _TASK_TTL_SECONDS = 3600
+tasks_store = TaskStore(data_dir / "tasks", ttl_seconds=_TASK_TTL_SECONDS)
 
 
-def _prune_tasks() -> None:
-    now = time.monotonic()
-    stale = [
-        tid for tid, t in _tasks.items()
-        if t.get("_ts", 0) + _TASK_TTL_SECONDS < now
-    ]
-    for tid in stale:
-        _tasks.pop(tid, None)
+def _prune_tasks() -> int:
+    return tasks_store.prune()
 
 
 def _register_task(task_id: str, payload: dict[str, Any]) -> None:
-    _prune_tasks()
-    _tasks[task_id] = {**payload, "_ts": time.monotonic()}
+    tasks_store.set(task_id, payload)
 
 
 __all__ = [
@@ -170,5 +164,5 @@ __all__ = [
     "_VERSION", "_bibitem_to_dict", "_dict_to_bibitem",
     "_ensure_data", "_migrate_json_to_db", "_load_bib", "_save_bib",
     "_bib_path", "_matching_path", "_config_path", "_default_config",
-    "_load_config", "_save_config", "_tasks", "_register_task", "_prune_tasks",
+    "_load_config", "_save_config", "tasks_store", "_register_task", "_prune_tasks",
 ]

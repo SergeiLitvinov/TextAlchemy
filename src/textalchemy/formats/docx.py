@@ -17,6 +17,7 @@ from textalchemy.core.document_model import (
     DocumentModel,
     PackageGraph,
 )
+from textalchemy.core.io import check_archive_safety
 from textalchemy.core.types import Block, BlockType, DocFormat, Table, Text
 from textalchemy.formats.docx_section import read_section
 from textalchemy.formats.docx_style import (
@@ -37,6 +38,7 @@ def read_docx(path: Union[str, Path], *, include_tables: bool = True) -> Text:
     p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(p)
+    check_archive_safety(p)
     doc = Document(str(p))
     blocks: list[Block] = []
     tables: list[Table] = []
@@ -78,6 +80,7 @@ def read_docx_model(
     source = Path(path)
     if not source.is_file():
         raise FileNotFoundError(source)
+    check_archive_safety(source)
     document = OpenDocument(str(source))
     model = DocumentModel(
         mode=mode,

@@ -1,11 +1,23 @@
 import subprocess
 from pathlib import Path
 
-from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-
 from textalchemy.core.exceptions import ExtractError
+from textalchemy.core.io import check_archive_safety
 from textalchemy.core.latex import escape_latex as clean_text
+
+
+def _docx():
+    """Ленивый импорт python-docx (дополнительная зависимость `docx`)."""
+    from docx import Document  # type: ignore[import-not-found]
+
+    return Document
+
+
+def _wd_align():
+    """Ленивый импорт ``WD_ALIGN_PARAGRAPH`` из python-docx."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH  # type: ignore[import-not-found]
+
+    return WD_ALIGN_PARAGRAPH
 
 
 def _get_paragraph_style(paragraph):
@@ -34,13 +46,13 @@ _PREAMBLE = """\\documentclass[12pt,a4paper]{article}
 """
 
 
-def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None,
-                  doc_type: str = "manuscript") -> str:
+def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None, doc_type: str = "manuscript") -> str:
     input_path = Path(input_path)
     if not input_path.exists():
         raise ExtractError(f"File not found: {input_path}")
     try:
-        doc = Document(str(input_path))
+        check_archive_safety(input_path)
+        doc = _docx()(str(input_path))
     except Exception as e:
         raise ExtractError(f"Failed to read document: {e}") from e
 
@@ -66,9 +78,9 @@ def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None,
             lines.append(f"\\subsubsection{{{clean}}}")
         else:
             align = para.alignment
-            if align == WD_ALIGN_PARAGRAPH.CENTER:
+            if align == _wd_align().CENTER:
                 lines.append(f"\\begin{{center}}{clean}\\end{{center}}")
-            elif align == WD_ALIGN_PARAGRAPH.RIGHT:
+            elif align == _wd_align().RIGHT:
                 lines.append(f"\\begin{{flushright}}{clean}\\end{{flushright}}")
             else:
                 lines.append(clean)
@@ -97,8 +109,7 @@ def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None,
     return result
 
 
-def docx_to_latex_pandoc(input_path: str | Path, output_path: str | Path,
-                         doc_type: str = "manuscript") -> str:
+def docx_to_latex_pandoc(input_path: str | Path, output_path: str | Path, doc_type: str = "manuscript") -> str:
     input_path = Path(input_path)
     output_path = Path(output_path)
     if not input_path.exists():
@@ -107,9 +118,18 @@ def docx_to_latex_pandoc(input_path: str | Path, output_path: str | Path,
     lua_filter = Path(__file__).parent.parent / "extract" / "lua-filters" / "sanitize.lua"
     lua_filter_str = str(lua_filter) if lua_filter.exists() else ""
 
-    cmd = ["pandoc", str(input_path), "-o", str(output_path),
-           "--from", "docx", "--to", "latex",
-           "--standalone", "--top-level-division=chapter"]
+    cmd = [
+        "pandoc",
+        str(input_path),
+        "-o",
+        str(output_path),
+        "--from",
+        "docx",
+        "--to",
+        "latex",
+        "--standalone",
+        "--top-level-division=chapter",
+    ]
     if lua_filter_str:
         cmd.extend(["--lua-filter", lua_filter_str])
 

@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from textalchemy.core.exceptions import GenerateError
+from textalchemy.core.io import check_archive_safety
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
@@ -94,6 +95,7 @@ class TemplateEngine:
 
         try:
             from docx import Document
+            check_archive_safety(template_path)
             doc = Document(str(template_path))
             params = params or {}
 

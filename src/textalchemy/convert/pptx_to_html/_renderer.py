@@ -8,12 +8,15 @@
 from __future__ import annotations
 
 import io
+import logging
 import zipfile
 from pathlib import Path
 from typing import Optional
 
 from PIL import Image
 from pptx import Presentation
+
+from textalchemy.core.io import check_archive_safety
 
 from ._omml import (  # noqa: F401
     M_NS as OMML_NS,
@@ -35,12 +38,15 @@ from ._pptx_lib import (
     size_to_pt,
 )
 
+logger = logging.getLogger(__name__)
+
 
 # ----------------------------------------------------------------------------
 # Resource extraction
 # ----------------------------------------------------------------------------
 def extract_resources(pptx_path: Path, out_dir: Path):
     """Extract media files and convert WMF/EMF to PNG."""
+    check_archive_safety(pptx_path)
     images_dir = out_dir / "assets" / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
     media_index: dict[str, str] = {}  # rId -> relative URL
@@ -59,7 +65,7 @@ def extract_resources(pptx_path: Path, out_dir: Path):
                     im.save(images_dir / out_name, "PNG")
                     media_index[name] = f"assets/images/{out_name}"
                 except Exception as e:
-                    print(f"WARN: failed to convert {name}: {e}")
+                    logger.warning("failed to convert %s: %s", name, e)
                     out_name = base
                     (images_dir / out_name).write_bytes(z.read(name))
                     media_index[name] = f"assets/images/{out_name}"
@@ -1067,9 +1073,9 @@ def convert_pptx(pptx_path: str | Path, out_dir: str | Path) -> None:
     (out / "assets" / "css").mkdir(parents=True, exist_ok=True)
     (out / "assets" / "js").mkdir(parents=True, exist_ok=True)
 
-    print(f"Loading {pptx}...")
+    logger.info("Loading %s...", pptx)
     media_index = extract_resources(pptx, out)
-    print(f"Extracted {len(media_index)} media files")
+    logger.info("Extracted %d media files", len(media_index))
 
     prs = Presentation(str(pptx))
     sw = prs.slide_width
@@ -1077,7 +1083,7 @@ def convert_pptx(pptx_path: str | Path, out_dir: str | Path) -> None:
     assert sw is not None and sh is not None
     sw_in = sw / EMU_PER_INCH
     sh_in = sh / EMU_PER_INCH
-    print(f"Slide size: {sw_in:.2f} x {sh_in:.2f} in")
+    logger.info("Slide size: %.2f x %.2f in", sw_in, sh_in)
 
     slides_html = []
     titles = []
@@ -1090,13 +1096,13 @@ def convert_pptx(pptx_path: str | Path, out_dir: str | Path) -> None:
         title = extract_title(slide)
         titles.append(title)
         if i % 10 == 0:
-            print(f"  rendered {i}/{len(slides)}")
+            logger.info("rendered %d/%d", i, len(slides))
 
-    print("Writing index.html...")
+    logger.info("Writing index.html...")
     write_index(out, slides_html, titles, (sw_in, sh_in))
     write_css(out)
     write_js(out)
-    print("Done")
+    logger.info("Done")
 
 
 # Backwards-compat alias (использовался в старом cli-скрипте)

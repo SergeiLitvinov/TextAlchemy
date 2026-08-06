@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import shutil
 import uuid
 from pathlib import Path
 
@@ -14,8 +12,9 @@ from textalchemy.convert.executor import ConversionExecutor, ConversionRequest, 
 from textalchemy.core.artifacts import ArtifactWorkspace
 from textalchemy.core.conversion_graph import ConversionPlan
 from textalchemy.core.document_model import ConversionMode
+from textalchemy.core.inspection import compare_inspections, inspect_path
 from textalchemy.core.types import DocFormat
-from textalchemy.web.app import _register_task, _tasks, app
+from textalchemy.web.app import _register_task, app, tasks_store
 from textalchemy.web.workspace import create_web_workspace, save_upload
 
 _LEGACY_CONVERSIONS = {
@@ -77,18 +76,25 @@ def _resolve_conversion(
     return source, target
 
 
-def _artifact_payload(output_path: Path, source_stem: str, target: DocFormat) -> tuple[bytes, str, str]:
+def _artifact_meta(output_path: Path, source_stem: str, target: DocFormat) -> tuple[str, str]:
+    """Определить (filename, media_type) артефакта; каталоги отдаём zip-архивом."""
     if output_path.is_dir():
-        archive_base = output_path.parent / f"{source_stem}-html"
-        archive = Path(shutil.make_archive(str(archive_base), "zip", output_path))
-        return archive.read_bytes(), archive.name, "application/zip"
-    return output_path.read_bytes(), output_path.name, _MEDIA_TYPES[target]
+        return f"{source_stem}-html", "application/zip"
+    return output_path.name, _MEDIA_TYPES[target]
 
 
 def _web_plan_supported(plan: ConversionPlan) -> bool:
     """Web executor safely supports direct routes and intermediate DocumentModel values."""
 
     return all(step.target is DocFormat.MODEL for step in plan.steps[:-1])
+
+
+def _inspection_payload(inspection, display_name: str) -> dict[str, object] | None:
+    if inspection is None:
+        return None
+    payload = inspection.to_dict()
+    payload["source_path"] = display_name
+    return payload
 
 
 def _available_conversions(executor: ConversionExecutor) -> dict[str, object]:
@@ -145,7 +151,13 @@ def _run_convert(
     mode: ConversionMode,
     workspace: ArtifactWorkspace,
 ) -> None:
+    source_inspection = None
+    inspection_error = None
     try:
+        try:
+            source_inspection = inspect_path(source_path)
+        except Exception as error:  # noqa: BLE001 - inspection must not block conversion
+            inspection_error = f"Не удалось проверить исходный документ: {error}"
         report = ConversionExecutor().execute(
             ConversionRequest(
                 input_path=source_path,
@@ -161,23 +173,54 @@ def _run_convert(
                 (issue["message"] for issue in report_payload["issues"] if issue["severity"] == "error"),
                 "Конвертация завершилась с ошибкой",
             )
-            _register_task(task_id, {"status": "error", "error": error, "report": report_payload})
+            _register_task(
+                task_id,
+                {
+                    "status": "error",
+                    "error": error,
+                    "report": report_payload,
+                    "source_inspection": _inspection_payload(source_inspection, source_path.name),
+                    "inspection_error": inspection_error,
+                },
+            )
             return
         workspace.validate_artifact(output_path)
-        content, filename, media_type = _artifact_payload(output_path, source_path.stem, target)
+        filename, media_type = _artifact_meta(output_path, source_path.stem, target)
+        artifact_name = tasks_store.store_artifact(task_id, output_path, filename)
+        target_inspection = None
+        comparison = None
+        if source_inspection is not None and output_path.is_file():
+            try:
+                target_inspection = inspect_path(output_path)
+                comparison = compare_inspections(source_inspection, target_inspection)
+            except Exception as error:  # noqa: BLE001 - unsupported targets still remain downloadable
+                inspection_error = f"Структурное сравнение результата недоступно: {error}"
         _register_task(
             task_id,
             {
                 "status": "done",
-                "content": base64.b64encode(content).decode("ascii"),
+                "artifact": artifact_name,
                 "filename": filename,
                 "media_type": media_type,
                 "error": None,
                 "report": report_payload,
+                "source_inspection": _inspection_payload(source_inspection, source_path.name),
+                "target_inspection": _inspection_payload(target_inspection, filename),
+                "comparison": comparison.to_dict() if comparison is not None else None,
+                "inspection_error": inspection_error,
             },
         )
     except Exception as error:  # noqa: BLE001 - background task must expose a stable status
-        _register_task(task_id, {"status": "error", "error": str(error), "report": None})
+        _register_task(
+            task_id,
+            {
+                "status": "error",
+                "error": str(error),
+                "report": None,
+                "source_inspection": _inspection_payload(source_inspection, source_path.name),
+                "inspection_error": inspection_error,
+            },
+        )
     finally:
         workspace.cleanup()
 
@@ -185,6 +228,21 @@ def _run_convert(
 @app.get("/api/convert/capabilities")
 async def api_convert_capabilities():
     return _available_conversions(ConversionExecutor())
+
+
+@app.post("/api/convert/inspect")
+async def api_convert_inspect(file: UploadFile = File(...)):
+    workspace = create_web_workspace()
+    try:
+        source_path = await save_upload(workspace, file, fallback="document")
+        inspection = inspect_path(source_path)
+        return {"success": True, "inspection": _inspection_payload(inspection, source_path.name)}
+    except HTTPException:
+        raise
+    except Exception as error:  # noqa: BLE001 - API boundary returns a stable validation error
+        raise HTTPException(status_code=400, detail=f"Не удалось проверить структуру документа: {error}") from error
+    finally:
+        workspace.cleanup()
 
 
 @app.post("/api/convert")
@@ -254,26 +312,29 @@ async def api_convert(
 
 @app.get("/api/convert/status/{task_id}")
 async def api_convert_status(task_id: str):
-    task = _tasks.get(task_id)
+    task = tasks_store.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return {
         key: value
         for key, value in task.items()
-        if key not in {"content", "_ts", "media_type", "filename"}
+        if key not in {"artifact", "content", "_ts", "media_type", "filename"}
     } | ({"filename": task["filename"]} if task.get("filename") else {})
 
 
 @app.get("/api/convert/result/{task_id}")
 async def api_convert_result(task_id: str):
-    task = _tasks.get(task_id)
+    task = tasks_store.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     if task["status"] != "done":
         raise HTTPException(status_code=409, detail="Result is not ready")
+    artifact_path = tasks_store.result_path(task_id, task.get("artifact", ""))
+    if artifact_path is None:
+        raise HTTPException(status_code=500, detail="Не удалось подготовить файл")
     try:
-        content = base64.b64decode(task["content"], validate=True)
-    except (KeyError, ValueError) as error:
+        content = artifact_path.read_bytes()
+    except OSError as error:
         raise HTTPException(status_code=500, detail="Не удалось подготовить файл") from error
     filename = task["filename"]
     ascii_name = filename.encode("ascii", "ignore").decode() or "converted"

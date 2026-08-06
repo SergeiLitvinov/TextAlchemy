@@ -5,7 +5,10 @@ import sys
 
 def cmd_run(args: argparse.Namespace) -> int:
     from textalchemy.core.registry import all_operations
+    from textalchemy.pipeline import register_builtin_operations
     from textalchemy.pipeline.runner import run_pipeline
+
+    register_builtin_operations()
 
     if args.list:
         print("Available operations:")

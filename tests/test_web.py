@@ -1,6 +1,7 @@
 import importlib
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from textalchemy import __version__
@@ -8,10 +9,26 @@ from textalchemy.core.artifacts import ArtifactWorkspace
 from textalchemy.core.database import Database
 from textalchemy.core.diagnostics import ConversionReport
 from textalchemy.core.document_model import ConversionMode
+from textalchemy.core.inspection import DocumentInspection
 from textalchemy.core.types import DocFormat
 from textalchemy.web.main import app
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_task_store(monkeypatch, tmp_path_factory):
+    """Фоновые задачи пишутся в отдельное временное хранилище, а не в user-data."""
+    import importlib
+
+    from textalchemy.web.tasks import TaskStore
+
+    web_app = importlib.import_module("textalchemy.web.app")
+    store = TaskStore(tmp_path_factory.mktemp("web-tasks"))
+    monkeypatch.setattr(web_app, "tasks_store", store)
+    from textalchemy.web.routes import convert as convert_route
+
+    monkeypatch.setattr(convert_route, "tasks_store", store)
 
 
 def test_web_version_uses_package_metadata():
@@ -34,6 +51,8 @@ def test_convert_page():
     assert resp.status_code == 200
     assert "Максимально похожий вид" in resp.text
     assert "Скачать результат" in resp.text
+    assert 'id="sourceInspection"' in resp.text
+    assert 'id="comparisonSection"' in resp.text
 
 
 def test_organize_page():
@@ -259,9 +278,41 @@ def test_api_convert_no_file():
     assert resp.status_code in (400, 422)
 
 
+def test_api_convert_inspect_no_file():
+    response = client.post("/api/convert/inspect")
+    assert response.status_code in (400, 422)
+
+
 def test_api_convert_status_not_found():
     resp = client.get("/api/convert/status/nonexistent")
     assert resp.status_code == 404
+
+
+def test_api_convert_inspect_returns_public_structure_and_cleans_workspace(monkeypatch, tmp_path):
+    def fake_inspect(path):
+        return DocumentInspection(
+            path,
+            "pptx",
+            metrics={"pages": 2, "paragraphs": 5, "tables": 1, "images": 2},
+        )
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.inspect_path", fake_inspect)
+    monkeypatch.setattr(
+        "textalchemy.web.routes.convert.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    response = client.post(
+        "/api/convert/inspect",
+        files={"file": (r"..\deck.pptx", b"pptx", "application/octet-stream")},
+    )
+
+    assert response.status_code == 200
+    inspection = response.json()["inspection"]
+    assert inspection["source_path"] == "deck.pptx"
+    assert inspection["source_format"] == "pptx"
+    assert inspection["metrics"]["tables"] == 1
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_api_convert_capabilities_are_runtime_plans(monkeypatch):
@@ -317,6 +368,53 @@ def test_api_convert_returns_report_and_separate_artifact(monkeypatch):
     assert result.status_code == 200
     assert result.content == b"converted-document"
     assert "article.docx" in result.headers["content-disposition"]
+
+
+def test_api_convert_compares_source_and_result_structure(monkeypatch):
+    def fake_execute(_executor, request):
+        request.output_path.write_bytes(b"converted-pdf")
+        return ConversionReport(request.output_path)
+
+    def fake_inspect(path):
+        is_source = path.suffix == ".docx"
+        return DocumentInspection(
+            path,
+            path.suffix.removeprefix("."),
+            metrics={
+                "pages": 1,
+                "paragraphs": 2,
+                "characters": 100 if is_source else 80,
+                "tables": 1 if is_source else 0,
+            },
+            pages=[
+                {
+                    "index": 0,
+                    "width_pt": 595.28,
+                    "height_pt": 841.89,
+                    "margin_top_pt": 72,
+                    "margin_right_pt": 72,
+                    "margin_bottom_pt": 72,
+                    "margin_left_pt": 72,
+                }
+            ],
+        )
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    monkeypatch.setattr("textalchemy.web.routes.convert.inspect_path", fake_inspect)
+    monkeypatch.setattr("textalchemy.convert.executor.requirement_available", lambda _requirement: True)
+    response = client.post(
+        "/api/convert",
+        files={"file": ("source.docx", b"docx", "application/octet-stream")},
+        data={"source_format": "docx", "target_format": "pdf"},
+    )
+
+    assert response.status_code == 200, response.text
+    status = client.get(response.json()["status"]).json()
+    assert status["source_inspection"]["source_path"] == "source.docx"
+    assert status["target_inspection"]["source_path"] == "source.pdf"
+    assert status["comparison"]["retention"]["characters"]["ratio"] == 0.8
+    assert status["comparison"]["retention"]["tables"]["ratio"] == 0
+    assert status["comparison"]["geometry_summary"]["max_dimension_error_pt"] == 0
 
 
 def test_api_convert_rejects_unknown_mode():
@@ -448,3 +546,251 @@ def test_api_generate_no_data():
 def test_404():
     resp = client.get("/nonexistent-route")
     assert resp.status_code == 404
+
+
+# ── Extract: текст и LaTeX ─────────────────────────
+
+def test_api_extract_text_returns_plain(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.extract.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+    resp = client.post(
+        "/api/extract/text",
+        files={"file": ("notes.txt", "Привет из файла".encode("utf-8"), "text/plain")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert "Привет из файла" in body["text"]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_api_extract_text_error(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.extract.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    def boom(**kwargs):
+        raise RuntimeError("reader exploded")
+
+    monkeypatch.setattr("textalchemy.web.routes.extract.extract_text", boom)
+    resp = client.post(
+        "/api/extract/text",
+        files={"file": ("notes.txt", b"x", "text/plain")},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["success"] is False
+    assert "reader exploded" in resp.json()["error"]
+
+
+def test_api_extract_latex_returns_tex(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.extract.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    def fake_latex(src, out, doc_type="manuscript"):
+        Path(out).write_text("\\section{Раздел}", encoding="utf-8")
+
+    monkeypatch.setattr("textalchemy.web.routes.extract.docx_to_latex", fake_latex)
+    resp = client.post(
+        "/api/extract/latex",
+        files={"file": ("doc.docx", b"docx-bytes", "application/octet-stream")},
+    )
+    assert resp.status_code == 200
+    assert "text/plain" in resp.headers["content-type"]
+    assert "\\section{Раздел}" in resp.text
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_api_extract_latex_error(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.extract.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    def boom(src, out, doc_type="manuscript"):
+        raise RuntimeError("latex failed")
+
+    monkeypatch.setattr("textalchemy.web.routes.extract.docx_to_latex", boom)
+    resp = client.post(
+        "/api/extract/latex",
+        files={"file": ("doc.docx", b"docx-bytes", "application/octet-stream")},
+    )
+    assert resp.json()["success"] is False
+    assert "latex failed" in resp.json()["error"]
+
+
+# ── Recognize: OCR ─────────────────────────────────
+
+def test_api_recognize_success(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.recognize.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    class FakeEngine:
+        is_available = True
+
+        def __init__(self, languages, use_gpu=False):
+            self.languages = languages
+
+        @property
+        def backend_name(self):
+            return "tesseract"
+
+        def recognize(self, path, handwriting=False):
+            return type("R", (), {"text": "распознано", "confidence": 0.9})()
+
+    monkeypatch.setattr("textalchemy.web.routes.recognize.OcrEngine", FakeEngine)
+    resp = client.post(
+        "/api/recognize",
+        files={"file": ("page.png", b"png-bytes", "image/png")},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is True
+    assert body["text"] == "распознано"
+    assert body["backend"] == "tesseract"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_api_recognize_stub_when_backend_unavailable(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.recognize.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    class FakeEngine:
+        is_available = False
+
+        def __init__(self, languages, use_gpu=False):
+            pass
+
+        @property
+        def backend_name(self):
+            return None
+
+        def recognize(self, path, handwriting=False):
+            raise AssertionError("не должен вызываться")
+
+    monkeypatch.setattr("textalchemy.web.routes.recognize.OcrEngine", FakeEngine)
+    resp = client.post(
+        "/api/recognize",
+        files={"file": ("page.png", b"png-bytes", "image/png")},
+    )
+    body = resp.json()
+    assert body["success"] is True
+    assert "[STUB]" in body["text"]
+    assert body["backend"] is None
+
+
+def test_api_recognize_error(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.recognize.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    class FakeEngine:
+        is_available = True
+
+        def __init__(self, languages, use_gpu=False):
+            pass
+
+        @property
+        def backend_name(self):
+            return "easyocr"
+
+        def recognize(self, path, handwriting=False):
+            raise RuntimeError("ocr backend crashed")
+
+    monkeypatch.setattr("textalchemy.web.routes.recognize.OcrEngine", FakeEngine)
+    resp = client.post(
+        "/api/recognize",
+        files={"file": ("page.png", b"png-bytes", "image/png")},
+    )
+    assert resp.json()["success"] is False
+    assert "ocr backend crashed" in resp.json()["error"]
+
+
+# ── Generate: шаблоны ──────────────────────────────
+
+def test_api_generate_lists_templates(monkeypatch):
+    from textalchemy.generate.template import DocumentTemplate
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.list_templates",
+        lambda: [DocumentTemplate(name="report", description="Отчёт")],
+    )
+    resp = client.get("/api/generate/templates")
+    assert resp.status_code == 200
+    assert resp.json() == [{"name": "report", "description": "Отчёт"}]
+
+
+def test_api_generate_rejects_bad_json():
+    resp = client.post(
+        "/api/generate",
+        data={"template": "report", "params": "{not json"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is False
+    assert "JSON" in body["error"]
+
+
+def test_api_generate_returns_file(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    def fake_generate(template_name, output_path, params):
+        Path(output_path).write_bytes(b"docx-content")
+        return output_path
+
+    monkeypatch.setattr("textalchemy.web.routes.generate.generate_document", fake_generate)
+    resp = client.post(
+        "/api/generate",
+        data={"template": "report", "output": "out.docx", "params": '{"a": 1}'},
+    )
+    assert resp.status_code == 200
+    assert "out.docx" in resp.headers["content-disposition"]
+    assert resp.content == b"docx-content"
+
+
+def test_api_generate_error(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    def boom(template_name, output_path, params):
+        raise RuntimeError("generation failed")
+
+    monkeypatch.setattr("textalchemy.web.routes.generate.generate_document", boom)
+    resp = client.post(
+        "/api/generate",
+        data={"template": "report", "params": "{}"},
+    )
+    assert resp.json()["success"] is False
+    assert "generation failed" in resp.json()["error"]

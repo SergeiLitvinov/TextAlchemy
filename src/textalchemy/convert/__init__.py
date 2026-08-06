@@ -13,8 +13,6 @@ from textalchemy.convert.pdf_to_docx import (
     create_converter,
 )
 from textalchemy.convert.pdf_writer import write_pdf_model
-from textalchemy.convert.pptx_to_html import PptxToHtmlConverter
-from textalchemy.convert.pptx_to_html import convert as pptx_to_html
 from textalchemy.convert.protocols import (
     ConversionBackend,
     ConversionValue,
@@ -51,3 +49,15 @@ __all__ = [
     "write_html_model",
     "write_pdf_model",
 ]
+
+
+def __getattr__(name: str) -> object:
+    """Ленивая загрузка тяжёлых конвертеров (python-pptx) по требованию."""
+    if name in {"PptxToHtmlConverter", "pptx_to_html"}:
+        from textalchemy.convert.pptx_to_html import PptxToHtmlConverter
+        from textalchemy.convert.pptx_to_html import convert as _pptx_to_html
+
+        if name == "PptxToHtmlConverter":
+            return PptxToHtmlConverter
+        return _pptx_to_html
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

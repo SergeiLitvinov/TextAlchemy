@@ -7,6 +7,7 @@ import yaml
 from fastapi import Form, HTTPException
 from fastapi.responses import Response
 
+from textalchemy.pipeline import register_builtin_operations
 from textalchemy.pipeline.render import render_bibtex, render_gost, render_json, render_markdown
 from textalchemy.pipeline.runner import run_pipeline
 from textalchemy.web.app import app, db
@@ -14,6 +15,7 @@ from textalchemy.web.app import app, db
 
 @app.post("/api/pipeline/run")
 async def api_pipeline_run(spec: str = Form(...)):
+    register_builtin_operations()
     try:
         pipeline_def = json.loads(spec)
     except json.JSONDecodeError:

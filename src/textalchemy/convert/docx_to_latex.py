@@ -71,6 +71,9 @@ class DocxToLatexConverter(BaseConverter):
             )
 
         try:
+            from textalchemy.core.io import check_archive_safety
+
+            check_archive_safety(input_path)
             doc = DocxDocument(str(input_path))
             from textalchemy.core.types import DocFormat
             text = Text(source_format=DocFormat.DOCX)

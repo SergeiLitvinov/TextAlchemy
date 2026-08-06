@@ -17,6 +17,66 @@ from typing import Iterable, Optional, Union
 
 PathLike = Union[str, Path]
 
+DEFAULT_MAX_ARCHIVE_ENTRIES = 100_000
+DEFAULT_MAX_ARCHIVE_SIZE = 512 * 1024 * 1024
+DEFAULT_MAX_COMPRESSION_RATIO = 200
+
+
+class ArchiveSafetyError(ValueError):
+    """Архив нарушает лимиты безопасности (zip-бомба, path traversal и т.п.)."""
+
+
+def check_archive_safety(
+    path: PathLike,
+    *,
+    max_entries: int = DEFAULT_MAX_ARCHIVE_ENTRIES,
+    max_total_size: int = DEFAULT_MAX_ARCHIVE_SIZE,
+    max_ratio: int = DEFAULT_MAX_COMPRESSION_RATIO,
+) -> None:
+    """Проверить zip/OOXML/EPUB перед распаковкой; поднимает ``ArchiveSafetyError``.
+
+    Читает только центральный каталог (без извлечения данных) и проверяет:
+      * число записей и суммарный размер не превышают лимиты;
+      * коэффициент сжатия не указывает на zip-бомбу;
+      * имена записей безопасны для извлечения: без ``..``, абсолютных путей
+        и дубликатов (защита от path traversal / zip-slip).
+    """
+    p = Path(path)
+    try:
+        with zipfile.ZipFile(p) as zf:
+            infos = zf.infolist()
+            if len(infos) > max_entries:
+                raise ArchiveSafetyError(
+                    f"Слишком много записей в архиве: {len(infos)} > {max_entries}"
+                )
+            total_size = 0
+            total_compressed = 0
+            seen: set[str] = set()
+            for info in infos:
+                name = info.filename
+                if name in seen:
+                    raise ArchiveSafetyError(f"Дубликат записи в архиве: {name}")
+                seen.add(name)
+                normalized = name.replace("\\", "/")
+                if normalized.startswith(("/", "//")):
+                    raise ArchiveSafetyError(f"Абсолютный путь в архиве: {name}")
+                if re.match(r"^[a-zA-Z]:", normalized):
+                    raise ArchiveSafetyError(f"Путь с буквой диска в архиве: {name}")
+                if any(part == ".." for part in normalized.split("/")):
+                    raise ArchiveSafetyError(f"Path traversal в архиве: {name}")
+                if info.file_size > max_total_size:
+                    raise ArchiveSafetyError(f"Запись слишком большая: {name} {info.file_size} байт")
+                total_size += info.file_size
+                total_compressed += info.compress_size
+            if total_size > max_total_size:
+                raise ArchiveSafetyError(f"Суммарный размер архива превышает лимит: {total_size} байт")
+            if total_compressed > 0 and total_size > total_compressed * max_ratio:
+                raise ArchiveSafetyError(
+                    f"Подозрительный коэффициент сжатия: {total_size} / {total_compressed}"
+                )
+    except (zipfile.BadZipFile, OSError) as e:
+        raise ArchiveSafetyError(f"Некорректный zip-архив: {e}") from e
+
 
 def compute_hash(path: PathLike, algorithm: str = "sha256", chunk: int = 65536) -> str:
     """Хеш файла. ``FileNotFoundError`` если файла нет."""
@@ -154,6 +214,8 @@ def create_zip_archive(files: list[Path], output_path: Path) -> Path:
 
 
 __all__ = [
+    "ArchiveSafetyError",
+    "check_archive_safety",
     "compute_hash",
     "find_duplicates_by_paths",
     "find_duplicates_in_folder",

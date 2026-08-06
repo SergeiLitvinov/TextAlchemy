@@ -6,6 +6,8 @@ import zipfile
 import pytest
 
 from textalchemy.core.io import (
+    ArchiveSafetyError,
+    check_archive_safety,
     compute_hash,
     create_zip_archive,
     ensure_dir,
@@ -186,6 +188,82 @@ class TestCreateZipArchive:
         assert out.is_file()
         with zipfile.ZipFile(out) as zf:
             assert set(zf.namelist()) == {"a.txt", "b.txt"}
+
+
+class TestCheckArchiveSafety:
+    """Защита от zip-бомб, path traversal и переполнения ресурсов."""
+
+    def _zip(self, tmp_path, names, contents=None):
+        """Собрать zip из имён записей и (опционально) байт."""
+        path = tmp_path / "sample.zip"
+        contents = contents or [b"x" * 100] * len(names)
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for name, data in zip(names, contents):
+                zf.writestr(name, data)
+        return path
+
+    def test_valid_zip_passes(self, tmp_path):
+        p = self._zip(tmp_path, ["word/document.xml", "word/styles.xml"])
+        assert check_archive_safety(p) is None
+
+    def test_empty_zip_passes(self, tmp_path):
+        p = tmp_path / "empty.zip"
+        with zipfile.ZipFile(p, "w"):
+            pass
+        assert check_archive_safety(p) is None
+
+    def test_path_traversal_rejected(self, tmp_path):
+        p = self._zip(tmp_path, ["../evil", "word/document.xml"])
+        with pytest.raises(ArchiveSafetyError, match="Path traversal"):
+            check_archive_safety(p)
+
+    def test_absolute_path_rejected(self, tmp_path):
+        p = self._zip(tmp_path, ["/etc/passwd"])
+        with pytest.raises(ArchiveSafetyError, match="Абсолютный путь"):
+            check_archive_safety(p)
+
+    def test_drive_letter_rejected(self, tmp_path):
+        p = self._zip(tmp_path, ["C:/windows/evil"])
+        with pytest.raises(ArchiveSafetyError, match="буквой диска"):
+            check_archive_safety(p)
+
+    def test_duplicate_entry_rejected(self, tmp_path):
+        p = tmp_path / "dup.zip"
+        with zipfile.ZipFile(p, "w") as zf:
+            zf.writestr("a.txt", b"one")
+            zf.writestr("b.txt", b"two")
+        # Дубликат имени в том же архиве (zip-slip / неоднозначность распаковки).
+        info = zipfile.ZipInfo("a.txt")
+        with zipfile.ZipFile(p, "a") as zf:
+            zf.writestr(info, b"three")
+        with pytest.raises(ArchiveSafetyError, match="Дубликат"):
+            check_archive_safety(p)
+
+    def test_too_many_entries_rejected(self, tmp_path):
+        p = self._zip(tmp_path, [f"e{i}.xml" for i in range(5)])
+        with pytest.raises(ArchiveSafetyError, match="Слишком много записей"):
+            check_archive_safety(p, max_entries=3)
+
+    def test_oversized_entry_rejected(self, tmp_path):
+        p = self._zip(tmp_path, ["big.bin"], contents=[b"z" * 1024])
+        with pytest.raises(ArchiveSafetyError, match="Запись слишком большая"):
+            check_archive_safety(p, max_total_size=512)
+
+    def test_total_size_rejected(self, tmp_path):
+        p = self._zip(tmp_path, ["a.bin", "b.bin"], contents=[b"z" * 300] * 2)
+        with pytest.raises(ArchiveSafetyError, match="Суммарный размер"):
+            check_archive_safety(p, max_total_size=512)
+
+    def test_zip_bomb_ratio_rejected(self, tmp_path):
+        p = self._zip(tmp_path, ["bomb.bin"], contents=[b"\x00" * 100_000])
+        with pytest.raises(ArchiveSafetyError, match="коэффициент"):
+            check_archive_safety(p, max_ratio=10)
+
+    def test_not_a_zip_rejected(self, tmp_path):
+        p = tmp_path / "junk.zip"
+        p.write_bytes(b"this is not a zip file")
+        with pytest.raises(ArchiveSafetyError, match="zip"):
+            check_archive_safety(p)
 
 
 class TestLegacyImports:

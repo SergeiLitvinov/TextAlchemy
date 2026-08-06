@@ -7,6 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Union
 
+from textalchemy.core.io import check_archive_safety
 from textalchemy.core.types import Block, BlockType, DocFormat, Text
 
 
@@ -14,6 +15,7 @@ def read_epub(path: Union[str, Path]) -> Text:
     p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(p)
+    check_archive_safety(p)
     try:
         import ebooklib
         from bs4 import BeautifulSoup

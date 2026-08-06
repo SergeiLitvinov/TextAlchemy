@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from textalchemy.core.registry import all_operations, by_tag, get, isolated, operation
+from textalchemy.core.registry import all_operations, by_tag, get, isolated, operation, reset
 
 
 def test_operation_registers():
@@ -79,3 +79,31 @@ def test_pipeline_operations_survive_isolation():
         assert all_operations() == []
     # после isolated() — снова видим ingest.file
     assert any(s.id == "ingest.file" for s in all_operations())
+
+
+def test_register_builtin_operations_is_idempotent():
+    from textalchemy.pipeline import register_builtin_operations
+
+    with isolated():
+        register_builtin_operations()
+        first = {s.id for s in all_operations()}
+        assert "ingest.file" in first
+        assert "extract.text" in first
+        assert "render.latex" in first
+        register_builtin_operations()
+        assert {s.id for s in all_operations()} == first
+
+
+def test_register_builtin_operations_repopulates_after_reset():
+    """reset() разрушителен, но register_builtin_operations() восстанавливает встроенные операции."""
+    from textalchemy.pipeline import register_builtin_operations
+
+    with isolated():
+        reset()
+        assert all_operations() == []
+        register_builtin_operations()
+        ids = {s.id for s in all_operations()}
+        assert "ingest.file" in ids
+        assert "template.render" in ids
+        # Повторная регистрация не должна падать на дубликатах.
+        register_builtin_operations()

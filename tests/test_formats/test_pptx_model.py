@@ -8,7 +8,7 @@ from PIL import Image as PillowImage
 from pptx import Presentation
 from pptx.chart.data import ChartData
 from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE
+from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.util import Emu, Inches, Pt
 
@@ -79,7 +79,22 @@ def _build_rich_pptx(path: Path, *, image_bytes: bytes | None = None) -> None:
     chart_data = ChartData()
     chart_data.categories = ["Alpha", "Beta"]
     chart_data.add_series("Score", (10, 20))
-    slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, Inches(6), Inches(2.6), Inches(5), Inches(3), chart_data)
+    chart = slide.shapes.add_chart(
+        XL_CHART_TYPE.COLUMN_CLUSTERED,
+        Inches(6),
+        Inches(2.6),
+        Inches(5),
+        Inches(3),
+        chart_data,
+    ).chart
+    chart.series[0].format.fill.solid()
+    chart.series[0].format.fill.fore_color.rgb = RGBColor(0x44, 0x72, 0xC4)
+    chart.has_legend = True
+    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+    chart.category_axis.has_title = True
+    chart.category_axis.axis_title.text_frame.text = "Categories"
+    chart.value_axis.has_title = True
+    chart.value_axis.axis_title.text_frame.text = "Score axis"
 
     slide.notes_slide.notes_text_frame.text = "Speaker notes for test."
 
@@ -89,6 +104,42 @@ def _build_rich_pptx(path: Path, *, image_bytes: bytes | None = None) -> None:
         slide.shapes.add_picture(str(image_path), Inches(1), Inches(4), Inches(2), Inches(1))
         image_path.unlink(missing_ok=True)
 
+    presentation.save(path)
+
+
+def _build_transformed_group_pptx(path: Path) -> None:
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    group = slide.shapes.add_group_shape()
+    group.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(1), Inches(0.5)).text = "matrix child"
+    group.left = Inches(1)
+    group.top = Inches(1)
+    group.width = Inches(2)
+    group.height = Inches(1)
+    xfrm = group._element.grpSpPr.xfrm
+    xfrm.set("rot", "5400000")
+    xfrm.set("flipH", "1")
+    presentation.save(path)
+
+
+def _build_nested_transformed_group_pptx(path: Path) -> None:
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    outer = slide.shapes.add_group_shape()
+    inner = outer.shapes.add_group_shape()
+    inner.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(1), Inches(0.5)).text = "nested child"
+    inner.left = Inches(0.5)
+    inner.top = Inches(0.5)
+    inner.width = Inches(2)
+    inner.height = Inches(1)
+    inner._element.grpSpPr.xfrm.set("rot", "900000")
+    inner._element.grpSpPr.xfrm.set("flipV", "1")
+    outer.left = Inches(1)
+    outer.top = Inches(1)
+    outer.width = Inches(4)
+    outer.height = Inches(2)
+    outer._element.grpSpPr.xfrm.set("rot", "1800000")
+    outer._element.grpSpPr.xfrm.set("flipH", "1")
     presentation.save(path)
 
 
@@ -149,6 +200,59 @@ class TestReadPptxModel:
         assert group_block.box.y == pytest.approx(36.0)
         assert group_block.box.width == pytest.approx(72.0)
 
+    def test_group_rotation_and_flip_produce_exact_affine_matrix(self, tmp_path):
+        path = tmp_path / "transformed-group.pptx"
+        _build_transformed_group_pptx(path)
+
+        model = read_pptx_model(path)
+        child = next(
+            paragraph
+            for paragraph in _paragraphs(model.sections[0].blocks)
+            if any(run.text == "matrix child" for run in paragraph.content if hasattr(run, "text"))
+        )
+        transform = child.properties["pptx"]["transform"]
+
+        assert transform["matrix"] == pytest.approx([0, -2, -2, 0, 180, 180], abs=0.01)
+        assert transform["width_pt"] == pytest.approx(72.0)
+        assert transform["height_pt"] == pytest.approx(36.0)
+        assert transform["rotation"] == pytest.approx(90.0)
+        assert child.box.x == pytest.approx(108.0)
+        assert child.box.y == pytest.approx(36.0)
+        assert child.box.width == pytest.approx(72.0)
+        assert child.box.height == pytest.approx(144.0)
+
+    def test_shape_flip_is_preserved_as_affine_matrix(self, tmp_path):
+        path = tmp_path / "flipped-shape.pptx"
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+        shape = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(1), Inches(2), Inches(2), Inches(1))
+        shape.text = "flipped"
+        shape._element.spPr.xfrm.set("flipV", "1")
+        presentation.save(path)
+
+        model = read_pptx_model(path)
+        paragraph = next(block for block in _paragraphs(model.sections[0].blocks) if block.plain_text == "flipped")
+        transform = paragraph.properties["pptx"]["transform"]
+
+        assert transform["matrix"] == pytest.approx([1, 0, 0, -1, 72, 216], abs=0.01)
+        assert transform["flip_vertical"] is True
+
+    def test_nested_group_transforms_are_composed(self, tmp_path):
+        path = tmp_path / "nested-groups.pptx"
+        _build_nested_transformed_group_pptx(path)
+
+        model = read_pptx_model(path)
+        paragraph = next(block for block in _paragraphs(model.sections[0].blocks) if block.plain_text == "nested child")
+        transform = paragraph.properties["pptx"]["transform"]
+        matrix = transform["matrix"]
+
+        assert transform["rotation"] == pytest.approx(45.0)
+        assert abs(matrix[1]) > 0.1
+        assert abs(matrix[2]) > 0.1
+        assert matrix[0] * matrix[3] - matrix[1] * matrix[2] > 0  # Two flips preserve orientation.
+        assert paragraph.box.width > 0
+        assert paragraph.box.height > 0
+
     def test_extracts_table(self, tmp_path):
         path = tmp_path / "rich.pptx"
         _build_rich_pptx(path)
@@ -169,6 +273,12 @@ class TestReadPptxModel:
         assert chart["categories"] == ["Alpha", "Beta"]
         assert chart["series"][0]["name"] == "Score"
         assert chart["series"][0]["values"] == ["10", "20"]
+        assert chart["series"][0]["color"] == "#4472C4"
+        assert chart["bar_direction"] == "col"
+        assert chart["grouping"] == "clustered"
+        assert chart["legend_position"] == "b"
+        assert chart["category_axis_title"] == "Categories"
+        assert chart["value_axis_title"] == "Score axis"
 
     def test_extracts_image_resource(self, tmp_path):
         path = tmp_path / "rich.pptx"

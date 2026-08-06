@@ -5,6 +5,7 @@ from fastapi import File, Form, HTTPException, UploadFile
 
 from textalchemy.core.registry import all_operations
 from textalchemy.organize import BibliographyParser as PipelineBibliographyParser
+from textalchemy.pipeline import register_builtin_operations
 from textalchemy.pipeline.bibliography import smart_parse_bibliography
 from textalchemy.web.app import _load_bib, _save_bib, app
 from textalchemy.web.workspace import create_web_workspace, save_upload
@@ -132,6 +133,7 @@ async def api_smart_parse(text: str = Form(...)):
 
 @app.get("/api/operations")
 async def api_operations():
+    register_builtin_operations()
     return [{"id": op.id, "input_type": op.input_type, "output_type": op.output_type,
              "input_param": op.input_param, "description": op.description, "tags": op.tags}
             for op in all_operations()]

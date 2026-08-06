@@ -1,5 +1,6 @@
 """Тесты DocumentModel → самодостаточный HTML."""
 
+import pytest
 from PIL import Image as PillowImage
 
 from textalchemy.convert.html_writer import write_html_model
@@ -259,3 +260,120 @@ def test_write_html_model_preserves_slide_canvas_and_background(tmp_path):
     assert '<section class="ta-section ta-section-0" style="background-color:#F2F2F2">' in html
     assert "left:72pt" in html
     assert "top:36pt" in html
+
+
+def test_write_html_model_uses_exact_pptx_affine_transform(tmp_path):
+    output = tmp_path / "affine.html"
+    paragraph = Paragraph(
+        content=[TextRun("Transformed")],
+        box=Box(x=108, y=36, width=72, height=144, rotation=90),
+        properties={
+            "pptx": {
+                "shape": {"prst": "rect", "fill": "#4472C4"},
+                "transform": {
+                    "matrix": [0, -2, -2, 0, 180, 180],
+                    "width_pt": 72,
+                    "height_pt": 36,
+                },
+            }
+        },
+    )
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[paragraph])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert "width:72pt" in html
+    assert "height:36pt" in html
+    assert "transform:matrix(0,-2,-2,0,180,180)" in html
+    assert "transform-origin:0 0" in html
+    assert "transform:rotate(90deg)" not in html
+
+
+@pytest.mark.parametrize(
+    ("chart_type", "marker"),
+    [("barChart", "<rect"), ("lineChart", "<polyline"), ("pieChart", "<path")],
+)
+def test_write_html_model_renders_editable_svg_charts(tmp_path, chart_type, marker):
+    output = tmp_path / f"{chart_type}.html"
+    paragraph = Paragraph(
+        content=[TextRun("text fallback must be hidden")],
+        box=Box(x=20, y=20, width=500, height=300),
+        properties={
+            "pptx": {
+                "shape": {"kind": "chart"},
+                "chart": {
+                    "chart_type": chart_type,
+                    "title": "Retention",
+                    "categories": ["Text", "Tables"],
+                    "series": [{"name": "Quality", "values": [100, 96], "color": "#4472C4"}],
+                },
+            }
+        },
+    )
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[paragraph])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert '<svg class="ta-chart"' in html
+    assert marker in html
+    assert "Retention" in html
+    assert "Text: 100.0" in html
+    assert "text fallback must be hidden" not in html
+
+
+def test_write_html_model_reports_unsupported_chart_type(tmp_path):
+    output = tmp_path / "unsupported-chart.html"
+    paragraph = Paragraph(
+        content=[TextRun("Accessible fallback")],
+        properties={
+            "pptx": {
+                "shape": {"kind": "chart"},
+                "chart": {"chart_type": "surfaceChart", "series": [{"name": "Z", "values": [1]}]},
+            }
+        },
+    )
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[paragraph])]), output)
+
+    assert report.lossless is False
+    assert any(issue.feature == "chart" and issue.severity is IssueSeverity.LOSS for issue in report.issues)
+    assert "Accessible fallback" in output.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("grouping", "bar_direction"),
+    [("stacked", "col"), ("percentStacked", "bar")],
+)
+def test_write_html_model_renders_stacked_bar_charts(tmp_path, grouping, bar_direction):
+    output = tmp_path / f"{grouping}-{bar_direction}.html"
+    chart = {
+        "chart_type": "barChart",
+        "grouping": grouping,
+        "bar_direction": bar_direction,
+        "legend": True,
+        "legend_position": "b",
+        "category_axis_title": "Document parts",
+        "value_axis_title": "Retention, %",
+        "categories": ["Text", "Tables"],
+        "series": [
+            {"name": "Preserved", "values": [70, 60], "color": "#4472C4"},
+            {"name": "Recovered", "values": [30, 40], "color": "#ED7D31"},
+        ],
+    }
+    paragraph = Paragraph(
+        content=[TextRun("fallback")],
+        box=Box(x=10, y=10, width=600, height=350),
+        properties={"pptx": {"shape": {"kind": "chart"}, "chart": chart}},
+    )
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[paragraph])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert "Preserved: 70" in html
+    assert "Recovered: 30" in html
+    assert "Document parts" in html
+    assert "Retention, %" in html
+    assert "fallback" not in html

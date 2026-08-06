@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from textalchemy.convert.pptx_to_html import PptxToHtmlConverter, convert
 from textalchemy.convert.pptx_to_html._omml import (
     M_NS,
@@ -38,9 +40,59 @@ def test_has_math_negative():
 
 def test_assets_present():
     """CSS и JS должны быть встроены в пакет."""
-    from pathlib import Path
     # tests/convert/test_pptx_to_html.py → parents[2] = TextAlchemy/
     repo_root = Path(__file__).resolve().parents[2]
     pptx_html = repo_root / "src" / "textalchemy" / "convert" / "pptx_to_html"
     assert (pptx_html / "assets" / "css" / "main.css").is_file()
     assert (pptx_html / "assets" / "js" / "main.js").is_file()
+
+
+_CORPUS_PPTX = Path(__file__).resolve().parents[2] / "tests" / "corpus" / "office" / "libreoffice-scientific-slides.pptx"
+
+
+def test_convert_corpus_pptx(tmp_path):
+    """End-to-end: corpus-презентация конвертируется в автономный HTML."""
+    output = tmp_path / "out"
+    result = PptxToHtmlConverter().convert(_CORPUS_PPTX, output)
+    assert result.success is True
+    assert result.error is None
+
+    index = output / "index.html"
+    assert index.is_file()
+    html = index.read_text(encoding="utf-8")
+    assert "<html" in html.lower()
+    assert "slide" in html.lower()
+    assert (output / "assets" / "css" / "main.css").is_file()
+    assert (output / "assets" / "js" / "main.js").is_file()
+
+
+def test_convert_missing_input(tmp_path):
+    result = PptxToHtmlConverter().convert(tmp_path / "nope.pptx", tmp_path / "out")
+    assert result.success is False
+    assert "not found" in result.error
+
+
+def test_convert_error_is_reported(tmp_path, monkeypatch):
+    import textalchemy.convert.pptx_to_html.converter as converter_mod
+
+    def boom(input_path, output_path):
+        raise RuntimeError("renderer exploded")
+
+    monkeypatch.setattr(converter_mod, "_convert_pptx_impl", boom)
+    result = PptxToHtmlConverter().convert(_CORPUS_PPTX, tmp_path / "out")
+    assert result.success is False
+    assert "renderer exploded" in result.error
+
+
+def test_convert_without_copy_assets_still_succeeds(tmp_path):
+    output = tmp_path / "out"
+    result = PptxToHtmlConverter(copy_assets=False).convert(_CORPUS_PPTX, output)
+    assert result.success is True
+    assert (output / "index.html").is_file()
+
+
+def test_convert_function_wrapper(tmp_path):
+    output = tmp_path / "out"
+    result = convert(_CORPUS_PPTX, output, copy_assets=False)
+    assert result.success is True
+    assert (output / "index.html").is_file()

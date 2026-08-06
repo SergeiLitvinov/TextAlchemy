@@ -31,6 +31,9 @@ class OperationSpec:
 
 _REGISTRY: dict[str, OperationSpec] = {}
 
+#: Маркер, которым декоратор помечает функцию операции; переживает ``reset()``.
+_SPEC_MARKER = "__textalchemy_operation_spec__"
+
 
 def operation(
     op_id: str,
@@ -63,12 +66,29 @@ def operation(
             tags=list(tags or []),
             params=dict(defaults),
         )
-        if op_id in _REGISTRY:
-            raise ValueError(f"Operation id {op_id!r} already registered")
-        _REGISTRY[op_id] = spec
+        register(spec)
+        setattr(func, _SPEC_MARKER, spec)
         return func
 
     return decorator
+
+
+def register(spec: OperationSpec) -> None:
+    """Явно зарегистрировать готовый ``OperationSpec``; дубликаты запрещены."""
+    if spec.id in _REGISTRY:
+        raise ValueError(f"Operation id {spec.id!r} already registered")
+    _REGISTRY[spec.id] = spec
+
+
+def re_register(spec: OperationSpec) -> None:
+    """Зарегистрировать spec, если его ещё нет (не перезаписывая существующий)."""
+    if spec.id not in _REGISTRY:
+        _REGISTRY[spec.id] = spec
+
+
+def spec_for(func: Callable[..., Any]) -> Optional[OperationSpec]:
+    """Вернуть spec, которым ``@operation`` пометил функцию (или ``None``)."""
+    return getattr(func, _SPEC_MARKER, None)
 
 
 def get(op_id: str) -> OperationSpec:
@@ -102,4 +122,15 @@ def isolated() -> Iterator[None]:
         _REGISTRY.update(snapshot)
 
 
-__all__ = ["operation", "OperationSpec", "get", "all_operations", "by_tag", "reset", "isolated"]
+__all__ = [
+    "operation",
+    "OperationSpec",
+    "register",
+    "re_register",
+    "spec_for",
+    "get",
+    "all_operations",
+    "by_tag",
+    "reset",
+    "isolated",
+]

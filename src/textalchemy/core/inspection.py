@@ -514,7 +514,7 @@ def inspect_document_model(
 
 
 def inspect_path(path: str | Path) -> DocumentInspection:
-    """Инспектировать DOCX, PDF или JSON-сериализацию DocumentModel."""
+    """Inspect DOCX, PDF, PPTX or a JSON-serialized DocumentModel."""
 
     source = Path(path)
     if not source.is_file():
@@ -530,6 +530,10 @@ def inspect_path(path: str | Path) -> DocumentInspection:
         return inspect_document_model(load_document(source), source_path=source, source_format="document-model-json")
     if suffix == ".pdf":
         return _inspect_pdf(source)
+    if suffix == ".pptx":
+        from textalchemy.formats.pptx import read_pptx_model
+
+        return inspect_document_model(read_pptx_model(source), source_path=source, source_format="pptx")
     raise TextAlchemyError(f"Unsupported inspection format: {suffix or '<none>'}")
 
 

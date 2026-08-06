@@ -114,6 +114,26 @@ def test_inspect_pdf_reports_text_vector_fonts_and_page_geometry(tmp_path):
     assert report.fonts
 
 
+def test_inspect_pptx_uses_shared_document_model(tmp_path):
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    source = tmp_path / "slides.pptx"
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+    slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1)).text = "Inspectable presentation"
+    presentation.save(source)
+
+    report = inspect_path(source)
+
+    assert report.valid is True
+    assert report.source_format == "pptx"
+    assert report.metrics["pages"] == 1
+    assert report.metrics["paragraphs"] == 1
+    assert report.metrics["characters"] == len("Inspectable presentation")
+    assert report.pages[0]["width_pt"] > 0
+
+
 def test_compare_inspections_reports_retention_and_page_geometry_loss():
     source = DocumentModel(
         sections=[

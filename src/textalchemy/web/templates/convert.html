@@ -25,6 +25,14 @@
                 </div>
                 <button type="button" class="btn-link" id="replaceBtn">Выбрать другой</button>
             </div>
+            <div class="inspection-panel" id="sourceInspection" aria-live="polite">
+                <div class="inspection-heading">
+                    <strong>Структура исходного документа</strong>
+                    <span id="inspectionState">Проверяем…</span>
+                </div>
+                <div class="inspection-metrics" id="inspectionMetrics"></div>
+                <p class="field-help inspection-message" id="inspectionMessage"></p>
+            </div>
             <div class="form-grid conversion-options">
                 <div>
                     <label for="target">Формат результата</label>
@@ -68,6 +76,11 @@
             <h3>Что требует внимания</h3>
             <ul class="issue-list" id="issueList"></ul>
         </div>
+        <div id="comparisonSection" hidden>
+            <h3>Сохранность структуры</h3>
+            <div class="retention-grid" id="retentionGrid"></div>
+            <p class="field-help inspection-message" id="comparisonMessage"></p>
+        </div>
         <div class="form-actions result-actions">
             <button type="button" id="downloadBtn">Скачать результат</button>
             <button type="button" class="btn-secondary" id="anotherBtn">Конвертировать ещё</button>
@@ -88,6 +101,7 @@
     let pendingFile = null;
     let selectedSource = null;
     let activeTask = null;
+    let inspectionRequest = 0;
 
     function setStatus(message, type) {
         const element = $('status');
@@ -136,6 +150,44 @@
             `<option value="${esc(item.format)}">${esc(item.label)} (${esc(item.extension)})</option>`
         ).join('');
         updateTarget();
+        inspectSelectedFile(file);
+    }
+
+    async function inspectSelectedFile(file) {
+        const request = ++inspectionRequest;
+        $('inspectionState').textContent = 'Проверяем…';
+        $('inspectionMetrics').innerHTML = '';
+        $('inspectionMessage').textContent = 'Анализируем страницы, текст, таблицы, изображения и формулы.';
+        const form = new FormData();
+        form.set('file', file);
+        try {
+            const data = await api('/api/convert/inspect', {method: 'POST', formData: form});
+            if (request !== inspectionRequest) return;
+            renderInspection(data.inspection);
+        } catch (_) {
+            if (request !== inspectionRequest) return;
+            $('inspectionState').textContent = 'Проверка недоступна';
+            $('inspectionMessage').textContent = 'Конвертацию всё равно можно запустить.';
+        }
+    }
+
+    function renderInspection(inspection) {
+        const metrics = inspection?.metrics || {};
+        const entries = [
+            ['Страницы', metrics.pages],
+            ['Абзацы', metrics.paragraphs],
+            ['Таблицы', metrics.tables],
+            ['Изображения', metrics.images],
+            ['Формулы', metrics.formulas],
+        ].filter((entry) => entry[1] !== undefined);
+        $('inspectionState').textContent = inspection?.valid ? 'Структура читается' : 'Есть ошибки структуры';
+        $('inspectionMetrics').innerHTML = entries.map(([label, value]) =>
+            `<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`
+        ).join('');
+        const issues = inspection?.issues || [];
+        $('inspectionMessage').textContent = issues.length
+            ? `Найдено замечаний: ${issues.length}. Они будут учтены в итоговом отчёте.`
+            : 'Критичных структурных проблем не найдено.';
     }
 
     function selectedTarget() {
@@ -250,8 +302,31 @@
         $('issueList').innerHTML = issues.map((issue) =>
             `<li class="issue-${esc(issue.severity)}"><strong>${esc(issue.feature)}</strong><span>${esc(issue.message)}</span></li>`
         ).join('');
+        renderComparison(data.comparison, data.inspection_error);
         $('downloadBtn').hidden = Boolean(failed);
         $('resultCard').scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+
+    function renderComparison(comparison, inspectionError) {
+        const section = $('comparisonSection');
+        const retention = comparison?.retention || {};
+        const names = {
+            characters: 'Текст', paragraphs: 'Абзацы', tables: 'Таблицы',
+            images: 'Изображения', formulas: 'Формулы', pages: 'Страницы',
+        };
+        const entries = Object.entries(names)
+            .filter(([name]) => retention[name])
+            .map(([name, label]) => [label, retention[name]]);
+        section.hidden = entries.length === 0 && !inspectionError;
+        $('retentionGrid').innerHTML = entries.map(([label, values]) => {
+            const percent = Math.round((values.ratio || 0) * 100);
+            const level = percent >= 99 ? 'good' : percent >= 80 ? 'warn' : 'bad';
+            return `<div class="retention-item ${level}"><span>${esc(label)}</span>` +
+                `<strong>${percent}%</strong><small>${esc(values.target)} из ${esc(values.source)}</small></div>`;
+        }).join('');
+        $('comparisonMessage').textContent = inspectionError || (comparison?.has_losses
+            ? 'Обнаружены структурные отличия — подробности перечислены в замечаниях.'
+            : 'Проверенные элементы структуры сохранены.');
     }
 
     $('downloadBtn').addEventListener('click', async () => {
@@ -274,6 +349,7 @@
         $('fileInput').value = '';
         pendingFile = null;
         selectedSource = null;
+        inspectionRequest += 1;
         $('dropZone').scrollIntoView({behavior: 'smooth', block: 'center'});
     });
 
