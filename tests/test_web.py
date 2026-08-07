@@ -964,7 +964,48 @@ def test_api_generate_lists_templates(monkeypatch):
     )
     resp = client.get("/api/generate/templates")
     assert resp.status_code == 200
-    assert resp.json() == [{"name": "report", "description": "Отчёт"}]
+    assert resp.json() == [{"name": "report", "description": "Отчёт", "template_type": "docx"}]
+
+
+def test_api_generate_template_schema(monkeypatch):
+    from textalchemy.generate.template_schema import TemplateSchema
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.template_schema_for",
+        lambda name, templates_dir=None: (TemplateSchema(allow_extra=True), "derived"),
+    )
+    resp = client.get("/api/generate/templates/report/schema")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["name"] == "report"
+    assert body["source"] == "derived"
+    assert body["schema"]["allow_extra"] is True
+
+
+def test_api_generate_template_schema_missing():
+    resp = client.get("/api/generate/templates/does-not-exist/schema")
+    assert resp.status_code == 404
+
+
+def test_api_generate_template_preview_meta(monkeypatch):
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.cached_page_count",
+        lambda preview_dir, source, side: 3,
+    )
+    resp = client.get("/api/generate/templates/report/preview/meta")
+    assert resp.status_code == 200
+    assert resp.json() == {"available": True, "pages": 3, "error": None}
+
+
+def test_api_generate_template_preview_png(monkeypatch):
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.cached_page_png",
+        lambda preview_dir, source, side, page, **kwargs: b"\x89PNG-preview",
+    )
+    resp = client.get("/api/generate/templates/report/preview?page=1")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/png"
+    assert resp.content == b"\x89PNG-preview"
 
 
 def test_api_generate_rejects_bad_json():
@@ -978,19 +1019,57 @@ def test_api_generate_rejects_bad_json():
     assert "JSON" in body["error"]
 
 
-def test_api_generate_returns_file(tmp_path, monkeypatch):
+def test_api_generate_validation_errors(tmp_path, monkeypatch):
     from textalchemy.core.artifacts import ArtifactWorkspace
+    from textalchemy.generate.template_schema import TemplateField, TemplateSchema, TemplateValueType
 
     monkeypatch.setattr(
         "textalchemy.web.routes.generate.create_web_workspace",
         lambda: ArtifactWorkspace(parent=tmp_path),
     )
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.template_schema_for",
+        lambda name, templates_dir=None: (
+            TemplateSchema(
+                fields=[
+                    TemplateField("title", TemplateValueType.STRING),
+                    TemplateField("count", TemplateValueType.INTEGER),
+                ],
+                allow_extra=False,
+            ),
+            "sidecar",
+        ),
+    )
+    resp = client.post(
+        "/api/generate",
+        data={"template": "report", "params": '{"count": "many"}'},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["success"] is False
+    assert body["errors"]["title"] == "required value is missing"
+    assert body["errors"]["count"] == "expected integer, got str"
 
-    def fake_generate(template_name, output_path, params):
+
+def test_api_generate_returns_file(tmp_path, monkeypatch):
+    from textalchemy.core.artifacts import ArtifactWorkspace
+    from textalchemy.core.diagnostics import ConversionReport
+    from textalchemy.generate.template_schema import TemplateSchema
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.template_schema_for",
+        lambda name, templates_dir=None: (TemplateSchema(allow_extra=True), "derived"),
+    )
+
+    def fake_generate(template_path, output_path, data, *, strict=True, schema=None):
         Path(output_path).write_bytes(b"docx-content")
-        return output_path
+        return ConversionReport(Path(output_path))
 
-    monkeypatch.setattr("textalchemy.web.routes.generate.generate_document", fake_generate)
+    monkeypatch.setattr("textalchemy.web.routes.generate.generate_docx_template", fake_generate)
     resp = client.post(
         "/api/generate",
         data={"template": "report", "output": "out.docx", "params": '{"a": 1}'},
@@ -1002,16 +1081,21 @@ def test_api_generate_returns_file(tmp_path, monkeypatch):
 
 def test_api_generate_error(tmp_path, monkeypatch):
     from textalchemy.core.artifacts import ArtifactWorkspace
+    from textalchemy.generate.template_schema import TemplateSchema
 
     monkeypatch.setattr(
         "textalchemy.web.routes.generate.create_web_workspace",
         lambda: ArtifactWorkspace(parent=tmp_path),
     )
+    monkeypatch.setattr(
+        "textalchemy.web.routes.generate.template_schema_for",
+        lambda name, templates_dir=None: (TemplateSchema(allow_extra=True), "derived"),
+    )
 
-    def boom(template_name, output_path, params):
+    def boom(template_path, output_path, data, *, strict=True, schema=None):
         raise RuntimeError("generation failed")
 
-    monkeypatch.setattr("textalchemy.web.routes.generate.generate_document", boom)
+    monkeypatch.setattr("textalchemy.web.routes.generate.generate_docx_template", boom)
     resp = client.post(
         "/api/generate",
         data={"template": "report", "params": "{}"},
