@@ -953,6 +953,125 @@ def test_api_recognize_error(tmp_path, monkeypatch):
     assert "ocr backend crashed" in resp.json()["error"]
 
 
+def test_api_recognize_pdf_scenario_fast(tmp_path, monkeypatch):
+    """PDF with a native text layer is readable in fast mode without OCR."""
+    import fitz
+
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.recognize.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    pdf = tmp_path / "text_layer.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=400)
+    page.insert_text((36, 48), "Fast mode text layer", fontname="helv", fontsize=12)
+    doc.save(str(pdf))
+    doc.close()
+
+    class FakeEngine:
+        is_available = False
+
+        def __init__(self, languages, use_gpu=False):
+            pass
+
+        @property
+        def backend_name(self):
+            return None
+
+        def recognize_pdf_geometry(self, *args, **kwargs):
+            raise AssertionError("OCR must not run in fast mode")
+
+    monkeypatch.setattr("textalchemy.web.routes.recognize.OcrEngine", FakeEngine)
+    with open(pdf, "rb") as fh:
+        resp = client.post(
+            "/api/recognize",
+            files={"file": ("scan.pdf", fh.read(), "application/pdf")},
+            data={"scenario": "fast"},
+        )
+    body = resp.json()
+    assert body["success"] is True
+    assert "Fast mode text layer" in body["text"]
+    assert body["backend"] == "text_layer"
+    assert body["scenario"] == "fast"
+
+
+def test_api_recognize_pdf_scan_stub_when_no_backend(tmp_path, monkeypatch):
+    """scan scenario without OCR backend degrades to a STUB message."""
+    import fitz
+
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.recognize.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    pdf = tmp_path / "scan.pdf"
+    doc = fitz.open()
+    doc.new_page(width=300, height=400)
+    doc.save(str(pdf))
+    doc.close()
+
+    class FakeEngine:
+        is_available = False
+
+        def __init__(self, languages, use_gpu=False):
+            pass
+
+        @property
+        def backend_name(self):
+            return None
+
+    monkeypatch.setattr("textalchemy.web.routes.recognize.OcrEngine", FakeEngine)
+    with open(pdf, "rb") as fh:
+        resp = client.post(
+            "/api/recognize",
+            files={"file": ("scan.pdf", fh.read(), "application/pdf")},
+            data={"scenario": "scan"},
+        )
+    body = resp.json()
+    assert body["success"] is True
+    assert "[STUB]" in body["text"]
+
+
+def test_api_recognize_pdf_unknown_scenario(tmp_path, monkeypatch):
+    """Unknown scenario returns an error payload."""
+    import fitz
+
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    monkeypatch.setattr(
+        "textalchemy.web.routes.recognize.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+
+    pdf = tmp_path / "x.pdf"
+    doc = fitz.open()
+    doc.new_page(width=300, height=400)
+    doc.save(str(pdf))
+    doc.close()
+
+    class FakeEngine:
+        is_available = False
+
+        def __init__(self, languages, use_gpu=False):
+            pass
+
+    monkeypatch.setattr("textalchemy.web.routes.recognize.OcrEngine", FakeEngine)
+    with open(pdf, "rb") as fh:
+        resp = client.post(
+            "/api/recognize",
+            files={"file": ("x.pdf", fh.read(), "application/pdf")},
+            data={"scenario": "bogus"},
+        )
+    body = resp.json()
+    assert body["success"] is False
+    assert "unknown scenario" in body["error"]
+
+
 # ── Generate: шаблоны ──────────────────────────────
 
 def test_api_generate_lists_templates(monkeypatch):

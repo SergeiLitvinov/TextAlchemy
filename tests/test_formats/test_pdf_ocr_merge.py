@@ -188,6 +188,121 @@ def test_read_pdf_with_ocr_no_engine(tmp_path):
     assert text.engine == "pymupdf"
 
 
+# ── read_pdf_scenario: fast / structure / scan ──────
+
+
+def test_read_pdf_scenario_fast_ignores_ocr(tmp_path):
+    """fast scenario must never run OCR and must use only the text layer."""
+    from textalchemy.formats.pdf_ocr_merge import read_pdf_scenario
+
+    path = tmp_path / "fast.pdf"
+    _make_simple_pdf(path, [("Fast text layer", 40, 60)])
+
+    called = []
+
+    class FakeEngine:
+        is_available = True
+
+        def recognize_pdf_geometry(self, *args, **kwargs):
+            called.append(True)
+            return [OcrPageResult(blocks=[OcrBlockGeometry(text="OCR junk", bbox=(0, 0, 10, 10), confidence=0.9, page=1)])]
+
+    text = read_pdf_scenario(str(path), mode="fast", ocr_engine=FakeEngine())
+
+    assert called == []  # OCR не запускается в fast
+    assert "Fast text layer" in text.plain
+    assert "OCR never" not in text.plain
+
+
+def test_read_pdf_scenario_structure_fills_empty_regions(tmp_path):
+    """structure scenario merges OCR blocks into empty regions of the text layer."""
+    from textalchemy.formats.pdf_ocr_merge import read_pdf_scenario
+
+    path = tmp_path / "structure.pdf"
+    _make_simple_pdf(path, [("Native text layer line", 40, 60)])
+
+    class OcrEngine:
+        is_available = True
+
+        def recognize_pdf_geometry(self, *args, **kwargs):
+            return [
+                OcrPageResult(
+                    blocks=[
+                        OcrBlockGeometry(text="OCR filled region", bbox=(30, 120, 250, 140), confidence=0.8, page=1),
+                        OcrBlockGeometry(text="Native text layer line", bbox=(40, 55, 250, 70), confidence=0.9, page=1),
+                    ]
+                )
+            ]
+
+    text = read_pdf_scenario(str(path), mode="structure", ocr_engine=OcrEngine())
+
+    assert "Native text layer line" in text.plain
+    assert "OCR filled region" in text.plain
+
+
+def test_read_scenario_scan_ignores_text_layer(tmp_path):
+    """scan scenario returns only OCR content, dropping the native text layer."""
+    from textalchemy.formats.pdf_ocr_merge import read_pdf_scenario
+
+    path = tmp_path / "scan.pdf"
+    _make_simple_pdf(path, [("Native text that must be ignored", 40, 60)])
+
+    class OcrEngine:
+        is_available = True
+
+        def recognize_pdf_geometry(self, *args, **kwargs):
+            return [
+                OcrPageResult(
+                    blocks=[
+                        OcrBlockGeometry(text="Only OCR content", bbox=(30, 40, 250, 60), confidence=0.85, page=1),
+                    ]
+                )
+            ]
+
+    text = read_pdf_scenario(str(path), mode="scan", ocr_engine=OcrEngine())
+
+    assert "OCR content" in text.plain
+    assert "must be ignored" not in text.plain
+
+
+def test_read_pdf_scenario_unknown_mode_raises(tmp_path):
+    _make_simple_pdf(tmp_path / "x.pdf", [("Hi", 40, 60)])
+
+    from textalchemy.formats.pdf_ocr_merge import read_pdf_scenario
+
+    with pytest.raises(ValueError, match="unknown PDF scenario"):
+        read_pdf_scenario(str(tmp_path / "x.pdf"), mode="bogus")
+
+
+def test_read_scenario_scan_without_engine_returns_empty(tmp_path):
+    """scan with no OCR backend yields no text (text layer is ignored)."""
+    from textalchemy.formats.pdf_ocr_merge import read_pdf_scenario
+
+    path = tmp_path / "no_engine.pdf"
+    _make_simple_pdf(path, [("Ignored native layer", 40, 60)])
+
+    text = read_pdf_scenario(str(path), mode="scan", ocr_engine=None)
+
+    assert text.plain == ""
+
+
+def test_merge_pdf_with_ocr_use_text_layer_false_keeps_only_ocr(tmp_path):
+    """merge_pdf_with_ocr(use_text_layer=False) drops native blocks in scan mode."""
+    _make_simple_pdf(tmp_path / "f.pdf", [("Native", 40, 60)])
+
+    geometry = read_pdf_geometry(str(tmp_path / "f.pdf"))
+    ocr_pages = [
+        OcrPageResult(
+            blocks=[OcrBlockGeometry(text="OCR only", bbox=(30, 50, 200, 70), confidence=0.8, page=1)]
+        )
+    ]
+
+    text = merge_pdf_with_ocr(geometry, ocr_pages=ocr_pages, use_text_layer=False)
+
+    assert "OCR only" in text.plain
+    assert "Native" not in text.plain
+
+
 def _make_text_blocks(blocks_data):
     """Helper: create PdfTextBlockGeometry list from (text, bbox, number)."""
     from textalchemy.formats.pdf_geometry import PdfLineGeometry, PdfSpanGeometry, PdfTextBlockGeometry

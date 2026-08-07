@@ -82,7 +82,7 @@ class TestExtractPdfModel:
         model = extract_pdf_model(doc=doc)
 
         assert model.source_format == "pdf"
-        assert model.metadata.get("engine") == "pymupdf+document-model"
+        assert model.metadata.get("engine") == "pymupdf+fast+document-model"
         assert model.metadata.get("pages") == 1
 
     def test_extracts_table_blocks(self, tmp_path):
@@ -310,3 +310,48 @@ class TestExtractPdfModelWithOcr:
 
         assert isinstance(model, DocumentModel)
         assert any("OCR failed" in w for w in model.metadata.get("warnings", []))
+
+    def test_mode_fast_skips_ocr(self, tmp_path):
+        pdf = _make_pdf(tmp_path / "fast.pdf", "Fast text")
+        doc = ingest_file(path=pdf)
+
+        with mock.patch(
+            "textalchemy.recognize.ocr.OcrEngine",
+            side_effect=AssertionError("OCR must not be created in fast mode"),
+        ):
+            model = extract_pdf_model(doc=doc, mode="fast")
+
+        assert isinstance(model, DocumentModel)
+        assert model.metadata.get("engine") == "pymupdf+fast+document-model"
+        plain = "".join(
+            run.text for block in model.sections[0].blocks if isinstance(block, Paragraph)
+            for run in block.content if isinstance(run, TextRun)
+        )
+        assert "Fast text" in plain
+
+    def test_mode_scan_uses_ocr_and_drops_text_layer(self, tmp_path):
+        pdf = _make_pdf(tmp_path / "scan.pdf", "Native text layer")
+        doc = ingest_file(path=pdf)
+
+        ocr_block = OcrBlockGeometry(text="Scan OCR content", bbox=(10, 10, 200, 30), confidence=0.8, page=1)
+        mock_engine = mock.MagicMock()
+        mock_engine.is_available = True
+        mock_engine.recognize_pdf_geometry.return_value = [OcrPageResult(blocks=[ocr_block])]
+
+        with mock.patch("textalchemy.recognize.ocr.OcrEngine", return_value=mock_engine):
+            model = extract_pdf_model(doc=doc, mode="scan")
+
+        assert model.metadata.get("engine") == "pymupdf+scan+document-model"
+        blocks = model.sections[0].blocks
+        plain = " ".join(
+            run.text for block in blocks if isinstance(block, Paragraph) for run in block.content if isinstance(run, TextRun)
+        )
+        assert "Scan OCR content" in plain
+        assert "Native text layer" not in plain
+
+    def test_mode_invalid_raises_value_error(self, tmp_path):
+        pdf = _make_pdf(tmp_path / "bad_mode.pdf", "Text")
+        doc = ingest_file(path=pdf)
+
+        with pytest.raises(ValueError, match="unknown PDF scenario"):
+            extract_pdf_model(doc=doc, mode="bogus")

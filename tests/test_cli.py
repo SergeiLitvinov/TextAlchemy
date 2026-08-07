@@ -535,6 +535,38 @@ def test_cli_recognize_with_output(tmp_path):
     assert ret == 1
 
 
+def test_cli_recognize_pdf_fast_uses_text_layer(tmp_path, capsys):
+    """fast scenario reads the PDF text layer without any OCR backend."""
+    import fitz
+
+    pdf = tmp_path / "layer.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=300, height=400)
+    page.insert_text((36, 48), "Fast CLI text layer", fontname="helv", fontsize=12)
+    doc.save(str(pdf))
+    doc.close()
+
+    ret = main(["recognize", str(pdf), "--scenario", "fast"])
+    assert ret == 0
+    assert "Fast CLI text layer" in capsys.readouterr().out
+
+
+def test_cli_recognize_pdf_scan_requires_backend(tmp_path, capsys):
+    """scan scenario without an OCR backend exits with an error."""
+    import fitz
+
+    pdf = tmp_path / "scan.pdf"
+    doc = fitz.open()
+    doc.new_page(width=300, height=400)
+    doc.save(str(pdf))
+    doc.close()
+
+    ret = main(["recognize", str(pdf), "--scenario", "scan"])
+    captured = capsys.readouterr()
+    assert ret == 1
+    assert "OCR" in captured.err or "OCR" in captured.out
+
+
 # ── bibtex ─────────────────────────────────────────
 
 

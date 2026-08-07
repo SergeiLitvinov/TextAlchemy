@@ -108,8 +108,12 @@ Final: \documentclass[12pt,a4paper]{article}...
 Для богатой структуры (reading order, таблицы, классификация подписей/колонтитулов,
 растровые и векторные изображения) и объединения текстового слоя с OCR используется
 геометрический анализ PyMuPDF (`formats/pdf_geometry.py`, `pdf_layout.py`, `pdf_classify.py`)
-с последующим слиянием OCR (`formats/pdf_ocr_merge.py`). В конвейере это доступно как
-`extract.pdf_model` (→ `DocumentModel`) с параметрами `use_ocr`, `ocr_backend`, `handwriting`, `use_gpu`.
+с последующим слиянием OCR (`formats/pdf_ocr_merge.py`). Единый сценарий «text layer + OCR»
+задаётся режимом: `fast` (только текстовый слой), `structure` (text layer + OCR-слияние,
+по умолчанию), `scan` (только OCR) — см. `read_pdf_scenario()`. В конвейере это доступно как
+`extract.pdf_model` (→ `DocumentModel`) с параметрами `mode`, `ocr_backend`, `handwriting`, `use_gpu`
+(и `use_ocr` для обратной совместимости). В CLI/вебе — флаг `--scenario` у `recognize` и
+выбор сценария на странице «Распознать».
 
 ### PPTX-импорт на общей модели
 
