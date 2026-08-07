@@ -430,6 +430,94 @@ select, input[type="text"], input[type="number"] { margin-bottom: 0.75rem; }
     font-size: 1.5rem;
 }
 
+/* ── Визуальный preview ────────────────────────────── */
+.preview-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 0.5rem 0 0.75rem;
+}
+
+.preview-modes {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
+.preview-mode {
+    padding: 0.35rem 0.75rem;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: all 0.15s;
+}
+
+.preview-mode:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.preview-mode.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.preview-mode:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.preview-paging {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}
+
+.preview-paging .btn-secondary {
+    min-width: 2rem;
+    padding: 0.25rem 0.6rem;
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.preview-canvas {
+    display: flex;
+    justify-content: center;
+    padding: 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    min-height: 12rem;
+    outline: none;
+}
+
+.preview-canvas:focus-visible { border-color: var(--primary); }
+
+.preview-canvas figure {
+    text-align: center;
+    margin: 0;
+}
+
+.preview-canvas img {
+    max-width: 100%;
+    height: auto;
+    box-shadow: var(--shadow);
+    background: #fff;
+}
+
+.preview-canvas figcaption {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.preview-single figure { width: 100%; max-width: 640px; }
+
+.preview-compare {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1rem;
+    width: 100%;
+}
+
+.preview-compare figure { width: 100%; }
+
 @media (max-width: 768px) {
     .header { flex-wrap: wrap; }
     .header nav { margin-left: 0; width: 100%; flex-wrap: wrap; }

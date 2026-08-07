@@ -15,6 +15,12 @@ from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.inspection import compare_inspections, inspect_path
 from textalchemy.core.types import DocFormat
 from textalchemy.web.app import _register_task, app, tasks_store
+from textalchemy.web.preview import (
+    DEFAULT_PREVIEW_DPI,
+    MAX_PREVIEW_DPI,
+    cached_page_count,
+    cached_page_png,
+)
 from textalchemy.web.workspace import create_web_workspace, save_upload
 
 _LEGACY_CONVERSIONS = {
@@ -315,13 +321,79 @@ async def api_convert(
             "mode": conversion_mode.value,
         },
     )
-    background_tasks.add_task(_run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace)
+    background_tasks.add_task(_run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True)
     return {
         "success": True,
         "task_id": task_id,
         "status": f"/api/convert/status/{task_id}",
         "result": f"/api/convert/result/{task_id}",
     }
+
+
+_PREVIEW_SIDES = ("source", "target")
+
+
+def _preview_side_meta(preview_dir: Path, file: Path | None, side: str) -> dict[str, object]:
+    if file is None or not file.is_file():
+        return {"available": False, "pages": 0, "error": None}
+    try:
+        pages = cached_page_count(preview_dir, file, side)
+    except Exception as error:  # noqa: BLE001 - preview must never break the API
+        return {"available": False, "pages": 0, "error": str(error)}
+    return {"available": pages > 0, "pages": pages, "error": None}
+
+
+@app.get("/api/convert/preview/{task_id}/meta")
+async def api_convert_preview_meta(task_id: str):
+    task = tasks_store.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task["status"] != "done":
+        raise HTTPException(status_code=409, detail="Preview is not ready")
+    preview_dir = tasks_store.preview_dir(task_id)
+    return {
+        "source": _preview_side_meta(preview_dir, tasks_store.source_path(task_id), "source"),
+        "target": _preview_side_meta(
+            preview_dir,
+            tasks_store.result_path(task_id, task.get("artifact", "")),
+            "target",
+        ),
+    }
+
+
+@app.get("/api/convert/preview/{task_id}")
+async def api_convert_preview(task_id: str, side: str = "source", page: int = 1, dpi: int = DEFAULT_PREVIEW_DPI):
+    if side not in _PREVIEW_SIDES:
+        raise HTTPException(status_code=400, detail="side must be 'source' or 'target'")
+    if page < 1:
+        raise HTTPException(status_code=400, detail="page must be positive")
+    task = tasks_store.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task["status"] != "done":
+        raise HTTPException(status_code=409, detail="Preview is not ready")
+    preview_dir = tasks_store.preview_dir(task_id)
+    file = (
+        tasks_store.source_path(task_id)
+        if side == "source"
+        else tasks_store.result_path(task_id, task.get("artifact", ""))
+    )
+    if file is None or not file.is_file():
+        raise HTTPException(status_code=404, detail="Source file is not available")
+    try:
+        pages = cached_page_count(preview_dir, file, side)
+    except Exception:  # noqa: BLE001 - preview must never break the API
+        pages = 0
+    if page > pages:
+        raise HTTPException(status_code=404, detail="Page is out of range")
+    data = cached_page_png(preview_dir, file, side, page - 1, dpi=min(dpi, MAX_PREVIEW_DPI))
+    if data is None:
+        raise HTTPException(status_code=404, detail="Не удалось отрисовать страницу")
+    return Response(
+        content=data,
+        media_type="image/png",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
 
 
 @app.get("/api/convert/status/{task_id}")

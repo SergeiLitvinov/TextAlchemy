@@ -107,6 +107,25 @@
             <div class="retention-grid" id="retentionGrid"></div>
             <p class="field-help inspection-message" id="comparisonMessage"></p>
         </div>
+        <div id="previewSection" hidden>
+            <h3>Визуальный preview</h3>
+            <div class="preview-toolbar">
+                <div class="preview-modes" role="group" aria-label="Режим просмотра">
+                    <button type="button" class="preview-mode active" id="previewModeSource">Исходник</button>
+                    <button type="button" class="preview-mode" id="previewModeTarget">Результат</button>
+                    <button type="button" class="preview-mode" id="previewModeCompare">До / после</button>
+                </div>
+                <div class="preview-paging">
+                    <button type="button" class="btn-secondary" id="previewPrev" aria-label="Предыдущая страница">‹</button>
+                    <span id="previewPageLabel" role="status">—</span>
+                    <button type="button" class="btn-secondary" id="previewNext" aria-label="Следующая страница">›</button>
+                </div>
+            </div>
+            <div class="preview-canvas" id="previewCanvas" tabindex="0" aria-live="polite">
+                <p class="field-help" id="previewMessage">Рендерим страницы…</p>
+            </div>
+            <p class="field-help">Листайте стрелками ← →. В режиме «До / после» показываются одинаковые страницы исходника и результата.</p>
+        </div>
         <div class="form-actions result-actions">
             <button type="button" id="downloadBtn">Скачать результат</button>
             <button type="button" class="btn-secondary" id="anotherBtn">Конвертировать ещё</button>
@@ -130,6 +149,12 @@
     let batchTargets = null;
     let activeTask = null;
     let activeJob = null;
+    let activeTaskId = null;
+    let previewTaskId = null;
+    let previewMeta = null;
+    let previewMode = 'source';
+    let previewPage = 1;
+    let previewRequest = 0;
     let inspectionRequest = 0;
 
     function setStatus(message, type) {
@@ -357,6 +382,7 @@
         setLoading($('convertBtn'), true);
         try {
             activeTask = await api('/api/convert', {method: 'POST', formData: form});
+            activeTaskId = activeTask.task_id;
             setProgress(true, 45, 'Анализ структуры и выбор маршрута…');
             pollTask(activeTask.status);
         } catch (_) {
@@ -437,9 +463,12 @@
             const download = task.status === 'done' && task.result_url
                 ? `<button type="button" class="btn-link" data-download-url="${esc(task.result_url)}" data-filename="${esc(task.filename || task.name)}">Скачать</button>`
                 : '';
+            const preview = task.status === 'done'
+                ? `<button type="button" class="btn-link" data-preview-task="${esc(task.task_id)}">Просмотр</button>`
+                : '';
             const error = task.status === 'error' && task.error ? `<small>${esc(task.error)}</small>` : '';
             return `<li class="batch-progress-item ${esc(task.status)}"><span class="file-name">${esc(task.name)}</span>` +
-                `<span class="job-state ${esc(task.status)}">${esc(label)}</span>${download}${error}</li>`;
+                `<span class="job-state ${esc(task.status)}">${esc(label)}</span>${download}${preview}${error}</li>`;
         }).join('');
     }
 
@@ -479,8 +508,120 @@
             `<li class="issue-${esc(issue.severity)}"><strong>${esc(issue.feature)}</strong><span>${esc(issue.message)}</span></li>`
         ).join('');
         renderComparison(data.comparison, data.inspection_error);
+        initPreview(failed ? null : activeTaskId);
         $('downloadBtn').hidden = Boolean(failed);
         $('resultCard').scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+
+    function previewUrl(side, page, dpi) {
+        return `/api/convert/preview/${encodeURIComponent(previewTaskId)}?side=${side}&page=${page}&dpi=${dpi || 110}`;
+    }
+
+    async function initPreview(taskId) {
+        previewTaskId = taskId;
+        previewMeta = null;
+        previewMode = 'source';
+        previewPage = 1;
+        previewRequest += 1;
+        const section = $('previewSection');
+        section.hidden = true;
+        if (!taskId) return;
+        const canvas = $('previewCanvas');
+        canvas.innerHTML = '<p class="field-help" id="previewMessage">Рендерим страницы…</p>';
+        try {
+            const meta = await api(`/api/convert/preview/${encodeURIComponent(taskId)}/meta`);
+            previewMeta = meta;
+            if (!meta.source?.available && !meta.target?.available) return;
+            section.hidden = false;
+            syncPreviewModeButtons();
+            renderPreview();
+        } catch (_) {
+            section.hidden = true;
+        }
+    }
+
+    async function openPreviewTask(taskId) {
+        if (!taskId) return;
+        activeTaskId = taskId;
+        try {
+            const data = await api('/api/convert/status/' + encodeURIComponent(taskId));
+            if (data.status === 'done') {
+                renderReport(data, false);
+                return;
+            }
+        } catch (_) {
+            /* fall through to standalone preview below */
+        }
+        initPreview(taskId);
+        $('previewSection').scrollIntoView({behavior: 'smooth', block: 'center'});
+    }
+
+    function syncPreviewModeButtons() {
+        const sourceAvailable = Boolean(previewMeta?.source?.available);
+        const targetAvailable = Boolean(previewMeta?.target?.available);
+        if (previewMode === 'source' && !sourceAvailable) previewMode = targetAvailable ? 'target' : 'source';
+        if (previewMode === 'target' && !targetAvailable) previewMode = sourceAvailable ? 'source' : 'target';
+        if (previewMode === 'compare' && !(sourceAvailable && targetAvailable)) previewMode = 'source';
+        $('previewModeSource').disabled = !sourceAvailable;
+        $('previewModeTarget').disabled = !targetAvailable;
+        $('previewModeCompare').disabled = !sourceAvailable || !targetAvailable;
+        for (const [button, mode] of [
+            ['previewModeSource', 'source'],
+            ['previewModeTarget', 'target'],
+            ['previewModeCompare', 'compare'],
+        ]) {
+            $(button).classList.toggle('active', previewMode === mode);
+        }
+    }
+
+    function activePreviewPages() {
+        if (previewMode === 'compare') {
+            return Math.min(previewMeta?.source?.pages || 0, previewMeta?.target?.pages || 0);
+        }
+        return previewMeta?.[previewMode]?.pages || 0;
+    }
+
+    function renderPreviewControls() {
+        const pages = activePreviewPages();
+        if (previewPage > pages) previewPage = Math.max(1, pages);
+        $('previewPageLabel').textContent = pages ? `${previewPage} / ${pages}` : '—';
+        $('previewPrev').disabled = !pages || previewPage <= 1;
+        $('previewNext').disabled = !pages || previewPage >= pages;
+    }
+
+    async function renderPreview() {
+        const request = ++previewRequest;
+        const canvas = $('previewCanvas');
+        canvas.innerHTML = '<p class="field-help" id="previewMessage">Рендерим страницы…</p>';
+        renderPreviewControls();
+        const sides = previewMode === 'compare' ? ['source', 'target'] : [previewMode];
+        try {
+            const entries = await Promise.all(sides.map(async (side) => {
+                const response = await fetch(previewUrl(side, previewPage, 110));
+                if (!response.ok) throw new Error('preview fetch failed');
+                return {side, blob: await response.blob()};
+            }));
+            if (request !== previewRequest) return;
+            canvas.innerHTML = '';
+            const wrapper = document.createElement('div');
+            wrapper.className = previewMode === 'compare' ? 'preview-compare' : 'preview-single';
+            for (const {side, blob} of entries) {
+                const figure = document.createElement('figure');
+                const image = document.createElement('img');
+                image.alt = side === 'source' ? 'Страница исходника' : 'Страница результата';
+                image.loading = 'lazy';
+                image.src = URL.createObjectURL(blob);
+                const caption = document.createElement('figcaption');
+                caption.textContent = side === 'source' ? 'Исходник' : 'Результат';
+                figure.appendChild(image);
+                figure.appendChild(caption);
+                wrapper.appendChild(figure);
+            }
+            canvas.appendChild(wrapper);
+        } catch (_) {
+            if (request !== previewRequest) return;
+            canvas.innerHTML = '<p class="field-help" id="previewMessage">Не удалось отрисовать страницы.</p>';
+        }
     }
 
     function renderComparison(comparison, inspectionError) {
@@ -517,8 +658,25 @@
         selectedSource = null;
         batchFiles = null;
         batchTargets = null;
+        activeTaskId = null;
+        previewRequest += 1;
+        $('previewSection').hidden = true;
         inspectionRequest += 1;
         $('dropZone').scrollIntoView({behavior: 'smooth', block: 'center'});
+    });
+
+    $('previewModeSource').addEventListener('click', () => { previewMode = 'source'; syncPreviewModeButtons(); renderPreview(); });
+    $('previewModeTarget').addEventListener('click', () => { previewMode = 'target'; syncPreviewModeButtons(); renderPreview(); });
+    $('previewModeCompare').addEventListener('click', () => { previewMode = 'compare'; syncPreviewModeButtons(); renderPreview(); });
+    $('previewPrev').addEventListener('click', () => {
+        if (previewPage > 1) { previewPage -= 1; renderPreview(); }
+    });
+    $('previewNext').addEventListener('click', () => {
+        if (previewPage < activePreviewPages()) { previewPage += 1; renderPreview(); }
+    });
+    $('previewCanvas').addEventListener('keydown', (event) => {
+        if (event.key === 'ArrowLeft' && previewPage > 1) { previewPage -= 1; renderPreview(); event.preventDefault(); }
+        if (event.key === 'ArrowRight' && previewPage < activePreviewPages()) { previewPage += 1; renderPreview(); event.preventDefault(); }
     });
 
     // ── История пакетных конвертаций ────────────────
@@ -593,8 +751,11 @@
                 ? `<button type="button" class="btn-link" data-download-url="${esc(task.result_url)}" data-filename="${esc(task.filename || task.name)}">Скачать</button>`
                 : '';
             const error = task.status === 'error' && task.error ? `<small>${esc(task.error)}</small>` : '';
+            const preview = task.status === 'done'
+                ? `<button type="button" class="btn-link" data-preview-task="${esc(task.task_id)}">Просмотр</button>`
+                : '';
             return `<li class="batch-progress-item ${esc(task.status)}"><span class="file-name">${esc(task.name)}</span>` +
-                `<span class="job-state ${esc(task.status)}">${esc(label)}</span>${download}${error}</li>`;
+                `<span class="job-state ${esc(task.status)}">${esc(label)}</span>${download}${preview}${error}</li>`;
         }).join('');
         const actions = `<div class="row-actions">` +
             `<button type="button" data-rerun-job="${esc(job.job_id)}">Перезапустить</button>` +
@@ -649,6 +810,11 @@
             rerunJob(rerunBtn.dataset.rerunJob);
             return;
         }
+        const previewBtn = event.target.closest('[data-preview-task]');
+        if (previewBtn) {
+            openPreviewTask(previewBtn.dataset.previewTask);
+            return;
+        }
         const deleteBtn = event.target.closest('[data-delete-job]');
         if (deleteBtn) {
             deleteJob(deleteBtn.dataset.deleteJob);
@@ -658,6 +824,11 @@
         const downloadBtn = event.target.closest('[data-download-url]');
         if (downloadBtn) {
             downloadResultUrl(downloadBtn.dataset.downloadUrl, downloadBtn.dataset.filename);
+            return;
+        }
+        const previewBtn = event.target.closest('[data-preview-task]');
+        if (previewBtn) {
+            openPreviewTask(previewBtn.dataset.previewTask);
         }
     });
 

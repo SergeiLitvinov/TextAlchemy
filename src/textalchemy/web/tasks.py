@@ -98,6 +98,13 @@ class TaskStore:
                 return None
             return candidate
 
+    def preview_dir(self, task_id: str) -> Path:
+        """Каталог кэша preview внутри задачи (очищается вместе с задачей)."""
+        with self._lock:
+            directory = self._task_dir(task_id) / "preview"
+            directory.mkdir(parents=True, exist_ok=True)
+            return directory
+
     def delete(self, task_id: str) -> None:
         with self._lock:
             self._delete_locked(task_id)

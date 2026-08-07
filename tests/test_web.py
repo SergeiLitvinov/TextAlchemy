@@ -31,6 +31,12 @@ def _isolate_task_store(monkeypatch, tmp_path_factory):
     monkeypatch.setattr(convert_route, "tasks_store", store)
 
 
+def _client_task_store():
+    from textalchemy.web.routes import convert as convert_route
+
+    return convert_route.tasks_store
+
+
 def test_web_version_uses_package_metadata():
     assert app.version == __version__
 
@@ -497,6 +503,102 @@ def test_api_convert_serves_single_file_html(monkeypatch):
     assert result.status_code == 200
     assert result.headers["content-type"].startswith("text/html")
     assert result.content == b"<html>converted</html>"
+
+
+# ── Convert: visual preview ──────────────────────────
+
+def _seed_preview_task(store, task_id="preview-task"):
+    task_dir = store.root / task_id
+    source_dir = task_dir / "source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "in.pdf").write_bytes(b"%PDF-1.4 preview source")
+    (task_dir / "out.pdf").write_bytes(b"%PDF-1.4 preview result")
+    store.set(task_id, {"status": "done", "artifact": "out.pdf", "filename": "out.pdf"})
+    return task_id
+
+
+def test_api_convert_single_preserves_source_for_preview(monkeypatch):
+    from textalchemy.web.routes import convert as convert_route
+
+    def fake_execute(_executor, request):
+        request.output_path.write_bytes(b"converted-document")
+        return ConversionReport(request.output_path)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    response = client.post(
+        "/api/convert",
+        files={"file": ("article.pdf", b"%PDF-test", "application/pdf")},
+        data={"source_format": "pdf", "target_format": "docx"},
+    )
+    assert response.status_code == 200
+    assert convert_route.tasks_store.source_path(response.json()["task_id"]) is not None
+
+
+def test_api_convert_preview_meta_and_page(monkeypatch):
+    store = _client_task_store()
+    task_id = _seed_preview_task(store)
+
+    def fake_count(_preview_dir, _file, _side):
+        return 3
+
+    def fake_png(_preview_dir, _file, _side, page_index, dpi=110):
+        return b"\x89PNG\r\n\x1a\npreview-page"
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.cached_page_count", fake_count)
+    monkeypatch.setattr("textalchemy.web.routes.convert.cached_page_png", fake_png)
+
+    meta = client.get(f"/api/convert/preview/{task_id}/meta")
+    assert meta.status_code == 200
+    body = meta.json()
+    assert body["source"]["available"] is True
+    assert body["source"]["pages"] == 3
+    assert body["target"]["pages"] == 3
+    assert body["target"]["error"] is None
+
+    page = client.get(f"/api/convert/preview/{task_id}?side=target&page=2")
+    assert page.status_code == 200
+    assert page.headers["content-type"] == "image/png"
+    assert page.content == b"\x89PNG\r\n\x1a\npreview-page"
+    assert "max-age" in page.headers.get("cache-control", "")
+
+    assert client.get(f"/api/convert/preview/{task_id}?side=target&page=9").status_code == 404
+    assert client.get(f"/api/convert/preview/{task_id}?side=other").status_code == 400
+    assert client.get(f"/api/convert/preview/{task_id}?side=target&page=0").status_code == 400
+    assert client.get("/api/convert/preview/nonexistent/meta").status_code == 404
+
+
+def test_api_convert_preview_requires_done_task(monkeypatch):
+    store = _client_task_store()
+    task_id = "pending-preview"
+    store.set(task_id, {"status": "running"})
+
+    meta = client.get(f"/api/convert/preview/{task_id}/meta")
+    assert meta.status_code == 409
+    page = client.get(f"/api/convert/preview/{task_id}?side=source")
+    assert page.status_code == 409
+
+
+def test_api_convert_preview_target_unavailable_for_directory_artifacts(monkeypatch):
+    store = _client_task_store()
+    task_id = "dir-artifact"
+    task_dir = store.root / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+    source_dir = task_dir / "source"
+    source_dir.mkdir(exist_ok=True)
+    (source_dir / "in.pdf").write_bytes(b"%PDF")
+    (task_dir / "deck-html.zip").write_bytes(b"zip")
+    store.set(task_id, {"status": "done", "artifact": "deck-html.zip", "filename": "deck-html.zip"})
+
+    def fake_count(_preview_dir, file, _side):
+        return 3 if file.suffix == ".pdf" else 0
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.cached_page_count", fake_count)
+
+    meta = client.get(f"/api/convert/preview/{task_id}/meta").json()
+    assert meta["source"]["available"] is True
+    assert meta["source"]["pages"] == 3
+    assert meta["target"]["available"] is False
+    assert meta["target"]["pages"] == 0
 
 
 # ── Convert: batch queue + history ──────────────────
