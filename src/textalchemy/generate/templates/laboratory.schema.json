@@ -1,0 +1,12 @@
+{
+  "fields": {
+    "title": {"type": "string", "required": true, "description": "Название работы"},
+    "author": {"type": "string", "required": true, "description": "Автор"},
+    "date": {"type": "string", "required": false, "default": "2026-08-07", "description": "Дата"},
+    "logo": {"type": "image", "required": false, "description": "Логотип или изображение"},
+    "results": {"type": "array", "required": false, "default": [{"name": "Показатель A", "value": 1.5}], "description": "Список результатов"},
+    "equation": {"type": "formula", "required": false, "description": "Формула (LaTeX)"},
+    "body": {"type": "string", "required": false, "default": "Краткое описание работы", "description": "Описание"}
+  },
+  "allow_extra": true
+}
