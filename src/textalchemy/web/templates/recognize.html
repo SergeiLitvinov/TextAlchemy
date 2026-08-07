@@ -11,10 +11,18 @@
                 <input type="text" id="lang" value="rus+eng">
             </div>
             <div>
-                <label>Режим</label>
+                <label>Режим текста</label>
                 <select id="mode">
                     <option value="printed">Печатный текст</option>
                     <option value="handwriting">Рукописный</option>
+                </select>
+            </div>
+            <div>
+                <label>Сценарий (PDF)</label>
+                <select id="scenario">
+                    <option value="structure">Сохранить структуру (Text layer + OCR)</option>
+                    <option value="fast">Быстро (только текстовый слой)</option>
+                    <option value="scan">Скан (только OCR)</option>
                 </select>
             </div>
             <div style="display:flex;align-items:flex-end">
@@ -73,6 +81,7 @@
         form.append('lang', $('lang').value);
         form.append('gpu', $('gpu').checked ? 'true' : 'false');
         form.append('mode', $('mode').value);
+        form.append('scenario', $('scenario').value);
         try {
             const data = await api('/api/recognize', { method: 'POST', formData: form });
             resultArea.value = data.text || '(текст не распознан)';

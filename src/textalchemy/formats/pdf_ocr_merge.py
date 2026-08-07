@@ -31,6 +31,12 @@ _TEXT_LAYER_MIN_CHARS = 200
 # Доля площади страницы, занимаемая текстовыми блоками.
 _TEXT_LAYER_MIN_COVERAGE = 0.02
 
+# Единый сценарий «text layer + OCR»: выбор стратегии обработки PDF.
+PDF_SCENARIO_FAST = "fast"
+PDF_SCENARIO_STRUCTURE = "structure"
+PDF_SCENARIO_SCAN = "scan"
+PDF_SCENARIO_MODES = (PDF_SCENARIO_FAST, PDF_SCENARIO_STRUCTURE, PDF_SCENARIO_SCAN)
+
 
 def _page_text_coverage(page_text: str, page_width: float, page_height: float) -> float:
     """Оценить долю площади страницы, покрытой текстом (грубо)."""
@@ -141,6 +147,8 @@ def _compute_overall_confidence(blocks: list[MergedTextBlock]) -> float:
 def merge_pdf_with_ocr(
     geometry: PdfGeometryDocument,
     ocr_pages: list[OcrPageResult] | None = None,
+    *,
+    use_text_layer: bool = True,
 ) -> Text:
     """Merge PDF geometry text layer with optional OCR results.
 
@@ -148,6 +156,8 @@ def merge_pdf_with_ocr(
         geometry: Geometry document from ``extract_pdf_geometry()``.
         ocr_pages: Per-page OCR results from ``OcrEngine.recognize_pdf_geometry()``.
             If None, falls back to pure text layer (geometry-only).
+        use_text_layer: When False, ignore the native text layer entirely and
+            keep only OCR blocks — the «скан» scenario for scanned PDFs.
 
     Returns:
         A ``Text`` with per-block ``confidence``, ``source`` and ``bbox`` in meta.
@@ -163,8 +173,12 @@ def merge_pdf_with_ocr(
 
         # Separate text and table blocks. Текст внутри восстановленной таблицы
         # не должен повторно появляться обычными абзацами.
-        tables = list(page.tables)
-        text_blocks = [block for block in page.text_blocks if not _covered_by_table(block, tables)]
+        if use_text_layer:
+            tables = list(page.tables)
+            text_blocks = [block for block in page.text_blocks if not _covered_by_table(block, tables)]
+        else:
+            tables = []
+            text_blocks = []
 
         if ocr_page and ocr_page.blocks:
             merged_blocks = _merge_text_layer_and_ocr_page(
@@ -286,6 +300,57 @@ def _covered_by_table(block: PdfTextBlockGeometry, tables: list[PdfTableGeometry
     return False
 
 
+def read_pdf_scenario(
+    path: str,
+    mode: str = PDF_SCENARIO_STRUCTURE,
+    ocr_engine: Any = None,
+    scale: int = 3,
+    handwriting: bool = False,
+) -> Text:
+    """Read a PDF in a unified «text layer + OCR» scenario.
+
+    Модель сценариев для TODO 113:
+
+    * ``fast`` — только текстовый слой, без OCR (быстро, требует geometry).
+    * ``structure`` — текстовый слой с OCR-слиянием: OCR заполняет пустые
+      области, не дублируя нативный текст и восстановленные таблицы.
+    * ``scan`` — только OCR: текстовый слой игнорируется (сканы).
+
+    Общая обработка (geometry, таблицы, изображения) одинакова для всех
+    режимов; различается лишь стратегия работы с текстовым слоем и OCR.
+
+    Args:
+        path: Path to the PDF file.
+        mode: One of ``PDF_SCENARIO_MODES``.
+        ocr_engine: An ``OcrEngine`` instance, or None to skip OCR.
+        scale: Rendering scale for OCR (2-6).
+        handwriting: Enable handwriting-optimised OCR mode.
+
+    Returns:
+        ``Text`` with merged content.
+    """
+    if mode not in PDF_SCENARIO_MODES:
+        raise ValueError(f"unknown PDF scenario mode {mode!r}; expected one of {PDF_SCENARIO_MODES}")
+
+    from textalchemy.formats.pdf import extract_pdf_geometry as _extract_geometry
+
+    geometry = _extract_geometry(path)
+
+    if mode == PDF_SCENARIO_FAST:
+        return merge_pdf_with_ocr(geometry, None)
+
+    ocr_pages: list[OcrPageResult] | None = None
+    if ocr_engine is not None and ocr_engine.is_available:
+        try:
+            ocr_pages = ocr_engine.recognize_pdf_geometry(path, scale=scale, handwriting=handwriting)
+        except Exception as exc:  # noqa: BLE001
+            geometry.warnings.append(f"OCR failed: {exc}")
+
+    if mode == PDF_SCENARIO_SCAN:
+        return merge_pdf_with_ocr(geometry, ocr_pages, use_text_layer=False)
+    return merge_pdf_with_ocr(geometry, ocr_pages)
+
+
 def read_pdf_with_ocr(
     path: str,
     ocr_engine: Any = None,
@@ -299,6 +364,8 @@ def read_pdf_with_ocr(
     2. Optionally runs OCR with bounding boxes
     3. Merges both sources into a single ``Text`` with per-block confidence
 
+    Alias for the ``structure`` scenario of ``read_pdf_scenario``.
+
     Args:
         path: Path to the PDF file.
         ocr_engine: An ``OcrEngine`` instance, or None to skip OCR.
@@ -308,22 +375,22 @@ def read_pdf_with_ocr(
     Returns:
         ``Text`` with merged content.
     """
-    from textalchemy.formats.pdf import extract_pdf_geometry as _extract_geometry
-
-    geometry = _extract_geometry(path)
-
-    ocr_pages: list[OcrPageResult] | None = None
-    if ocr_engine is not None and ocr_engine.is_available:
-        try:
-            ocr_pages = ocr_engine.recognize_pdf_geometry(path, scale=scale, handwriting=handwriting)
-        except Exception as exc:  # noqa: BLE001
-            geometry.warnings.append(f"OCR failed: {exc}")
-
-    return merge_pdf_with_ocr(geometry, ocr_pages)
+    return read_pdf_scenario(
+        path,
+        mode=PDF_SCENARIO_STRUCTURE,
+        ocr_engine=ocr_engine,
+        scale=scale,
+        handwriting=handwriting,
+    )
 
 
 __all__ = [
     "MergedTextBlock",
+    "PDF_SCENARIO_FAST",
+    "PDF_SCENARIO_MODES",
+    "PDF_SCENARIO_SCAN",
+    "PDF_SCENARIO_STRUCTURE",
     "merge_pdf_with_ocr",
+    "read_pdf_scenario",
     "read_pdf_with_ocr",
 ]

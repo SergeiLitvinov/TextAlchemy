@@ -16,7 +16,11 @@ def cmd_recognize(args: argparse.Namespace) -> int:
     from textalchemy.recognize import OcrEngine
     engine = OcrEngine(languages=args.lang.split("+"), use_gpu=args.gpu, backend=args.backend)
 
-    if not engine.is_available:
+    ext = input_path.suffix.lower()
+
+    # Изображения всегда требуют OCR; PDF — только если сценарий не fast.
+    needs_ocr = ext != ".pdf" or args.scenario in ("structure", "scan")
+    if needs_ocr and not engine.is_available:
         if args.json:
             print(json.dumps({"error": "OCR backend not available", "backend": engine.backend_name}))
         else:
@@ -25,17 +29,20 @@ def cmd_recognize(args: argparse.Namespace) -> int:
             print("[STUB] Install pytesseract, easyocr or paddleocr")
         return 1
 
-    ext = input_path.suffix.lower()
     handwriting = args.mode == "handwriting"
 
     if ext == ".pdf":
-        page_results = engine.recognize_pdf(
+        from textalchemy.formats.pdf_ocr_merge import read_pdf_scenario
+
+        result = read_pdf_scenario(
             args.input,
+            mode=args.scenario,
+            ocr_engine=engine,
             scale=args.scale,
             handwriting=handwriting,
         )
-        text = "\n\n".join(r.text for r in page_results)
-        pages = len(page_results)
+        text = result.plain
+        pages = result.pages
     else:
         result = engine.recognize(args.input, handwriting=handwriting)
         text = result.text

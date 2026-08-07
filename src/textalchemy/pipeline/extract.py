@@ -92,19 +92,37 @@ def extract_pdf_model(
     ocr_backend: str = "",
     handwriting: bool = False,
     use_gpu: bool = False,
+    mode: str | None = None,
 ) -> DocumentModel:
     """Извлечь PDF в богатую модель с текстом, таблицами и изображениями.
 
+    Единый сценарий «text layer + OCR» задаётся ``mode``:
+    ``fast`` — только текстовый слой; ``structure`` — text layer + OCR-слияние;
+    ``scan`` — только OCR. При отсутствии ``mode`` поведение определяется
+    ``use_ocr`` (backward compatibility).
+
     Args:
         doc: Документ PDF.
-        use_ocr: Включить OCR-слияние с текстовым слоем.
+        use_ocr: Включить OCR-слияние с текстовым слоем (⇒ mode ``structure``).
         ocr_backend: Имя OCR-бэкенда (tesseract/easyocr/paddle).
         handwriting: Режим распознавания рукописного текста.
         use_gpu: Использовать GPU для OCR.
+        mode: Стратегия обработки: ``fast`` / ``structure`` / ``scan``.
 
     Returns:
         ``DocumentModel`` с текстом, таблицами и изображениями.
     """
+    from textalchemy.formats.pdf_ocr_merge import (
+        PDF_SCENARIO_FAST,
+        PDF_SCENARIO_MODES,
+        PDF_SCENARIO_SCAN,
+        PDF_SCENARIO_STRUCTURE,
+    )
+
+    scenario = mode if mode is not None else (PDF_SCENARIO_STRUCTURE if use_ocr else PDF_SCENARIO_FAST)
+    if scenario not in PDF_SCENARIO_MODES:
+        raise ValueError(f"unknown PDF scenario mode {scenario!r}; expected one of {PDF_SCENARIO_MODES}")
+
     if doc.format != DocFormat.PDF:
         return DocumentModel(
             sections=[],
@@ -121,11 +139,11 @@ def extract_pdf_model(
 
     path = str(doc.path)
     geometry = read_pdf_geometry(path)
-    engine = "pymupdf+document-model"
+    engine = f"pymupdf+{scenario}+document-model"
     ocr_pages = None
 
-    # Optionally merge with OCR
-    if use_ocr:
+    # OCR-слияние для structure/scan сценариев.
+    if scenario in (PDF_SCENARIO_STRUCTURE, PDF_SCENARIO_SCAN):
         from textalchemy.recognize.ocr import OcrEngine
 
         ocr_engine = OcrEngine(
@@ -135,7 +153,6 @@ def extract_pdf_model(
         if ocr_engine.is_available:
             try:
                 ocr_pages = ocr_engine.recognize_pdf_geometry(path, handwriting=handwriting)
-                engine = "pymupdf+ocr+document-model"
             except Exception as exc:  # noqa: BLE001
                 geometry.warnings.append(f"OCR failed: {exc}")
         else:
@@ -147,7 +164,7 @@ def extract_pdf_model(
 
     from textalchemy.formats.pdf_ocr_merge import merge_pdf_with_ocr
 
-    semantic = merge_pdf_with_ocr(geometry, ocr_pages)
+    semantic = merge_pdf_with_ocr(geometry, ocr_pages, use_text_layer=(scenario != PDF_SCENARIO_SCAN))
 
     all_warnings: list[str] = list(geometry.warnings) + img_warnings + vec_warnings
 

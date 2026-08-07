@@ -180,6 +180,8 @@ def _setup_parser():
     p.add_argument("--gpu", action="store_true", help="Использовать GPU (если доступен CUDA)")
     p.add_argument("--mode", choices=["printed", "handwriting"], default="printed",
                    help="Тип текста: printed (печатный) или handwriting (рукописный)")
+    p.add_argument("--scenario", choices=["fast", "structure", "scan"], default="structure",
+                   help="PDF: fast (только текстовый слой), structure (text layer + OCR), scan (только OCR)")
     p.add_argument("--scale", type=int, default=3, help="Масштаб рендеринга PDF (2-6)")
     p.add_argument("--output-format", choices=["txt", "docx", "tex"], default="txt",
                    help="Формат выходного файла (требуется --output)")
