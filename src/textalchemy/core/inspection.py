@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
@@ -178,6 +180,40 @@ def _compare_page_geometry(
     *,
     tolerance_pt: float = 0.5,
 ) -> tuple[list[dict[str, Any]], dict[str, float | int], list[ConversionIssue]]:
+    if not source_pages or not target_pages:
+        issues: list[ConversionIssue] = []
+        if source_pages and not target_pages:
+            issues.append(
+                ConversionIssue(
+                    IssueSeverity.WARNING,
+                    "page-geometry-n-a",
+                    "target has no page geometry (pagination-less format, e.g. HTML/LaTeX)",
+                    "pages",
+                )
+            )
+        elif target_pages and not source_pages:
+            issues.append(
+                ConversionIssue(
+                    IssueSeverity.WARNING,
+                    "page-geometry-n-a",
+                    "source has no page geometry",
+                    "pages",
+                )
+            )
+        summary: dict[str, float | int] = {
+            "source_pages": len(source_pages),
+            "target_pages": len(target_pages),
+            "compared_pages": 0,
+            "missing_pages": abs(len(source_pages) - len(target_pages)),
+            "tolerance_pt": tolerance_pt,
+            "max_dimension_error_pt": 0.0,
+            "mean_dimension_error_pt": 0.0,
+            "rms_dimension_error_pt": 0.0,
+            "max_margin_error_pt": 0.0,
+            "mean_margin_error_pt": 0.0,
+            "rms_margin_error_pt": 0.0,
+        }
+        return [], summary, issues
     page_geometry: list[dict[str, Any]] = []
     issues: list[ConversionIssue] = []
     dimension_errors: list[float] = []
@@ -514,7 +550,7 @@ def inspect_document_model(
 
 
 def inspect_path(path: str | Path) -> DocumentInspection:
-    """Inspect DOCX, PDF, PPTX or a JSON-serialized DocumentModel."""
+    """Inspect DOCX, PDF, PPTX, HTML, LaTeX or a JSON-serialized DocumentModel."""
 
     source = Path(path)
     if not source.is_file():
@@ -534,6 +570,10 @@ def inspect_path(path: str | Path) -> DocumentInspection:
         from textalchemy.formats.pptx import read_pptx_model
 
         return inspect_document_model(read_pptx_model(source), source_path=source, source_format="pptx")
+    if suffix == ".html":
+        return _inspect_html(source)
+    if suffix == ".tex":
+        return _inspect_latex(source)
     raise TextAlchemyError(f"Unsupported inspection format: {suffix or '<none>'}")
 
 
@@ -784,6 +824,241 @@ def _inspect_pdf(path: Path) -> DocumentInspection:
     report.resources = list(resources.values())
     report.fonts = dict(fonts.most_common())
     return report
+
+
+_HTML_SKIP_TAGS = {"script", "style", "head"}
+_LATEX_MATH_ENVS = (
+    "equation",
+    "equation*",
+    "align",
+    "align*",
+    "gather",
+    "gather*",
+    "alignat",
+    "alignat*",
+    "eqnarray",
+    "eqnarray*",
+    "multline",
+    "multline*",
+    "flalign",
+    "flalign*",
+)
+_LATEX_PAPER_SIZES = {
+    "a3paper": (841.89, 1190.55),
+    "a4paper": (595.28, 841.89),
+    "a5paper": (419.53, 595.28),
+    "letterpaper": (612.0, 792.0),
+    "legalpaper": (612.0, 1008.0),
+}
+_LATEX_TEXT_COMMANDS = re.compile(r"\\(?:textbf|textit|emph|text|mbox|mathrm|mathsf|mathtt|mathcal|underline|url)\{([^{}]*)\}")
+_LATEX_REF_COMMANDS = re.compile(r"\\(?:eqref|pageref|cref|vref|label|ref)\{")
+_LATEX_CITE_COMMANDS = re.compile(r"\\[a-zA-Z@]*cite[a-zA-Z@]*\{")
+_LATEX_HREF_COMMANDS = re.compile(r"\\href\{")
+_LATEX_DISPLAY_MATH = re.compile(r"\$\$.*?\$\$|\\\[.*?\\\]", re.DOTALL)
+_LATEX_INLINE_MATH = re.compile(r"(?<!\\)\$(?!\$)[^$\n]+(?<!\\)\$")
+_LATEX_HEADING_COMMANDS = re.compile(r"\\(?:chapter|(?:sub)*section)\*?\{")
+_LATEX_COMMAND_TOKEN = re.compile(r"\\[a-zA-Z@]+\*?")
+_LATEX_BEGIN_END = re.compile(r"\\(?:begin|end)\{[a-zA-Z*]+\}")
+_LATEX_ESCAPES = {
+    r"\%": "%",
+    r"\&": "&",
+    r"\_": "_",
+    r"\#": "#",
+    r"\$": "$",
+    r"\{": "{",
+    r"\}": "}",
+    r"\textbackslash": "\\",
+    r"\textasciitilde": "~",
+    r"\textasciicircum": "^",
+    r"\ldots": "…",
+    r"\textendash": "–",
+    r"\textemdash": "—",
+    r"\textquotedbl": '"',
+    r"\textquoteleft": "‘",
+    r"\textquoteright": "’",
+    r"\textbullet": "•",
+}
+
+
+class _HtmlInspectionParser(HTMLParser):
+    """Собрать структурные метрики и data-URI ресурсы из HTML."""
+
+    def __init__(self, report: DocumentInspection) -> None:
+        super().__init__(convert_charrefs=True)
+        self.report = report
+        self.counters: Counter[str] = Counter()
+        self.fonts: Counter[str] = Counter()
+        self.resources: dict[str, dict[str, Any]] = {}
+        self._skip_depth = 0
+        self._math_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = {name: value or "" for name, value in attrs}
+        if tag in _HTML_SKIP_TAGS:
+            self._skip_depth += 1
+        elif tag == "section":
+            self.counters["sections"] += 1
+        elif tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            self.counters["headings"] += 1
+        elif tag == "p":
+            self.counters["paragraphs"] += 1
+        elif tag == "table":
+            self.counters["tables"] += 1
+        elif tag == "tr":
+            self.counters["table_rows"] += 1
+        elif tag in {"td", "th"}:
+            self.counters["table_cells"] += 1
+        elif tag == "img":
+            self.counters["images"] += 1
+            self._inspect_image(attributes.get("src", ""))
+        elif tag == "a":
+            href = attributes.get("href")
+            if href:
+                if href.startswith("#"):
+                    self.counters["internal_hyperlinks"] += 1
+                else:
+                    self.counters["hyperlinks"] += 1
+        elif tag == "math":
+            self.counters["formulas"] += 1
+            self._math_depth += 1
+        elif tag in {"ul", "ol"}:
+            self.counters["lists"] += 1
+        elif tag == "li":
+            self.counters["list_items"] += 1
+        style = attributes.get("style")
+        if style:
+            self._extract_fonts(style)
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _HTML_SKIP_TAGS:
+            self._skip_depth = max(0, self._skip_depth - 1)
+        elif tag == "math":
+            self._math_depth = max(0, self._math_depth - 1)
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth or self._math_depth or not data.strip():
+            return
+        self.counters["characters"] += len(data)
+        self.counters["text_runs"] += 1
+
+    def _inspect_image(self, source: str) -> None:
+        match = re.match(r"data:(image/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+)", source)
+        if not match:
+            return
+        media_type, encoded = match.groups()
+        try:
+            raw = base64.b64decode(encoded)
+        except ValueError:
+            return
+        index = len(self.resources)
+        self.resources[f"img-{index}"] = {
+            "id": f"img-{index}",
+            "kind": "raster_image",
+            "media_type": media_type,
+            "filename": None,
+            "size_bytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "embedded": True,
+        }
+
+    def _extract_fonts(self, style: str) -> None:
+        for match in re.finditer(r"font-family\s*:\s*([^;}]+)", style):
+            family = match.group(1).strip().strip("'\"").split(",")[0].strip()
+            if family:
+                self.fonts[family] += 1
+
+
+def _inspect_html(path: Path) -> DocumentInspection:
+    """Собрать структурные метрики, ресурсы и шрифты из HTML-файла."""
+
+    report = DocumentInspection(path, "html")
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        raw = path.read_text(encoding="utf-8", errors="replace")
+    parser = _HtmlInspectionParser(report)
+    parser.feed(raw)
+    report.metrics = dict(sorted(parser.counters.items()))
+    report.resources = list(parser.resources.values())
+    report.fonts = dict(parser.fonts.most_common())
+    if parser.counters["formulas"]:
+        report.formula_formats = {"mathml": parser.counters["formulas"]}
+    return report
+
+
+def _inspect_latex(path: Path) -> DocumentInspection:
+    """Собрать структурные метрики и геометрию страницы из LaTeX-файла."""
+
+    report = DocumentInspection(path, "latex")
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    counters: Counter[str] = Counter()
+    counters["pages"] = 1
+    counters["characters"] = len(_strip_latex_text(raw))
+    counters["text_runs"] = len(re.findall(r"\S+", _strip_latex_text(raw)))
+    counters["headings"] = len(_LATEX_HEADING_COMMANDS.findall(raw))
+    counters["tables"] = len(re.findall(r"\\begin\{tabular", raw))
+    counters["images"] = len(re.findall(r"\\includegraphics\*?", raw))
+    counters["hyperlinks"] = len(_LATEX_HREF_COMMANDS.findall(raw))
+    counters["internal_hyperlinks"] = len(_LATEX_REF_COMMANDS.findall(raw))
+    counters["citations"] = len(_LATEX_CITE_COMMANDS.findall(raw))
+    counters["formulas"] = _count_latex_formulas(raw)
+    counters["list_items"] = len(re.findall(r"\\item", raw))
+    counters["paragraphs"] = _count_latex_paragraphs(raw)
+    papersize = _latex_paper_size(raw)
+    report.metrics = dict(sorted(counters.items()))
+    if papersize is not None:
+        report.pages = [
+            {
+                "index": 0,
+                "width_pt": papersize[0],
+                "height_pt": papersize[1],
+            }
+        ]
+    if counters["formulas"]:
+        report.formula_formats = {"latex": counters["formulas"]}
+    return report
+
+
+def _latex_paper_size(raw: str) -> tuple[float, float] | None:
+    match = re.search(r"\\documentclass\s*(?:\[[^\]]*\])?\s*\{[^{}]*\}", raw)
+    options = match.group(0) if match else ""
+    for name, size in _LATEX_PAPER_SIZES.items():
+        if name in options:
+            return size
+    return None
+
+
+def _count_latex_formulas(raw: str) -> int:
+    return len(_LATEX_DISPLAY_MATH.findall(raw)) + len(_LATEX_INLINE_MATH.findall(raw)) + sum(
+        raw.count(rf"\begin{{{env}}}") for env in _LATEX_MATH_ENVS
+    )
+
+
+def _count_latex_paragraphs(raw: str) -> int:
+    body = re.search(r"\\begin\{document\}(.*?)\\end\{document\}", raw, re.DOTALL)
+    source = body.group(1) if body else raw
+    return sum(1 for block in re.split(r"\n\s*\n", source) if re.search(r"\w", _strip_latex_text(block)))
+
+
+def _strip_latex_text(raw: str) -> str:
+    text = re.sub(r"(?<!\\)%.*$", "", raw, flags=re.MULTILINE)
+    text = _LATEX_DISPLAY_MATH.sub(" ", text)
+    for env in _LATEX_MATH_ENVS:
+        text = re.sub(rf"\\begin{{{env}}}.*?\\end{{{env}}}", " ", text, flags=re.DOTALL)
+    text = _LATEX_INLINE_MATH.sub(" ", text)
+    text = re.sub(r"\\href\{[^{}]*\}\{([^{}]*)\}", r"\1", text)
+    text = _LATEX_CITE_COMMANDS.sub(" ", text)
+    text = _LATEX_REF_COMMANDS.sub(" ", text)
+    text = _LATEX_BEGIN_END.sub(" ", text)
+    text = _LATEX_TEXT_COMMANDS.sub(r"\1", text)
+    text = _LATEX_COMMAND_TOKEN.sub(" ", text)
+    for token, replacement in _LATEX_ESCAPES.items():
+        text = text.replace(token, replacement)
+    text = text.replace("~", " ").replace("{", " ").replace("}", " ")
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _json_safe(value: Any) -> Any:
