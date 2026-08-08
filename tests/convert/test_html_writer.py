@@ -3,7 +3,7 @@
 import pytest
 from PIL import Image as PillowImage
 
-from textalchemy.convert.html_writer import write_html_model
+from textalchemy.convert.html_writer import _chart_axis_style, write_html_model
 from textalchemy.core.diagnostics import IssueSeverity
 from textalchemy.core.document_model import (
     Box,
@@ -476,6 +476,16 @@ def test_write_html_model_respects_explicit_axis_range_and_unit(tmp_path):
     assert "20" in html
     # шаг по major_unit не даёт промежуточного деления 90
     assert ">90<" not in html
+
+
+def test_chart_axis_explicit_bounds_do_not_expand_to_fit_data():
+    style = _chart_axis_style(
+        [{"values": [-50.0, 150.0]}],
+        {"auto_min": False, "min": 0.0, "auto_max": False, "max": 100.0},
+    )
+
+    assert style["minimum"] == 0.0
+    assert style["maximum"] == 100.0
 
 
 def test_write_html_model_pie_chart_uses_series_color(tmp_path):

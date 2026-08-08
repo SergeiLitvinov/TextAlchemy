@@ -4,6 +4,8 @@ from __future__ import annotations
 import time
 import zipfile
 
+import pytest
+
 from textalchemy.web.tasks import TaskStore
 
 
@@ -48,8 +50,11 @@ def test_store_artifact_file(tmp_path):
     store = TaskStore(tmp_path)
     source = tmp_path / "source.docx"
     source.write_bytes(b"artifact-bytes")
+    preview = store.preview_dir("task-1")
+    (preview / "target-0-72dpi.png").write_bytes(b"stale")
     stored_name = store.store_artifact("task-1", source, "result.docx")
     assert stored_name == "result.docx"
+    assert not preview.exists()
     result = store.result_path("task-1", stored_name)
     assert result is not None
     assert result.read_bytes() == b"artifact-bytes"
@@ -68,9 +73,39 @@ def test_store_artifact_directory_becomes_zip(tmp_path):
         assert "index.html" in zf.namelist()
 
 
+def test_store_artifact_directory_keeps_previous_zip_when_archiving_fails(tmp_path, monkeypatch):
+    store = TaskStore(tmp_path)
+    source_dir = tmp_path / "html"
+    source_dir.mkdir()
+    (source_dir / "index.html").write_text("old", encoding="utf-8")
+    stored_name = store.store_artifact("task-1", source_dir, "deck-html")
+    previous = store.result_path("task-1", stored_name).read_bytes()
+
+    def fail_archive(*_args, **_kwargs):
+        raise OSError("archive failed")
+
+    monkeypatch.setattr("textalchemy.web.tasks.shutil.make_archive", fail_archive)
+    with pytest.raises(OSError, match="archive failed"):
+        store.store_artifact("task-1", source_dir, "deck-html")
+
+    assert store.result_path("task-1", stored_name).read_bytes() == previous
+    assert not list((tmp_path / "task-1").glob("*.partial.zip"))
+
+
 def test_result_path_rejects_traversal(tmp_path):
     store = TaskStore(tmp_path)
     assert store.result_path("task-1", "../outside.txt") is None
+
+
+@pytest.mark.parametrize("identifier", ["../outside", "a/b", "a\\b", ".", ""])
+def test_task_identifier_rejects_path_traversal(tmp_path, identifier):
+    store = TaskStore(tmp_path)
+    with pytest.raises(ValueError, match="invalid task identifier"):
+        store.set(identifier, {"status": "done"})
+    assert store.get(identifier) is None
+    assert store.source_path(identifier) is None
+    assert store.result_path(identifier, "result.bin") is None
+    store.delete(identifier)
 
 
 def test_delete_removes_meta_and_artifact(tmp_path):

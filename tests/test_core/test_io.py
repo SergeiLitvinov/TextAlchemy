@@ -1,6 +1,7 @@
 """Тесты core.io — единый набор утилит (заменил дубли в core/file_utils и organize/utils)."""
 from __future__ import annotations
 
+import os
 import zipfile
 
 import pytest
@@ -260,6 +261,15 @@ class TestCheckArchiveSafety:
     def test_zip_bomb_ratio_rejected(self, tmp_path):
         p = self._zip(tmp_path, ["bomb.bin"], contents=[b"\x00" * 100_000])
         with pytest.raises(ArchiveSafetyError, match="коэффициент"):
+            check_archive_safety(p, max_ratio=10)
+
+    def test_per_entry_compression_ratio_cannot_be_diluted(self, tmp_path):
+        p = tmp_path / "mixed.zip"
+        with zipfile.ZipFile(p, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("bomb.txt", b"0" * (1024 * 1024))
+            zf.writestr("noise.bin", os.urandom(1024 * 1024))
+
+        with pytest.raises(ArchiveSafetyError, match="коэффициент сжатия записи"):
             check_archive_safety(p, max_ratio=10)
 
     def test_not_a_zip_rejected(self, tmp_path):

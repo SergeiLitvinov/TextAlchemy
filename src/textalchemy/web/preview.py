@@ -14,6 +14,8 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
+from textalchemy.core.io import atomic_copy, atomic_write_bytes, atomic_write_text
+
 DEFAULT_PREVIEW_DPI = 110
 MAX_PREVIEW_DPI = 200
 
@@ -65,7 +67,10 @@ def convert_to_pdf(source: Path, output_pdf: Path) -> bool:
             if not produced.is_file():
                 return False
             output_pdf.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(produced, output_pdf)
+            # ``tmp`` and the preview cache may live on different filesystems,
+            # where ``os.replace`` fails with EXDEV.  Copy through a sibling
+            # partial file so publishing the cached PDF remains atomic.
+            atomic_copy(produced, output_pdf)
             return True
     except (OSError, subprocess.SubprocessError):
         return False
@@ -117,7 +122,7 @@ def cached_page_count(preview_dir: Path, source_file: Path, side: str) -> int:
     pdf = ensure_pdf(preview_dir, source_file, side)
     count = pdf_page_count(pdf) if pdf is not None else 0
     try:
-        count_file.write_text(str(count), encoding="utf-8")
+        atomic_write_text(count_file, str(count), encoding="utf-8")
     except OSError:
         pass
     return count
@@ -132,7 +137,10 @@ def cached_page_png(
     dpi: int = DEFAULT_PREVIEW_DPI,
 ) -> Optional[bytes]:
     """PNG-байты страницы с кэшированием в каталоге preview."""
-    png_path = preview_dir / f"{side}-{page_index}.png"
+    dpi = max(1, min(int(dpi), MAX_PREVIEW_DPI))
+    # DPI is part of the representation.  Without it, the first request
+    # permanently determined the resolution returned to every later caller.
+    png_path = preview_dir / f"{side}-{page_index}-{dpi}dpi.png"
     if png_path.is_file():
         try:
             return png_path.read_bytes()
@@ -145,7 +153,7 @@ def cached_page_png(
     if data is None:
         return None
     try:
-        png_path.write_bytes(data)
+        atomic_write_bytes(png_path, data)
     except OSError:
         pass
     return data

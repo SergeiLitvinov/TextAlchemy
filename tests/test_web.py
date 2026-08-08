@@ -47,6 +47,9 @@ def test_dashboard():
     resp = client.get("/")
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
+    assert f"/static/css/style.css?v={__version__}" in resp.text
+    assert f"/static/js/app.js?v={__version__}" in resp.text
+    assert f"/static/favicon.svg?v={__version__}" in resp.text
 
 
 def test_extract_page():
@@ -881,6 +884,42 @@ def test_api_convert_batch_rejects_unavailable_target_and_cleans(monkeypatch, tm
     response = client.post("/api/convert/batch", files=_batch_files(), data={"target_format": "pptx"})
     assert response.status_code == 400
     assert "недоступен" in response.json()["detail"]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_api_convert_batch_cleans_all_workspaces_on_unexpected_preparation_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "textalchemy.web.routes.convert.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+    calls = 0
+
+    def fail_on_second(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise RuntimeError("preparation failed")
+        return DocFormat.PDF, DocFormat.DOCX
+
+    monkeypatch.setattr("textalchemy.web.routes.convert._resolve_conversion", fail_on_second)
+
+    with pytest.raises(RuntimeError, match="preparation failed"):
+        client.post("/api/convert/batch", files=_batch_files(), data={"target_format": "docx"})
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_api_convert_batch_cleans_workspaces_when_job_persistence_fails(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "textalchemy.web.routes.convert.create_web_workspace",
+        lambda: ArtifactWorkspace(parent=tmp_path),
+    )
+    monkeypatch.setattr(
+        "textalchemy.web.routes.convert.tasks_store.set_job",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("job store failed")),
+    )
+
+    with pytest.raises(OSError, match="job store failed"):
+        client.post("/api/convert/batch", files=_batch_files(), data={"target_format": "docx"})
     assert list(tmp_path.iterdir()) == []
 
 

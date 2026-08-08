@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_ARTIFACT_QUOTA = 100 * 1024 * 1024
+_WINDOWS_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{index}" for index in range(1, 10)),
+    *(f"LPT{index}" for index in range(1, 10)),
+}
 
 
 class ArtifactLimitError(ValueError):
@@ -42,7 +47,7 @@ class ArtifactWorkspace:
         """Return a path contained directly in this workspace."""
 
         self._ensure_open()
-        safe_name = _safe_filename(name, fallback=fallback)
+        safe_name = safe_artifact_filename(name, fallback=fallback)
         return self.path / safe_name
 
     def write_bytes(self, name: str, data: bytes, *, fallback: str = "artifact") -> Path:
@@ -115,15 +120,19 @@ class ArtifactWorkspace:
             raise RuntimeError("artifact workspace is closed")
 
 
-def _safe_filename(name: str, *, fallback: str) -> str:
-    normalized = str(name).replace("\\", "/").replace("\x00", "")
-    candidate = normalized.rsplit("/", 1)[-1].strip()
+def safe_artifact_filename(name: str, *, fallback: str) -> str:
+    """Return a portable basename safe for workspace and download paths."""
+
+    normalized = "".join(character for character in str(name).replace("\\", "/") if ord(character) >= 32)
+    candidate = normalized.rsplit("/", 1)[-1].strip().rstrip(". ")
     if candidate in {"", ".", ".."}:
         candidate = fallback
+    if candidate.split(".", 1)[0].upper() in _WINDOWS_RESERVED_NAMES:
+        candidate = f"_{candidate}"
     if len(candidate) > 160:
         suffix = Path(candidate).suffix[:20]
         candidate = f"{Path(candidate).stem[: 160 - len(suffix)]}{suffix}"
     return candidate
 
 
-__all__ = ["ArtifactLimitError", "ArtifactWorkspace", "DEFAULT_ARTIFACT_QUOTA"]
+__all__ = ["ArtifactLimitError", "ArtifactWorkspace", "DEFAULT_ARTIFACT_QUOTA", "safe_artifact_filename"]

@@ -72,3 +72,11 @@ def test_workspace_path_is_always_inside_root(tmp_path):
         path = workspace.artifact_path("folder/file.txt")
         assert path.parent == workspace.path
         assert workspace.path in Path(path).resolve().parents
+
+
+@pytest.mark.parametrize("name", ["CON", "con.txt", "NUL.pdf", "LPT1", "report. "])
+def test_workspace_uses_portable_windows_safe_names(tmp_path, name):
+    with ArtifactWorkspace(parent=tmp_path) as workspace:
+        path = workspace.artifact_path(name)
+        assert path.name.startswith("_") or not path.name.endswith((".", " "))
+        assert path.parent == workspace.path

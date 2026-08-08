@@ -41,6 +41,7 @@ static_dir = Path(__file__).parent / "static"
 data_dir = Path(platformdirs.user_data_dir("textalchemy", "textalchemy"))
 
 env = Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=True, cache_size=0)
+env.globals["asset_version"] = __version__
 templates = Jinja2Templates(env=env)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 

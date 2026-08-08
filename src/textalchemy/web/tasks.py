@@ -9,13 +9,20 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import shutil
 import threading
 import time
+import uuid
 from pathlib import Path
 from typing import Any, Optional
 
+from textalchemy.core.artifacts import safe_artifact_filename
+from textalchemy.core.io import atomic_copy, atomic_write_text
+
 DEFAULT_TASK_TTL_SECONDS = 3600
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 
 
 class TaskStore:
@@ -36,6 +43,8 @@ class TaskStore:
     def get(self, task_id: str) -> Optional[dict[str, Any]]:
         """Вернуть метаданные задачи или ``None`` (в т.ч. если она протухла)."""
         with self._lock:
+            if not _valid_identifier(task_id):
+                return None
             meta = self._read_meta_locked(task_id)
             if meta is None:
                 return None
@@ -50,33 +59,44 @@ class TaskStore:
         Для каталогов (например, PPTX→HTML) создаётся zip рядом с задачей.
         """
         with self._lock:
+            task_id = _safe_identifier(task_id)
             task_dir = self._task_dir(task_id)
             task_dir.mkdir(parents=True, exist_ok=True)
+            # A rerun may replace the result under the same task id.  Cached
+            # page counts and PNGs must never survive that replacement.
+            shutil.rmtree(task_dir / "preview", ignore_errors=True)
             if source.is_dir():
-                safe = _safe_filename(filename, fallback="converted")
+                safe = safe_artifact_filename(filename, fallback="converted")
                 zip_path = task_dir / f"{safe}.zip"
-                if zip_path.exists():
-                    zip_path.unlink()
-                shutil.make_archive(str(zip_path.with_suffix("")), "zip", source)
+                partial_base = task_dir / f".{safe}.{uuid.uuid4().hex}.partial"
+                partial_zip = Path(f"{partial_base}.zip")
+                try:
+                    shutil.make_archive(str(partial_base), "zip", source)
+                    os.replace(partial_zip, zip_path)
+                finally:
+                    partial_zip.unlink(missing_ok=True)
                 return zip_path.name
-            stored = task_dir / _safe_filename(filename, fallback="converted")
-            shutil.copy2(source, stored)
+            stored = task_dir / safe_artifact_filename(filename, fallback="converted")
+            atomic_copy(source, stored)
             return stored.name
 
     def store_source(self, task_id: str, source: Path, filename: str) -> str:
         """Сохранить исходный файл задачи, чтобы её можно было перезапустить."""
         with self._lock:
+            task_id = _safe_identifier(task_id)
             task_dir = self._task_dir(task_id)
             task_dir.mkdir(parents=True, exist_ok=True)
             source_dir = task_dir / "source"
             source_dir.mkdir(exist_ok=True)
-            stored = source_dir / _safe_filename(filename, fallback="source")
-            shutil.copy2(source, stored)
+            stored = source_dir / safe_artifact_filename(filename, fallback="source")
+            atomic_copy(source, stored)
             return stored.name
 
     def source_path(self, task_id: str) -> Optional[Path]:
         """Путь к сохранённому исходнику задачи (только внутри её каталога)."""
         with self._lock:
+            if not _valid_identifier(task_id):
+                return None
             task_dir = self._task_dir(task_id).resolve()
             source_dir = task_dir / "source"
             if not source_dir.is_dir():
@@ -92,6 +112,8 @@ class TaskStore:
     def result_path(self, task_id: str, artifact_name: str) -> Optional[Path]:
         """Путь к артефакту задачи (только внутри её каталога)."""
         with self._lock:
+            if not _valid_identifier(task_id):
+                return None
             task_dir = self._task_dir(task_id).resolve()
             candidate = (task_dir / artifact_name).resolve()
             if not candidate.is_file() or task_dir not in candidate.parents:
@@ -107,6 +129,8 @@ class TaskStore:
 
     def delete(self, task_id: str) -> None:
         with self._lock:
+            if not _valid_identifier(task_id):
+                return
             self._delete_locked(task_id)
 
     def set_job(self, job_id: str, payload: dict[str, Any]) -> None:
@@ -120,6 +144,8 @@ class TaskStore:
     def get_job(self, job_id: str) -> Optional[dict[str, Any]]:
         """Вернуть метаданные job или ``None`` (в т.ч. если они протухли)."""
         with self._lock:
+            if not _valid_identifier(job_id):
+                return None
             path = self._job_path(job_id)
             if not path.is_file():
                 return None
@@ -155,6 +181,8 @@ class TaskStore:
 
     def delete_job(self, job_id: str) -> None:
         with self._lock:
+            if not _valid_identifier(job_id):
+                return
             self._delete_job_locked(job_id)
 
     def prune(self) -> int:
@@ -163,16 +191,16 @@ class TaskStore:
             return self._prune_locked()
 
     def _task_dir(self, task_id: str) -> Path:
-        return self.root / task_id
+        return self.root / _safe_identifier(task_id)
 
     def _jobs_dir(self) -> Path:
         return self.root / "jobs"
 
     def _job_path(self, job_id: str) -> Path:
-        return self._jobs_dir() / f"{job_id}.json"
+        return self._jobs_dir() / f"{_safe_identifier(job_id)}.json"
 
     def _meta_path(self, task_id: str) -> Path:
-        return self.root / f"{task_id}.json"
+        return self.root / f"{_safe_identifier(task_id)}.json"
 
     def _read_meta_locked(self, task_id: str) -> Optional[dict]:
         path = self._meta_path(task_id)
@@ -185,14 +213,14 @@ class TaskStore:
         return payload if isinstance(payload, dict) else None
 
     def _write_meta_locked(self, task_id: str, payload: dict) -> None:
-        self._meta_path(task_id).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        atomic_write_text(self._meta_path(task_id), json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
     def _delete_locked(self, task_id: str) -> None:
         self._meta_path(task_id).unlink(missing_ok=True)
         shutil.rmtree(self._task_dir(task_id), ignore_errors=True)
 
     def _write_job_locked(self, job_id: str, payload: dict) -> None:
-        self._job_path(job_id).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        atomic_write_text(self._job_path(job_id), json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
     def _delete_job_locked(self, job_id: str) -> None:
         self._job_path(job_id).unlink(missing_ok=True)
@@ -235,15 +263,15 @@ class TaskStore:
         return removed
 
 
-def _safe_filename(name: str, *, fallback: str) -> str:
-    normalized = str(name).replace("\\", "/").replace("\x00", "")
-    candidate = normalized.rsplit("/", 1)[-1].strip()
-    if candidate in {"", ".", ".."}:
-        candidate = fallback
-    if len(candidate) > 160:
-        suffix = Path(candidate).suffix[:20]
-        candidate = f"{Path(candidate).stem[: 160 - len(suffix)]}{suffix}"
+def _safe_identifier(value: str) -> str:
+    candidate = str(value)
+    if not _valid_identifier(candidate):
+        raise ValueError("invalid task identifier")
     return candidate
+
+
+def _valid_identifier(value: str) -> bool:
+    return _IDENTIFIER_RE.fullmatch(str(value)) is not None
 
 
 __all__ = ["DEFAULT_TASK_TTL_SECONDS", "TaskStore"]

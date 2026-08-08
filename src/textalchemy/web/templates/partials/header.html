@@ -1,6 +1,6 @@
 <div class="header">
     <h1>TextAlchemy</h1>
-    <button class="theme-toggle" onclick="toggleTheme()" title="Переключить тему">🌓</button>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Переключить тему" aria-label="Переключить тему">🌓</button>
     <nav>
         <a href="/" {% if active == 'index' %}class="active"{% endif %}>Главная</a>
         <a href="/extract" {% if active == 'extract' %}class="active"{% endif %}>Извлечь</a>

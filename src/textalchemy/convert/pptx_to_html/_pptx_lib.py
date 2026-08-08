@@ -251,7 +251,3 @@ PRST_GEOMETRY = {
     "flowchartStoredData": ("M0,0.1 L1,0 L1,0.9 L0,1 Z M0,0.1 A0.05,0.05 0 0 1 0,0.2 Z M1,0 A0.05,0.05 0 0 1 1,0.1 Z M1,0.9 A0.05,0.05 0 0 1 1,0.95 Z M0,0.95 A0.05,0.05 0 0 1 0,1 Z", False),  # noqa: E501
     "flowchartConnector": ("M0,0.5 L0.4,0.5 L0.4,1 L1,1", True),
 }
-
-
-if __name__ == "__main__":
-    print("This is a library; use it from convert.py")

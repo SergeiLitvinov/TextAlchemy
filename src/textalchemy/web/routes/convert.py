@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 
 from fastapi import BackgroundTasks, File, Form, HTTPException, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 
 from textalchemy.convert.executor import ConversionExecutor, ConversionRequest, infer_format
 from textalchemy.core.artifacts import ArtifactWorkspace
@@ -414,19 +414,10 @@ async def api_convert_result(task_id: str):
     artifact_path = tasks_store.result_path(task_id, task.get("artifact", ""))
     if artifact_path is None:
         raise HTTPException(status_code=500, detail="Не удалось подготовить файл")
-    try:
-        content = artifact_path.read_bytes()
-    except OSError as error:
-        raise HTTPException(status_code=500, detail="Не удалось подготовить файл") from error
-    filename = task["filename"]
-    ascii_name = filename.encode("ascii", "ignore").decode() or "converted"
-    from urllib.parse import quote
-
-    disposition = f"attachment; filename={ascii_name}; filename*=UTF-8''{quote(filename)}"
-    return Response(
-        content=content,
+    return FileResponse(
+        artifact_path,
         media_type=task["media_type"],
-        headers={"Content-Disposition": disposition},
+        filename=task["filename"],
     )
 
 
@@ -469,49 +460,56 @@ async def api_convert_batch(
                     detail=f"Маршрут {source.value} → {target.value} ({conversion_mode.value}) недоступен",
                 )
             prepared.append((workspace, source_path, source, target))
-    except HTTPException:
+    except Exception:
         for workspace in workspaces:
             workspace.cleanup()
         raise
 
     tasks: list[dict[str, object]] = []
-    for workspace, source_path, source, target in prepared:
-        task_id = str(uuid.uuid4())
-        _register_task(
-            task_id,
+    try:
+        for workspace, source_path, source, target in prepared:
+            task_id = str(uuid.uuid4())
+            _register_task(
+                task_id,
+                {
+                    "status": "running",
+                    "error": None,
+                    "report": None,
+                    "source_format": source.value,
+                    "target_format": target.value,
+                    "mode": conversion_mode.value,
+                },
+            )
+            output_path = _output_path_for(workspace, source_path, source, target)
+            background_tasks.add_task(
+                _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True
+            )
+            tasks.append(
+                {
+                    "name": source_path.name,
+                    "task_id": task_id,
+                    "source_format": source.value,
+                    "target_format": target.value,
+                    "status": f"/api/convert/status/{task_id}",
+                    "result": f"/api/convert/result/{task_id}",
+                }
+            )
+        job_id = str(uuid.uuid4())
+        tasks_store.set_job(
+            job_id,
             {
-                "status": "running",
-                "error": None,
-                "report": None,
-                "source_format": source.value,
-                "target_format": target.value,
+                "job_id": job_id,
+                "target_format": target_format,
                 "mode": conversion_mode.value,
+                "files": tasks,
             },
         )
-        output_path = _output_path_for(workspace, source_path, source, target)
-        background_tasks.add_task(
-            _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True
-        )
-        tasks.append(
-            {
-                "name": source_path.name,
-                "task_id": task_id,
-                "source_format": source.value,
-                "target_format": target.value,
-                "status": f"/api/convert/status/{task_id}",
-                "result": f"/api/convert/result/{task_id}",
-            }
-        )
-    job_id = str(uuid.uuid4())
-    tasks_store.set_job(
-        job_id,
-        {
-            "job_id": job_id,
-            "target_format": target_format,
-            "mode": conversion_mode.value,
-            "files": tasks,
-        },
-    )
+    except Exception:
+        for workspace in workspaces:
+            workspace.cleanup()
+        for task in tasks:
+            tasks_store.delete(str(task["task_id"]))
+        raise
     return {"success": True, "job_id": job_id, "tasks": tasks}
 
 
@@ -614,8 +612,17 @@ async def api_convert_job_rerun(job_id: str, background_tasks: BackgroundTasks):
                 _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, False
             )
             launched.append(task_id)
-    except HTTPException:
+    except Exception as error:
         for workspace in workspaces:
             workspace.cleanup()
+        for task_id in launched:
+            _register_task(
+                task_id,
+                {
+                    "status": "error",
+                    "error": f"Не удалось перезапустить задачу: {error}",
+                    "report": None,
+                },
+            )
         raise
     return {"success": True, "job_id": job_id, "launched": launched}

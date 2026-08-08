@@ -519,9 +519,17 @@ select, input[type="text"], input[type="number"] { margin-bottom: 0.75rem; }
 
 .preview-compare figure { width: 100%; }
 
-@media (max-width: 768px) {
+@media (max-width: 1050px) {
     .header { flex-wrap: wrap; }
-    .header nav { margin-left: 0; width: 100%; flex-wrap: wrap; }
+    .header nav {
+        order: 3;
+        margin-left: 0;
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .header nav { flex-wrap: wrap; }
     .result-summary { grid-template-columns: 1fr; }
     .issue-list li { grid-template-columns: 1fr; gap: 0.2rem; }
 }

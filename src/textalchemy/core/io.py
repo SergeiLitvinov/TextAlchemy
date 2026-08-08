@@ -70,6 +70,11 @@ def check_archive_safety(
                     raise ArchiveSafetyError(f"Запись слишком большая: {name} {info.file_size} байт")
                 total_size += info.file_size
                 total_compressed += info.compress_size
+                if info.compress_size == 0:
+                    if info.file_size > 0:
+                        raise ArchiveSafetyError(f"Запись имеет нулевой сжатый размер: {name}")
+                elif info.file_size > info.compress_size * max_ratio:
+                    raise ArchiveSafetyError(f"Подозрительный коэффициент сжатия записи: {name}")
             if total_size > max_total_size:
                 raise ArchiveSafetyError(f"Суммарный размер архива превышает лимит: {total_size} байт")
             if total_compressed > 0 and total_size > total_compressed * max_ratio:

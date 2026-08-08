@@ -39,8 +39,12 @@ def test_cached_page_count_and_png(tmp_path):
 
     data = preview.cached_page_png(preview_dir, pdf, "target", 0, dpi=72)
     assert data and data.startswith(b"\x89PNG")
-    assert (preview_dir / "target-0.png").is_file()
+    assert (preview_dir / "target-0-72dpi.png").is_file()
     assert preview.cached_page_png(preview_dir, pdf, "target", 0, dpi=72) == data
+
+    high_resolution = preview.cached_page_png(preview_dir, pdf, "target", 0, dpi=144)
+    assert high_resolution != data
+    assert (preview_dir / "target-0-144dpi.png").is_file()
 
 
 def test_ensure_pdf_returns_source_directly_for_pdf(tmp_path):

@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Integer, String, Text, create_engine
 from sqlalchemy.orm import Session, declarative_base
+from sqlalchemy.pool import NullPool
 
 from textalchemy.core.types import BibItem
 from textalchemy.organize.bibliography import BibliographyParser
@@ -76,7 +77,9 @@ class Database:
     def __init__(self, db_path: str | Path = ".textalchemy/library.db"):
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.engine = create_engine(f"sqlite:///{self.db_path}")
+        # File-backed SQLite connections are short-lived here.  Avoid keeping
+        # pooled handles open across Web requests/tests (and Windows file locks).
+        self.engine = create_engine(f"sqlite:///{self.db_path}", poolclass=NullPool)
         Base.metadata.create_all(self.engine)
 
     def session(self) -> Session:

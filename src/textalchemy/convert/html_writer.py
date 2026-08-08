@@ -494,9 +494,9 @@ def _chart_axis_style(series: list[dict[str, Any]], value_axis: dict[str, Any]) 
     """Собрать параметры отрисовки осей: диапазон, шаг, формат, видимость меток."""
     minimum, maximum = _chart_range(series)
     if not value_axis.get("auto_min") and isinstance(value_axis.get("min"), (int, float)):
-        minimum = min(minimum, value_axis["min"])
+        minimum = float(value_axis["min"])
     if not value_axis.get("auto_max") and isinstance(value_axis.get("max"), (int, float)):
-        maximum = max(maximum, value_axis["max"])
+        maximum = float(value_axis["max"])
     if math.isclose(minimum, maximum):
         maximum = minimum + 1.0
     hidden = bool(value_axis.get("hidden"))

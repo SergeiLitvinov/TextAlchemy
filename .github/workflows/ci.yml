@@ -7,6 +7,26 @@ on:
     branches: [main, master]
 
 jobs:
+  minimal-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install core dependencies only
+        run: uv sync
+      - name: Verify core imports and CLI discovery
+        run: |
+          uv run python -c "import textalchemy, textalchemy.convert, textalchemy.pipeline"
+          uv run python -c "import importlib.util; assert all(importlib.util.find_spec(name) is None for name in ('fitz', 'docx', 'pptx', 'PIL', 'fastapi', 'sqlalchemy'))"
+          uv run textalchemy --help
+
   test:
     runs-on: ubuntu-latest
     strategy:
