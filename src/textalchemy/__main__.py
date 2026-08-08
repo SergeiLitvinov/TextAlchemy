@@ -1,5 +1,4 @@
 import argparse
-import logging
 import sys
 from typing import Optional
 
@@ -24,9 +23,9 @@ from textalchemy.cli import (
     cmd_template_check,
     cmd_web,
 )
+from textalchemy.core.logging import configure_logging, get_logger
 
-logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
-logger = logging.getLogger("textalchemy")
+logger = get_logger("cli")
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -220,12 +219,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     debug = bool(getattr(args, "debug", False))
-    logging.getLogger("textalchemy").setLevel(logging.DEBUG if debug else logging.WARNING)
-    if debug:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-        )
+    configure_logging(debug=debug)
 
     if not args.command:
         parser.print_help()

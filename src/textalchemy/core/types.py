@@ -127,6 +127,27 @@ class Text:
     def __bool__(self) -> bool:
         return bool(self.plain or self.blocks or self.tables)
 
+    def to_dict(self) -> dict:
+        return {
+            "blocks": [
+                {
+                    "type": b.type.value if hasattr(b.type, "value") else str(b.type),
+                    "text": b.text,
+                    "level": b.level,
+                    "page": b.page,
+                    "meta": b.meta,
+                }
+                for b in self.blocks
+            ],
+            "tables": [{"page": t.page, "rows": t.rows} for t in self.tables],
+            "plain": self.plain,
+            "language": self.language,
+            "source_format": self.source_format.value if hasattr(self.source_format, "value") else str(self.source_format),
+            "engine": self.engine,
+            "warnings": self.warnings,
+            "pages": self.pages,
+        }
+
 
 @dataclass
 class BibItem:

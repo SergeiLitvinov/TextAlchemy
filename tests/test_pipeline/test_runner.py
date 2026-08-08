@@ -195,3 +195,69 @@ def test_all_operations_in_registry():
         "name.from_match",
     }
     assert expected <= ids
+
+
+def test_run_pipeline_emits_progress(tmp_path):
+    f = tmp_path / "a.txt"
+    f.write_text("Body", encoding="utf-8")
+    p = tmp_path / "pipe.yaml"
+    p.write_text(
+        f"steps:\n"
+        f"  - op: ingest.file\n"
+        f"    output: doc\n"
+        f"    params:\n"
+        f"      path: {str(f)!r}\n"
+        f"  - op: extract.text\n"
+        f"    input: doc\n"
+        f"    output: text\n",
+        encoding="utf-8",
+    )
+    events = []
+    result = run_pipeline(p, progress=events.append)
+    kinds = [e.kind for e in events]
+    assert kinds == [
+        "pipeline_start",
+        "step_start",
+        "step_done",
+        "step_start",
+        "step_done",
+        "pipeline_done",
+    ]
+    assert result.ok, result.error
+    done = [e for e in events if e.kind == "step_done"]
+    assert [e.op for e in done] == ["ingest.file", "extract.text"]
+    assert done[0].index == 0 and done[1].index == 1
+    assert all(e.total == 2 for e in events)
+    assert all(e.elapsed >= 0 for e in done)
+
+
+def test_run_pipeline_emits_progress_on_error():
+    p = {
+        "steps": [
+            {"op": "does.not.exist", "output": "x"},
+        ]
+    }
+    events = []
+    result = run_pipeline(p, progress=events.append)
+    assert not result.ok
+    kinds = [e.kind for e in events]
+    assert kinds == ["pipeline_start", "step_start", "step_failed", "pipeline_done"]
+    failed = [e for e in events if e.kind == "step_failed"][0]
+    assert failed.op == "does.not.exist"
+    done = events[-1]
+    assert done.kind == "pipeline_done"
+    assert done.error == result.error
+
+
+def test_run_pipeline_progress_default_is_noop(tmp_path):
+    f = tmp_path / "a.txt"
+    f.write_text("Body", encoding="utf-8")
+    result = run_pipeline(
+        {
+            "steps": [
+                {"op": "ingest.file", "output": "doc", "params": {"path": str(f)}},
+                {"op": "extract.text", "input": "doc", "output": "text"},
+            ]
+        }
+    )
+    assert result.ok, result.error

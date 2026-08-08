@@ -30,11 +30,13 @@ Pipeline-файл — это список шагов::
 from __future__ import annotations
 
 import logging
+import time
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, Union
 
+from textalchemy.core.progress import ProgressEvent, ProgressSink
 from textalchemy.core.registry import get
 
 try:
@@ -90,6 +92,8 @@ def _safe(v: Any) -> Any:
         return str(v)
     if isinstance(v, DocumentModel):
         return document_to_dict(v)
+    if hasattr(v, "to_dict"):
+        return v.to_dict()
     return str(v)
 
 
@@ -146,15 +150,18 @@ def run_pipeline(
     spec: Union[str, Path, dict],
     *,
     initial_ctx: Optional[dict] = None,
+    progress: Optional[ProgressSink] = None,
 ) -> RunResult:
     """Выполнить pipeline. ``spec`` — путь к файлу или готовый dict.
 
     Контекст (``ctx``) копирует ``initial_ctx``, затем накапливает результаты шагов.
+    Если передан ``progress`` — на каждый шаг рассылается событие :class:`ProgressEvent`.
     """
     if not isinstance(spec, dict):
         spec = load_pipeline(spec)
     steps = spec.get("steps") or []
     output_name = spec.get("output")
+    total = len(steps)
 
     ctx: dict = dict(initial_ctx or {})
     # Всё, что в spec вне ``steps``/``output`` — это начальный контекст.
@@ -165,21 +172,44 @@ def run_pipeline(
             ctx[k] = v
     result = RunResult()
 
+    def emit(ev: ProgressEvent) -> None:
+        if progress is not None:
+            progress(ev)
+
+    emit(ProgressEvent(kind="pipeline_start", index=0, total=total))
+    started = time.perf_counter()
+
     for i, step in enumerate(steps):
         op_id = step.get("op")
         name = step.get("output") or f"step{i}"
         sr = StepResult(name=name, op=op_id)
         result.steps.append(sr)
+        step_started = time.perf_counter()
+        emit(ProgressEvent(kind="step_start", index=i, total=total, op=op_id or "", name=name))
 
         if not op_id:
             sr.error = "missing 'op'"
             result.error = f"step {i}: {sr.error}"
+            emit(
+                ProgressEvent(
+                    kind="step_failed", index=i, total=total, op="", name=name,
+                    error=sr.error, elapsed=time.perf_counter() - step_started,
+                )
+            )
+            emit(ProgressEvent(kind="pipeline_done", index=total, total=total, error=result.error))
             return result
         try:
             spec_op = get(op_id)
         except KeyError as e:
             sr.error = str(e)
             result.error = f"step {i}: {sr.error}"
+            emit(
+                ProgressEvent(
+                    kind="step_failed", index=i, total=total, op=op_id, name=name,
+                    error=sr.error, elapsed=time.perf_counter() - step_started,
+                )
+            )
+            emit(ProgressEvent(kind="pipeline_done", index=total, total=total, error=result.error))
             return result
 
         params = _interpolate(step.get("params") or {}, ctx)
@@ -197,15 +227,34 @@ def run_pipeline(
         except Exception as e:  # noqa: BLE001
             sr.error = f"{type(e).__name__}: {e}"
             result.error = f"step {i} ({op_id}) failed: {sr.error}"
+            emit(
+                ProgressEvent(
+                    kind="step_failed", index=i, total=total, op=op_id, name=name,
+                    error=sr.error, elapsed=time.perf_counter() - step_started,
+                )
+            )
+            emit(ProgressEvent(kind="pipeline_done", index=total, total=total, error=result.error))
             return result
         ctx[name] = value
         sr.value = _safe(value)
         logger.info("step %d: %s -> %s", i, op_id, name)
+        emit(
+            ProgressEvent(
+                kind="step_done", index=i, total=total, op=op_id, name=name,
+                elapsed=time.perf_counter() - step_started,
+            )
+        )
 
     if output_name:
         result.final = ctx.get(output_name)
     elif result.steps:
         result.final = ctx.get(result.steps[-1].name)
+    emit(
+        ProgressEvent(
+            kind="pipeline_done", index=total, total=total,
+            error=result.error, elapsed=time.perf_counter() - started,
+        )
+    )
     return result
 
 
