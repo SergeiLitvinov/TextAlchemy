@@ -63,6 +63,13 @@ _MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 
 _SHAPE_TAGS = frozenset({"sp", "cxnSp", "pic", "graphicFrame", "grpSp"})
 
+# Сведение 3D-типов диаграмм к базовым 2D-типам.
+_CHART_3D_MAP = {
+    "bar3DChart": "barChart",
+    "pie3DChart": "pieChart",
+    "doughnut3DChart": "doughnutChart",
+}
+
 # Стандартные цвета темы PowerPoint (ECMA-376, p:clrMap → theme palette).
 _THEME_COLORS = {
     "bg1": "FFFFFF",
@@ -1013,7 +1020,7 @@ def _chart_block(chart_el, slide_part, box: Box) -> Paragraph:
 
 
 def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
-    """Прочитать данные диаграммы из её part (заголовок, категории, серии)."""
+    """Прочитать данные диаграммы из её part (заголовок, категории, серии, оси)."""
     part = _related_part(slide_part, r_id)
     if part is None:
         return {}
@@ -1024,6 +1031,7 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
     chart = root.find(_c("chart"))
     if chart is None:
         return {}
+    theme_colors = _load_theme_colors(slide_part)
     data: dict[str, Any] = {}
     title = _chart_element_title(chart)
     if title:
@@ -1046,15 +1054,32 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
             data["category_axis_title"] = category_axis_title
         if value_axis_title:
             data["value_axis_title"] = value_axis_title
-        chart_type = None
-        chart_node = None
+        axes: dict[str, Any] = {}
+        category_axis_info = _chart_axis_info(category_axis)
+        if category_axis_info:
+            axes["category"] = category_axis_info
+        value_axis_info = _chart_axis_info(value_axis)
+        if value_axis_info:
+            axes["value"] = value_axis_info
+        if axes:
+            data["axes"] = axes
+        chart_nodes: list[tuple[str, Any]] = []
         for child in plot_area:
             tag = _local_name(child)
             if tag.endswith("Chart"):
-                chart_type = tag
-                chart_node = child
-                break
-        data["chart_type"] = chart_type
+                chart_nodes.append((tag, child))
+        if not chart_nodes:
+            data["chart_type"] = None
+            return data
+        if len(chart_nodes) > 1:
+            data["combo_types"] = [tag for tag, _node in chart_nodes]
+        primary_tag, chart_node = chart_nodes[0]
+        data["chart_type"] = _chart_base_type(primary_tag)
+        if primary_tag != data["chart_type"]:
+            data["chart_3d"] = True
+        data_labels = _read_data_labels(chart_node)
+        if data_labels:
+            data["data_labels"] = data_labels
         if chart_node is not None:
             bar_direction = chart_node.find(_c("barDir"))
             grouping = chart_node.find(_c("grouping"))
@@ -1062,28 +1087,193 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
                 data["bar_direction"] = bar_direction.get("val")
             if grouping is not None and grouping.get("val"):
                 data["grouping"] = grouping.get("val")
+            for tag, key in (("gapWidth", "gap_width"), ("overlap", "overlap"), ("varyColors", "vary_colors")):
+                element = chart_node.find(_c(tag))
+                if element is not None and element.get("val") is not None:
+                    if tag == "varyColors":
+                        data[key] = _chart_bool(element.get("val"))
+                    else:
+                        data[key] = _chart_float(element.get("val"))
         series: list[dict[str, Any]] = []
         categories: list[str] = []
-        for ser in plot_area.iter(_c("ser")):
-            tx = ser.find(_c("tx"))
-            name = _pt_values(tx)[0] if tx is not None and _pt_values(tx) else ""
-            cat = ser.find(_c("cat"))
-            if cat is not None:
-                cats = _pt_values(cat)
-                if not categories:
-                    categories = cats
-            val = ser.find(_c("val"))
-            values = _pt_values(val) if val is not None else []
-            item: dict[str, Any] = {"name": name, "values": values}
-            color = _chart_series_color(ser)
-            if color is not None:
-                item["color"] = color
-            series.append(item)
+        for node_tag, node in chart_nodes:
+            series_index = 0
+            for ser in node.findall(_c("ser")):
+                tx = ser.find(_c("tx"))
+                name = _pt_values(tx)[0] if tx is not None and _pt_values(tx) else ""
+                cat = ser.find(_c("cat"))
+                if cat is not None:
+                    cats = _pt_values(cat)
+                    if not categories:
+                        categories = cats
+                val = ser.find(_c("val"))
+                values = _pt_values(val) if val is not None else []
+                item: dict[str, Any] = {"name": name, "values": values}
+                item["chart_type"] = _chart_base_type(node_tag)
+                color = _chart_series_color(ser, theme_colors)
+                if color is None:
+                    # Без явного цвета PowerPoint берёт акцентные цвета темы по порядку.
+                    accent = theme_colors.get(f"accent{series_index % 6 + 1}")
+                    if accent:
+                        color = "#" + accent
+                if color is not None:
+                    item["color"] = color
+                series_data_labels = _read_data_labels(ser)
+                if series_data_labels:
+                    item["data_labels"] = series_data_labels
+                series.append(item)
+                series_index += 1
         if categories:
             data["categories"] = categories
         if series:
             data["series"] = series
     return data
+
+
+def _chart_base_type(tag: str) -> str:
+    """Свести 3D-тип диаграммы к базовому 2D-типу."""
+    return _CHART_3D_MAP.get(tag, tag)
+
+
+def _load_theme_colors(slide_part) -> dict[str, str]:
+    """Прочитать схему цветов темы презентации из её part.
+
+    Возвращает словарь вида ``{"accent1": "4F81BD", ...}``; при отсутствии
+    темы или ошибках — стандартную палитру PowerPoint (Office 2013+).
+    """
+    colors = dict(_THEME_COLORS)
+    try:
+        from pptx.opc.constants import RELATIONSHIP_TYPE as _RT  # type: ignore[import-not-found]
+
+        package = slide_part.package
+        presentation_part = getattr(package, "main_document_part", None)
+        if presentation_part is None:
+            return colors
+        theme = presentation_part.part_related_by(_RT.THEME)
+        if theme is None or not theme.blob:
+            return colors
+        root = etree.fromstring(theme.blob)
+        scheme = root.find(f".//{_a('clrScheme')}")
+        if scheme is None:
+            return colors
+        for child in scheme:
+            key = _local_name(child)
+            srgb = child.find(_a("srgbClr"))
+            if srgb is not None:
+                colors[key] = (srgb.get("val") or "").upper()
+                continue
+            sys_clr = child.find(_a("sysClr"))
+            if sys_clr is not None:
+                last = sys_clr.get("lastClr")
+                if last:
+                    colors[key] = last.upper()
+    except Exception:  # noqa: BLE001
+        pass
+    return colors
+
+
+def _chart_axis_info(axis) -> dict[str, Any] | None:
+    """Собрать настройки оси диаграммы (scaling, единицы, формат, видимость)."""
+    if axis is None:
+        return None
+    info: dict[str, Any] = {}
+    delete = axis.find(_c("delete"))
+    if delete is not None:
+        info["hidden"] = _chart_bool(delete.get("val"))
+    ax_pos = axis.find(_c("axPos"))
+    if ax_pos is not None and ax_pos.get("val"):
+        info["position"] = ax_pos.get("val")
+    scaling = axis.find(_c("scaling"))
+    if scaling is not None:
+        for child in scaling:
+            tag = _local_name(child)
+            val = child.get("val")
+            if val is None:
+                continue
+            if tag == "min":
+                info["min"] = _chart_float(val)
+            elif tag == "max":
+                info["max"] = _chart_float(val)
+            elif tag == "autoMin":
+                info["auto_min"] = _chart_bool(val)
+            elif tag == "autoMax":
+                info["auto_max"] = _chart_bool(val)
+            elif tag == "logBase":
+                info["log_base"] = _chart_float(val)
+    for tag, key in (
+        ("majorUnit", "major_unit"),
+        ("minorUnit", "minor_unit"),
+    ):
+        unit = axis.find(_c(tag))
+        if unit is not None and unit.get("val"):
+            info[key] = _chart_float(unit.get("val"))
+    num_fmt = axis.find(_c("numFmt"))
+    if num_fmt is not None:
+        format_code = num_fmt.get("formatCode")
+        if format_code:
+            info["num_format"] = format_code
+            linked = (num_fmt.get("sourceLinked") or "1").lower()
+            info["num_format_linked"] = linked in {"1", "true"}
+    tick_label = axis.find(_c("tickLblPos"))
+    if tick_label is not None and tick_label.get("val"):
+        info["tick_label_position"] = tick_label.get("val")
+    for tag, key in (("majorTickMark", "major_tick_mark"), ("minorTickMark", "minor_tick_mark")):
+        mark = axis.find(_c(tag))
+        if mark is not None and mark.get("val"):
+            info[key] = mark.get("val")
+    return info
+
+
+def _chart_float(value: str) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _chart_bool(value: str | None, *, default: bool = False) -> bool:
+    """Разобрать OOXML-булево значение: ``1``/``true`` — истина."""
+    if value is None:
+        return default
+    return value.lower() in {"1", "true"}
+
+
+def _read_data_labels(node) -> dict[str, Any] | None:
+    """Прочитать настройки подписей данных из ``c:dLbls``."""
+    if node is None:
+        return None
+    labels = node.find(_c("dLbls"))
+    if labels is None:
+        return None
+    info: dict[str, Any] = {}
+    show = {
+        "showLegendKey": "show_legend_key",
+        "showVal": "show_value",
+        "showCatName": "show_category",
+        "showSerName": "show_series",
+        "showPercent": "show_percent",
+    }
+    has_show = False
+    for tag, key in show.items():
+        element = labels.find(_c(tag))
+        if element is None:
+            continue
+        has_show = True
+        info[key] = _chart_bool(element.get("val"))
+    if not has_show:
+        return None
+    num_fmt = labels.find(_c("numFmt"))
+    if num_fmt is not None and num_fmt.get("formatCode"):
+        info["num_format"] = num_fmt.get("formatCode")
+    position = labels.find(_c("dLblPos"))
+    if position is not None and position.get("val"):
+        info["position"] = position.get("val")
+    separator = labels.find(_c("separator"))
+    if separator is not None:
+        value = separator.get("val") or separator.text
+        if value:
+            info["separator"] = value
+    return info
 
 
 def _chart_element_title(element) -> str | None:
@@ -1097,12 +1287,24 @@ def _chart_element_title(element) -> str | None:
     return text or None
 
 
-def _chart_series_color(series) -> str | None:
+def _chart_series_color(series, theme_colors: dict[str, str] | None = None) -> str | None:
     shape_properties = series.find(_c("spPr"))
     if shape_properties is None:
         return None
     solid = shape_properties.find(_a("solidFill"))
-    return _resolve_color_node(solid) if solid is not None else None
+    if solid is None:
+        return None
+    srgb = solid.find(_a("srgbClr"))
+    if srgb is not None:
+        return "#" + (srgb.get("val") or "").upper()
+    scheme = solid.find(_a("schemeClr"))
+    if scheme is not None:
+        palette = theme_colors or _THEME_COLORS
+        base = palette.get(scheme.get("val") or "")
+        if base is None:
+            return None
+        return "#" + base
+    return _resolve_color_node(solid)
 
 
 def _pt_values(node) -> list[str]:

@@ -13,6 +13,7 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.util import Emu, Inches, Pt
 
 from textalchemy.core.document_model import Formula, Image, Paragraph, ResourceKind, Table
+from textalchemy.formats import pptx as pptx_mod
 from textalchemy.formats.pptx import read_pptx, read_pptx_model
 
 CORPUS_PPTX = Path(__file__).resolve().parent.parent / "corpus" / "office" / "libreoffice-scientific-slides.pptx"
@@ -279,6 +280,197 @@ class TestReadPptxModel:
         assert chart["legend_position"] == "b"
         assert chart["category_axis_title"] == "Categories"
         assert chart["value_axis_title"] == "Score axis"
+        axes = chart["axes"]
+        assert axes["category"]["position"] == "b"
+        assert axes["category"]["tick_label_position"] == "nextTo"
+        assert axes["category"]["hidden"] is False
+        assert axes["value"]["position"] == "l"
+        assert axes["value"]["major_tick_mark"] == "out"
+
+    def test_load_theme_colors_reads_actual_theme(self, tmp_path):
+        path = tmp_path / "rich.pptx"
+        _build_rich_pptx(path)
+
+        presentation = Presentation(str(path))
+        colors = pptx_mod._load_theme_colors(presentation.slides[0].part)
+        assert colors["accent1"] == "4F81BD"
+        assert colors["accent1"] != pptx_mod._THEME_COLORS["accent1"]
+        assert colors["accent2"] == "C0504D"
+
+    def test_chart_series_scheme_color_resolves_against_theme(self):
+        xml = (
+            f'<ser xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:spPr><a:solidFill><a:schemeClr val=\"accent2\"/></a:solidFill></c:spPr>"
+            f"</ser>"
+        )
+        element = etree.fromstring(xml)
+        color = pptx_mod._chart_series_color(element, {"accent2": "C0504D"})
+        assert color == "#C0504D"
+        assert color != "#" + pptx_mod._THEME_COLORS["accent2"]
+
+    def test_read_chart_data_axes_and_theme_accents(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f"<c:barChart><c:barDir val=\"col\"/><c:grouping val=\"clustered\"/>"
+            f"<c:ser>"
+            f"<c:tx><c:strRef><c:strCache><c:pt><c:v>Score</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:cat><c:strRef><c:strCache>"
+            f"<c:pt><c:v>A</c:v></c:pt><c:pt><c:v>B</c:v></c:pt>"
+            f"</c:strCache></c:strRef></c:cat>"
+            f"<c:val><c:numRef><c:numCache>"
+            f"<c:pt><c:v>10</c:v></c:pt><c:pt><c:v>20</c:v></c:pt>"
+            f"</c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f"</c:barChart>"
+            f"<c:valAx>"
+            f"<c:scaling><c:autoMin val=\"0\"/><c:autoMax val=\"0\"/><c:max val=\"100\"/></c:scaling>"
+            f"<c:numFmt formatCode=\"0.0%\" sourceLinked=\"0\"/>"
+            f"<c:tickLblPos val=\"none\"/>"
+            f"</c:valAx>"
+            f"<c:catAx><c:scaling><c:orientation val=\"minMax\"/></c:scaling>"
+            f"<c:tickLblPos val=\"nextTo\"/></c:catAx>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: {**pptx_mod._THEME_COLORS, "accent1": "4F81BD"})
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        assert data["series"][0]["name"] == "Score"
+        assert data["series"][0]["color"] == "#4F81BD"
+        value_axis = data["axes"]["value"]
+        assert value_axis["num_format"] == "0.0%"
+        assert value_axis["num_format_linked"] is False
+        assert value_axis["tick_label_position"] == "none"
+        assert value_axis["auto_min"] is False
+        assert value_axis["auto_max"] is False
+        assert value_axis["max"] == 100.0
+        assert data["axes"]["category"]["tick_label_position"] == "nextTo"
+
+    def test_read_chart_data_labels(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f"<c:pieChart>"
+            f"<c:dLbls>"
+            f"<c:showLegendKey val=\"0\"/><c:showVal val=\"1\"/>"
+            f"<c:showCatName val=\"0\"/><c:showSerName val=\"1\"/>"
+            f"<c:showPercent val=\"0\"/>"
+            f"<c:numFmt formatCode=\"0.0\" sourceLinked=\"0\"/>"
+            f"<c:dLblPos val=\"ctr\"/>"
+            f"</c:dLbls>"
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt></c:strCache></c:strRef></c:cat>"
+            f"<c:val><c:numRef><c:numCache><c:pt><c:v>10</c:v></c:pt></c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f"</c:pieChart>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        labels = data["data_labels"]
+        assert labels["show_value"] is True
+        assert labels["show_percent"] is False
+        assert labels["show_series"] is True
+        assert labels["show_legend_key"] is False
+        assert labels["num_format"] == "0.0"
+        assert labels["position"] == "ctr"
+
+    def test_read_chart_bar_gap_and_overlap(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f"<c:barChart><c:barDir val=\"col\"/><c:grouping val=\"clustered\"/>"
+            f"<c:varyColors val=\"1\"/><c:gapWidth val=\"200\"/><c:overlap val=\"-27\"/>"
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt></c:strCache></c:strRef></c:cat>"
+            f"<c:val><c:numRef><c:numCache><c:pt><c:v>10</c:v></c:pt></c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f"</c:barChart>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        assert data["gap_width"] == 200.0
+        assert data["overlap"] == -27.0
+        assert data["vary_colors"] is True
+
+    def test_read_chart_3d_normalizes_chart_type(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f"<c:bar3DChart><c:barDir val=\"col\"/><c:grouping val=\"clustered\"/>"
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt></c:strCache></c:strRef></c:cat>"
+            f"<c:val><c:numRef><c:numCache><c:pt><c:v>10</c:v></c:pt></c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f"</c:bar3DChart>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        assert data["chart_type"] == "barChart"
+        assert data["chart_3d"] is True
+        assert data["series"][0]["chart_type"] == "barChart"
+
+    def test_read_chart_combo_marks_series_by_chart_node(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f"<c:barChart><c:barDir val=\"col\"/><c:grouping val=\"clustered\"/>"
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>Bars</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt><c:pt><c:v>B</c:v></c:pt></c:strCache></c:strRef></c:cat>"
+            f"<c:val><c:numRef><c:numCache>"
+            f"<c:pt><c:v>10</c:v></c:pt><c:pt><c:v>20</c:v></c:pt>"
+            f"</c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f"</c:barChart>"
+            f"<c:lineChart><c:grouping val=\"standard\"/>"
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>Trend</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:val><c:numRef><c:numCache>"
+            f"<c:pt><c:v>1</c:v></c:pt><c:pt><c:v>3</c:v></c:pt>"
+            f"</c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f"</c:lineChart>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        assert data["chart_type"] == "barChart"
+        assert data["combo_types"] == ["barChart", "lineChart"]
+        assert data["series"][0]["name"] == "Bars"
+        assert data["series"][0]["chart_type"] == "barChart"
+        assert data["series"][1]["name"] == "Trend"
+        assert data["series"][1]["chart_type"] == "lineChart"
+        assert data["categories"] == ["A", "B"]
 
     def test_extracts_image_resource(self, tmp_path):
         path = tmp_path / "rich.pptx"
