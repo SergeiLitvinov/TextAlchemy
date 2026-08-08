@@ -5,6 +5,7 @@ from pathlib import Path
 
 
 def cmd_gost(args: argparse.Namespace) -> int:
+    from textalchemy.core.io import atomic_write_text
     from textalchemy.pipeline.bibliography import parse_bibliography
     from textalchemy.pipeline.render import render_gost
 
@@ -14,9 +15,7 @@ def cmd_gost(args: argparse.Namespace) -> int:
         return 1
     items = parse_bibliography(path=args.input)
     result = render_gost(items=items)
-    out_path = Path(args.output)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(result, encoding="utf-8")
+    atomic_write_text(args.output, result, encoding="utf-8")
     if args.json:
         print(json.dumps({"input": args.input, "output": args.output, "entries": len(items)}))
     else:
@@ -53,6 +52,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
 
 def cmd_export(args: argparse.Namespace) -> int:
+    from textalchemy.core.io import atomic_write_text
     from textalchemy.pipeline.bibliography import parse_bibliography
     from textalchemy.pipeline.render import render_gost, render_json, render_markdown
 
@@ -64,16 +64,13 @@ def cmd_export(args: argparse.Namespace) -> int:
     fmt = args.format
     if fmt == "json":
         out = args.output or "bibliography.json"
-        Path(out).parent.mkdir(parents=True, exist_ok=True)
-        Path(out).write_text(render_json(items=items), encoding="utf-8")
+        atomic_write_text(out, render_json(items=items), encoding="utf-8")
     elif fmt == "markdown":
         out = args.output or "bibliography.md"
-        Path(out).parent.mkdir(parents=True, exist_ok=True)
-        Path(out).write_text(render_markdown(items=items), encoding="utf-8")
+        atomic_write_text(out, render_markdown(items=items), encoding="utf-8")
     elif fmt == "gost":
         out = args.output or "bibliography_gost.txt"
-        Path(out).parent.mkdir(parents=True, exist_ok=True)
-        Path(out).write_text(render_gost(items=items), encoding="utf-8")
+        atomic_write_text(out, render_gost(items=items), encoding="utf-8")
     else:
         print(f"Unknown format: {fmt}", file=sys.stderr)
         return 1

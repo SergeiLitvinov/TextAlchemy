@@ -7,6 +7,9 @@ import pytest
 
 from textalchemy.core.io import (
     ArchiveSafetyError,
+    atomic_copy,
+    atomic_write_bytes,
+    atomic_write_text,
     check_archive_safety,
     compute_hash,
     create_zip_archive,
@@ -264,6 +267,41 @@ class TestCheckArchiveSafety:
         p.write_bytes(b"this is not a zip file")
         with pytest.raises(ArchiveSafetyError, match="zip"):
             check_archive_safety(p)
+
+
+class TestAtomicWrites:
+    def test_atomic_write_text_creates_parents(self, tmp_path):
+        target = tmp_path / "nested" / "out.txt"
+        atomic_write_text(target, "hello", encoding="utf-8")
+        assert target.read_text(encoding="utf-8") == "hello"
+
+    def test_atomic_write_text_leaves_no_partials(self, tmp_path):
+        target = tmp_path / "out.txt"
+        atomic_write_text(target, "one")
+        atomic_write_text(target, "two")
+        assert target.read_text(encoding="utf-8") == "two"
+        leftovers = [p for p in tmp_path.iterdir() if ".partial" in p.name]
+        assert leftovers == []
+
+    def test_atomic_write_bytes(self, tmp_path):
+        target = tmp_path / "out.bin"
+        atomic_write_bytes(target, b"\x00\x01\x02")
+        assert target.read_bytes() == b"\x00\x01\x02"
+
+    def test_atomic_write_overwrites_existing(self, tmp_path):
+        target = tmp_path / "out.txt"
+        target.write_text("old", encoding="utf-8")
+        atomic_write_text(target, "new")
+        assert target.read_text(encoding="utf-8") == "new"
+
+    def test_atomic_copy(self, tmp_path):
+        src = tmp_path / "src.txt"
+        src.write_text("data", encoding="utf-8")
+        dst = tmp_path / "sub" / "dst.txt"
+        atomic_copy(src, dst)
+        assert dst.read_text(encoding="utf-8") == "data"
+        leftovers = [p for p in (tmp_path / "sub").iterdir() if ".partial" in p.name]
+        assert leftovers == []
 
 
 class TestLegacyImports:

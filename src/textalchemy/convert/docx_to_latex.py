@@ -117,7 +117,9 @@ class DocxToLatexConverter(BaseConverter):
                 text.tables.append(Table(rows=[[c.text.strip() for c in row.cells] for row in table.rows]))
 
             tex = self._render(text, title=input_path.stem)
-            Path(output_path).write_text(tex, encoding="utf-8")
+            from textalchemy.core.io import atomic_write_text
+
+            atomic_write_text(output_path, tex, encoding="utf-8")
         except Exception as e:  # noqa: BLE001
             return ConversionResult(input_path, output_path, False, str(e))
 

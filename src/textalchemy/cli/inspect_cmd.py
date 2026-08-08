@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-from pathlib import Path
 from typing import Any
 
 
@@ -24,9 +23,9 @@ def cmd_inspect(args: argparse.Namespace) -> int:
             else report.to_dict()
         )
         if args.output:
-            output = Path(args.output)
-            output.parent.mkdir(parents=True, exist_ok=True)
-            output.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            from textalchemy.core.io import atomic_write_text
+
+            atomic_write_text(args.output, json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         if args.json:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         else:

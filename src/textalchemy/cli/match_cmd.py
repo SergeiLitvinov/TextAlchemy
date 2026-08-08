@@ -61,8 +61,8 @@ def cmd_match(args: argparse.Namespace) -> int:
             ],
             "unmatched": [m.document.path.name for m in unmatched],
         }
-        Path("matching_report.json").write_text(
-            json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8",
-        )
+        from textalchemy.core.io import atomic_write_text
+
+        atomic_write_text("matching_report.json", json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print("Report saved: matching_report.json")
     return 0

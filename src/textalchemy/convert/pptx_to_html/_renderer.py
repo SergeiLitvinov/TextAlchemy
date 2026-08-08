@@ -1708,7 +1708,9 @@ window.MathJax = {{
 </body>
 </html>
 """
-    (out / "index.html").write_text(html, encoding="utf-8")
+    from textalchemy.core.io import atomic_write_text
+
+    atomic_write_text(out / "index.html", html, encoding="utf-8")
 
 
 def write_css(out: Path):

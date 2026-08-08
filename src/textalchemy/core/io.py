@@ -9,7 +9,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import re
+import uuid
 import zipfile
 from collections import defaultdict
 from pathlib import Path
@@ -154,6 +156,51 @@ def write_text_file(path: PathLike, content: str) -> None:
     Path(path).write_text(content, encoding="utf-8")
 
 
+def atomic_write_text(path: PathLike, content: str, encoding: str = "utf-8") -> Path:
+    """Атомарно записать текст: во временный файл рядом, затем ``os.replace``.
+
+    Исключает частично записанный файл при сбое/прерывании и сохраняет
+    существующий файл нетронутым до момента фиксации.
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_name(f".{target.name}.{uuid.uuid4().hex}.partial")
+    try:
+        partial.write_text(content, encoding=encoding)
+        os.replace(partial, target)
+    finally:
+        partial.unlink(missing_ok=True)
+    return target
+
+
+def atomic_write_bytes(path: PathLike, data: bytes) -> Path:
+    """Атомарно записать байты (см. ``atomic_write_text``)."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_name(f".{target.name}.{uuid.uuid4().hex}.partial")
+    try:
+        partial.write_bytes(data)
+        os.replace(partial, target)
+    finally:
+        partial.unlink(missing_ok=True)
+    return target
+
+
+def atomic_copy(src: PathLike, dst: PathLike) -> Path:
+    """Атомарно скопировать файл: во временный файл в каталоге назначения, затем ``os.replace``."""
+    import shutil
+
+    target = Path(dst)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_name(f".{target.name}.{uuid.uuid4().hex}.partial")
+    try:
+        shutil.copy2(src, partial)
+        os.replace(partial, target)
+    finally:
+        partial.unlink(missing_ok=True)
+    return target
+
+
 def progress_bar(current: int, total: int, width: int = 30) -> str:
     """ASCII-индикатор прогресса в строку."""
     filled = int(width * current / total) if total > 0 else 0
@@ -225,6 +272,9 @@ __all__ = [
     "ensure_folder",
     "read_text_file",
     "write_text_file",
+    "atomic_write_text",
+    "atomic_write_bytes",
+    "atomic_copy",
     "progress_bar",
     "validate_pdf",
     "get_file_info",

@@ -119,7 +119,9 @@ class ConversionExecutor:
             if not plan.steps and request.target is not DocFormat.MODEL:
                 request.output_path.parent.mkdir(parents=True, exist_ok=True)
                 if request.input_path.resolve() != request.output_path.resolve():
-                    shutil.copy2(request.input_path, request.output_path)
+                    from textalchemy.core.io import atomic_copy
+
+                    atomic_copy(request.input_path, request.output_path)
                 return report
             for step in plan.steps:
                 backend = self.backends[step.id]

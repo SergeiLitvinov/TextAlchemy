@@ -49,6 +49,8 @@ def cmd_recognize(args: argparse.Namespace) -> int:
         pages = 1
 
     if args.output:
+        from textalchemy.core.io import atomic_write_bytes, atomic_write_text
+
         out_path = Path(args.output)
         fmt = out_path.suffix.lower().lstrip(".") or args.output_format
         if fmt == "docx":
@@ -57,7 +59,14 @@ def cmd_recognize(args: argparse.Namespace) -> int:
             for paragraph in text.split("\n\n"):
                 if paragraph.strip():
                     docx.add_paragraph(paragraph.strip())
-            docx.save(str(out_path))
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+                tmp_path = tmp.name
+            try:
+                docx.save(tmp_path)
+                atomic_write_bytes(out_path, Path(tmp_path).read_bytes())
+            finally:
+                Path(tmp_path).unlink(missing_ok=True)
         elif fmt == "tex":
             from textalchemy.core.latex import escape_latex
             latex = (
@@ -71,9 +80,9 @@ def cmd_recognize(args: argparse.Namespace) -> int:
                 f"{escape_latex(text)}\n\n"
                 "\\end{document}\n"
             )
-            out_path.write_text(latex, encoding="utf-8")
+            atomic_write_text(out_path, latex, encoding="utf-8")
         else:
-            out_path.write_text(text, encoding="utf-8")
+            atomic_write_text(out_path, text, encoding="utf-8")
         if args.json:
             print(json.dumps({"saved": str(out_path), "pages": pages, "length": len(text)}))
         else:

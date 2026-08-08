@@ -376,15 +376,14 @@ class OcrEngine:
         except ImportError:
             raise RecognizeError("pymupdf (fitz) required for PDF OCR")
 
-        import tempfile
+        from textalchemy.core.artifacts import ArtifactWorkspace
 
         scale = max(2, min(6, scale))
 
         results: list[OcrResult] = []
 
         with fitz.open(str(pdf_path)) as doc:
-            with tempfile.TemporaryDirectory(prefix="textalchemy_ocr_") as tmpdir:
-                tmp = Path(tmpdir)
+            with ArtifactWorkspace(prefix="textalchemy_ocr_") as ws:
                 for page_num in range(len(doc)):
                     page = doc[page_num]
                     mat = fitz.Matrix(scale, scale)
@@ -397,8 +396,10 @@ class OcrEngine:
                     if save_images:
                         save_path = Path.cwd() / f"page_{page_num + 1}.png"
                     else:
-                        save_path = tmp / f"page_{page_num}.png"
+                        save_path = ws.artifact_path(f"page_{page_num}.png")
                     img.save(save_path)
+                    if not save_images:
+                        ws.validate_artifact(save_path)
                     result = self.recognize(save_path, handwriting=handwriting)
 
                     result.pages = len(doc)
@@ -421,14 +422,13 @@ class OcrEngine:
         except ImportError:
             raise RecognizeError("pymupdf (fitz) required for PDF OCR")
 
-        import tempfile
+        from textalchemy.core.artifacts import ArtifactWorkspace
 
         scale = max(2, min(6, scale))
         results: list[OcrPageResult] = []
 
         with fitz.open(str(pdf_path)) as doc:
-            with tempfile.TemporaryDirectory(prefix="textalchemy_ocr_") as tmpdir:
-                tmp = Path(tmpdir)
+            with ArtifactWorkspace(prefix="textalchemy_ocr_") as ws:
                 for page_num in range(len(doc)):
                     page = doc[page_num]
                     mat = fitz.Matrix(scale, scale)
@@ -438,8 +438,9 @@ class OcrEngine:
 
                     img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
-                    save_path = tmp / f"page_{page_num}.png"
+                    save_path = ws.artifact_path(f"page_{page_num}.png")
                     img.save(save_path)
+                    ws.validate_artifact(save_path)
                     page_result = self.recognize_with_geometry(save_path, scale=scale, handwriting=handwriting)
                     page_result.pages = len(doc)
                     for block in page_result.blocks:
