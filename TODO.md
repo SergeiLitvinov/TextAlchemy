@@ -72,11 +72,11 @@
 ## P1 — PPTX и HTML
 
 - [x] Перевести PPTX importer/HTML renderer на общую модель.
-- [ ] Поддержать группы фигур, transforms, SVG, диаграммы, таблицы, notes и master/layout styles.
+- [x] Поддержать группы фигур, transforms, SVG, диаграммы, таблицы, notes и master/layout styles.
   - [x] Импортировать группы с базовым scale/translate, SVG/preset shapes, данные диаграмм, таблицы и notes.
   - [x] Наследовать геометрию и стили placeholder из layout/master.
   - [x] Реализовать полные affine transforms групп (rotation/flip), включая вложенные группы.
-  - [ ] Реализовать визуально точный редактируемый рендер диаграмм.
+  - [x] Реализовать визуально точный редактируемый рендер диаграмм.
     - [x] Рендерить базовые bar/line/pie/doughnut charts как редактируемый self-contained SVG.
     - [x] Рендерить clustered/stacked/percent-stacked bar charts, позиции legend и заголовки осей.
     - [x] Сохранять theme, деления/формат осей, data labels, 3D/combo charts и расширенные настройки серий.
