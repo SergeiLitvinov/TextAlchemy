@@ -7,19 +7,19 @@
         <form id="matchForm">
             <div class="form-grid">
                 <div>
-                    <label>Директория исходных файлов</label>
+                    <label for="source_dir">Директория исходных файлов</label>
                     <input type="text" id="source_dir" value="{{ config.source_dir }}">
                 </div>
                 <div>
-                    <label>Директория для сохранения</label>
+                    <label for="output_dir">Директория для сохранения</label>
                     <input type="text" id="output_dir" value="{{ config.output_dir }}">
                 </div>
                 <div>
-                    <label>Порог совпадения (0–1)</label>
+                    <label for="threshold">Порог совпадения (0–1)</label>
                     <input type="number" id="threshold" step="0.01" min="0" max="1" value="{{ config.threshold }}">
                 </div>
                 <div>
-                    <label>Файл библиографии (опционально)</label>
+                    <label for="bibliography_file">Файл библиографии (опционально)</label>
                     <input type="text" id="bibliography_file" value="{{ config.bibliography_file }}">
                 </div>
             </div>

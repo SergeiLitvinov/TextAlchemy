@@ -8,15 +8,15 @@
             <input type="hidden" id="itemId" value="">
             <div class="form-grid">
                 <div>
-                    <label>Авторы (через точку с запятой)</label>
+                    <label for="authors">Авторы (через точку с запятой)</label>
                     <input type="text" id="authors" required>
                 </div>
                 <div>
-                    <label>Название</label>
+                    <label for="title">Название</label>
                     <input type="text" id="title" required>
                 </div>
                 <div>
-                    <label>Тип документа</label>
+                    <label for="doc_type">Тип документа</label>
                     <select id="doc_type">
                         <option value="article">Статья</option>
                         <option value="book">Книга</option>
@@ -32,35 +32,35 @@
                     </select>
                 </div>
                 <div>
-                    <label>Год</label>
+                    <label for="year">Год</label>
                     <input type="text" id="year" inputmode="numeric">
                 </div>
                 <div>
-                    <label>Журнал</label>
+                    <label for="journal">Журнал</label>
                     <input type="text" id="journal">
                 </div>
                 <div>
-                    <label>Издательство</label>
+                    <label for="publisher">Издательство</label>
                     <input type="text" id="publisher">
                 </div>
                 <div>
-                    <label>Город</label>
+                    <label for="city">Город</label>
                     <input type="text" id="city">
                 </div>
                 <div>
-                    <label>Страницы</label>
+                    <label for="pages">Страницы</label>
                     <input type="text" id="pages">
                 </div>
                 <div>
-                    <label>ISBN</label>
+                    <label for="isbn">ISBN</label>
                     <input type="text" id="isbn">
                 </div>
                 <div>
-                    <label>DOI</label>
+                    <label for="doi">DOI</label>
                     <input type="text" id="doi">
                 </div>
                 <div>
-                    <label>Источник (путь к файлу)</label>
+                    <label for="source">Источник (путь к файлу)</label>
                     <input type="text" id="source">
                 </div>
             </div>
@@ -80,6 +80,7 @@
             </form>
         </div>
         <div style="margin-bottom:1rem">
+            <label for="bibSearch" class="visually-hidden">Поиск по авторам или названию</label>
             <input type="text" id="bibSearch" placeholder="🔎 Поиск по авторам или названию…" style="width:100%">
         </div>
         <table id="bibTable">

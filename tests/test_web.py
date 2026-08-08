@@ -1,4 +1,6 @@
 import importlib
+import json
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -64,6 +66,228 @@ def test_convert_page():
 def test_organize_page():
     resp = client.get("/pipeline")
     assert resp.status_code == 200
+    assert "Конструктор pipeline" in resp.text
+    assert 'id="opsPalette"' in resp.text
+    assert 'id="expertMode"' in resp.text
+
+
+def test_api_operations_includes_param_schema():
+    resp = client.get("/api/operations")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+    ops = {op["id"]: op for op in data}
+    assert "ingest.file" in ops
+    op = ops["ingest.file"]
+    assert op["input_param"] == "path"
+    assert "params" in op
+    assert op["params"]["path"]["required"] is True
+
+
+def test_api_pipeline_parse_normalizes_spec():
+    spec = json.dumps({
+        "path": "input.txt",
+        "steps": [
+            {"op": "ingest.file", "output": "doc", "params": {"path": "input.txt"}},
+            {"op": "extract.text", "input": "doc", "output": "text"},
+        ],
+        "output": "text",
+    })
+    resp = client.post("/api/pipeline/parse", data={"spec": spec})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert [s["op"] for s in data["spec"]["steps"]] == ["ingest.file", "extract.text"]
+    assert data["spec"]["steps"][1]["input"] == "doc"
+    assert data["spec"]["ctx"] == {"path": "input.txt"}
+    assert data["spec"]["output"] == "text"
+
+
+def test_api_pipeline_parse_rejects_bad_spec():
+    resp = client.post("/api/pipeline/parse", data={"spec": "steps: [некорректно"})
+    assert resp.status_code == 200
+    assert resp.json()["success"] is False
+
+
+def test_api_pipeline_yaml_serializes():
+    spec = json.dumps({"steps": [{"op": "ingest.file", "output": "doc"}]})
+    resp = client.post("/api/pipeline/yaml", data={"spec": spec})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert "ingest.file" in data["yaml"]
+
+
+def test_api_pipeline_validate_reports_broken_links():
+    spec = json.dumps({
+        "steps": [
+            {"op": "ingest.file", "output": "doc", "params": {"path": "input.txt"}},
+            {"op": "extract.text", "input": "missing", "output": "text"},
+        ],
+    })
+    resp = client.post("/api/pipeline/validate", data={"spec": spec})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is False
+    assert any("missing" in e["message"] for e in data["errors"])
+
+
+def test_api_pipeline_validate_ok():
+    spec = json.dumps({
+        "steps": [
+            {"op": "ingest.file", "output": "doc", "params": {"path": "input.txt"}},
+            {"op": "extract.text", "input": "doc", "output": "text"},
+        ],
+        "output": "text",
+    })
+    resp = client.post("/api/pipeline/validate", data={"spec": spec})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["errors"] == []
+
+
+def test_api_pipeline_run_reports_step_failure():
+    spec = json.dumps({
+        "path": "no-such-file-12345.txt",
+        "steps": [{"op": "ingest.file", "output": "doc", "params": {"path": "no-such-file-12345.txt"}}],
+    })
+    resp = client.post("/api/pipeline/run", data={"spec": spec})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["result"]["ok"] is False
+
+
+def test_pipeline_builder_end_to_end_flow(tmp_path):
+    """Полный пользовательский поток конструктора через те же API, что и фронтенд."""
+    src = tmp_path / "input.txt"
+    src.write_text("e2e", encoding="utf-8")
+
+    operations = {op["id"]: op for op in client.get("/api/operations").json()}
+    assert "ingest.file" in operations
+    assert "extract.text" in operations
+
+    spec = json.dumps({
+        "path": str(src),
+        "steps": [
+            {"op": "ingest.file", "output": "doc", "params": {"path": str(src)}},
+            {"op": "extract.text", "input": "doc", "output": "text"},
+        ],
+        "output": "text",
+    })
+
+    validated = client.post("/api/pipeline/validate", data={"spec": spec}).json()
+    assert validated["success"] is True
+
+    yaml_resp = client.post("/api/pipeline/yaml", data={"spec": spec}).json()
+    assert yaml_resp["success"] is True
+    assert "ingest.file" in yaml_resp["yaml"]
+
+    parsed = client.post("/api/pipeline/parse", data={"spec": yaml_resp["yaml"]}).json()
+    assert parsed["success"] is True
+    assert [s["op"] for s in parsed["spec"]["steps"]] == ["ingest.file", "extract.text"]
+
+    ran = client.post("/api/pipeline/run", data={"spec": yaml_resp["yaml"]}).json()
+    assert ran["success"] is True
+    assert ran["result"]["ok"] is True
+    assert ran["result"]["final"]["plain"] == "e2e"
+
+
+_PAGES = ["/", "/extract", "/convert", "/pipeline", "/bibliography", "/matching",
+          "/reports", "/recognize", "/generate", "/export"]
+
+_LABELABLE = {"input", "select", "textarea"}
+_EXEMPT_CONTROL_TYPES = {"hidden", "submit", "reset", "button", "image", "file"}
+
+
+class _A11yScanner(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.viewport = False
+        self.h1 = False
+        self.label_for = []
+        self.controls = []  # (tag, attrs, in_wrapping_label)
+        self.images = []
+        self.dropzones = []
+        self._label_for = None
+        self._in_wrapping_label = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "meta" and attrs.get("name") == "viewport":
+            self.viewport = True
+        elif tag == "h1":
+            self.h1 = True
+        elif tag == "label":
+            self._label_for = attrs.get("for")
+            self._in_wrapping_label = not self._label_for
+            if self._label_for:
+                self.label_for.append(self._label_for)
+        elif tag == "img":
+            self.images.append(attrs)
+        if tag == "div" and "file-drop" in (attrs.get("class") or "").split():
+            self.dropzones.append(attrs)
+        if tag in _LABELABLE:
+            self.controls.append((tag, attrs, self._in_wrapping_label))
+
+    def handle_endtag(self, tag):
+        if tag == "label":
+            self._label_for = None
+            self._in_wrapping_label = False
+
+
+def _scan_page(path):
+    resp = client.get(path)
+    assert resp.status_code == 200
+    scanner = _A11yScanner()
+    scanner.feed(resp.text)
+    scanner.html = resp.text
+    return scanner
+
+
+def test_pages_are_mobile_ready():
+    for path in _PAGES:
+        assert _scan_page(path).viewport, f"{path} без <meta name='viewport'>"
+
+
+def test_pages_have_main_heading():
+    for path in _PAGES:
+        assert _scan_page(path).h1, f"{path} без <h1>"
+
+
+def test_pages_form_controls_have_labels():
+    for path in _PAGES:
+        scanner = _scan_page(path)
+        labelled = set(scanner.label_for)
+        for tag, attrs, in_wrapping_label in scanner.controls:
+            if attrs.get("type") in _EXEMPT_CONTROL_TYPES:
+                continue
+            if attrs.get("aria-label") or attrs.get("aria-labelledby"):
+                continue
+            if in_wrapping_label:
+                continue
+            control_id = attrs.get("id")
+            assert control_id and control_id in labelled, (
+                f"{path}: <{tag} id={control_id!r}> не имеет связанной <label for> или aria-label"
+            )
+
+
+def test_pages_images_have_alt():
+    for path in _PAGES:
+        scanner = _scan_page(path)
+        for attrs in scanner.images:
+            assert "alt" in attrs, f"{path}: <img> без атрибута alt"
+
+
+def test_dropzones_are_keyboard_operable():
+    for path in _PAGES:
+        scanner = _scan_page(path)
+        for attrs in scanner.dropzones:
+            assert attrs.get("role") == "button", f"{path}: file-drop без role='button'"
+            assert attrs.get("tabindex") == "0", f"{path}: file-drop без tabindex='0'"
+        if scanner.dropzones:
+            assert "keydown" in scanner.html, f"{path}: file-drop без обработчика keydown (Enter/Space)"
 
 
 def test_bibliography_page():

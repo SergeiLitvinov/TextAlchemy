@@ -34,7 +34,7 @@ async def convert_page(request: Request):
 
 @app.get("/pipeline", response_class=HTMLResponse)
 async def pipeline_page(request: Request):
-    return templates.TemplateResponse(request, "organize.html")
+    return templates.TemplateResponse(request, "pipeline.html")
 
 
 @app.get("/bibliography", response_class=HTMLResponse)

@@ -7,18 +7,18 @@
         <p>OCR из изображений и сканированных PDF.</p>
         <div class="form-grid">
             <div>
-                <label>Языки (через +)</label>
+                <label for="lang">Языки (через +)</label>
                 <input type="text" id="lang" value="rus+eng">
             </div>
             <div>
-                <label>Режим текста</label>
+                <label for="mode">Режим текста</label>
                 <select id="mode">
                     <option value="printed">Печатный текст</option>
                     <option value="handwriting">Рукописный</option>
                 </select>
             </div>
             <div>
-                <label>Сценарий (PDF)</label>
+                <label for="scenario">Сценарий (PDF)</label>
                 <select id="scenario">
                     <option value="structure">Сохранить структуру (Text layer + OCR)</option>
                     <option value="fast">Быстро (только текстовый слой)</option>
@@ -31,7 +31,7 @@
                 </label>
             </div>
         </div>
-        <div class="file-drop" id="dropZone" style="margin-top:1rem;">
+        <div class="file-drop" id="dropZone" style="margin-top:1rem;" role="button" tabindex="0" aria-controls="fileInput" aria-label="Выбрать изображение">
             <div style="font-size:3rem;margin-bottom:0.5rem;">🖼️</div>
             <strong>Перетащите изображение сюда</strong>
             <div class="hint">или нажмите для выбора файла (PNG, JPG, PDF)</div>
@@ -45,7 +45,7 @@
             <h2>Результат распознавания</h2>
             <button type="button" id="copyBtn">📋 Копировать</button>
         </div>
-        <textarea id="result" readonly placeholder="Распознанный текст появится здесь..."></textarea>
+        <textarea id="result" readonly aria-label="Распознанный текст" placeholder="Распознанный текст появится здесь..."></textarea>
     </div>
 {% endblock %}
 
@@ -65,6 +65,9 @@
     }
 
     dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
+    });
     dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
     dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
     dropZone.addEventListener('drop', (e) => {
