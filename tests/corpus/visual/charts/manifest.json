@@ -1,0 +1,114 @@
+{
+  "source": "tests.corpus.charts:build_chart_document",
+  "renderer": "PyMuPDF Story",
+  "dpi": 96,
+  "normalised_size": [
+    160,
+    160
+  ],
+  "thresholds": {
+    "min_similarity": 0.9,
+    "max_hash_distance": 24,
+    "min_foreground_iou": 0.3
+  },
+  "pages": [
+    {
+      "name": "bar-clustered",
+      "file": "bar-clustered.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "05198939d2e53e3daec922531289a936b6834be335f4c0ab4f989e38deed67e7"
+    },
+    {
+      "name": "bar-horizontal",
+      "file": "bar-horizontal.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "0bc1cfadd05aedbc70180054fea5d90a01f1e263289df63dd7daa6848435bda7"
+    },
+    {
+      "name": "bar-stacked",
+      "file": "bar-stacked.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "d3c4ce5691f2d162cac0d77cb6ab8bcb5c112d9909e10813e9ade4f5c018ab1e"
+    },
+    {
+      "name": "bar-percent",
+      "file": "bar-percent.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "4c8e0864f509f5d160c034c7d1c583a38949d6054b48325b3c1877becd31f3a7"
+    },
+    {
+      "name": "line-markers",
+      "file": "line-markers.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "2313d2a790a4b4fbbc4281d3f0f6bc2521c17761e82ba36e6aa3895375f5e6d9"
+    },
+    {
+      "name": "pie",
+      "file": "pie.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "905549d28bbfd8d8da55d57281853dad306a60950bbc32cf55616d6aa37ac443"
+    },
+    {
+      "name": "doughnut",
+      "file": "doughnut.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "d25f123728d37122d686ff6306673b72a9dbaf761d4817b5a97106eb72d93c08"
+    },
+    {
+      "name": "combo",
+      "file": "combo.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "0d1fed4c46863904ea6cf839d04f175a2e97a659be6de5cc2317fb25dd1ee988"
+    },
+    {
+      "name": "dual-axis",
+      "file": "dual-axis.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "5386dd688a4d492f95c0fe6f4e7b73cc70e98314d6a9163335c944caa8237840"
+    },
+    {
+      "name": "trendline-linear",
+      "file": "trendline-linear.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "7a7d7950a6f81149501baad9a7f519be449d3efe84515a690c1c0b35ac8325d6"
+    },
+    {
+      "name": "trendline-moving-avg",
+      "file": "trendline-moving-avg.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "41a2ac2414bede98af5a27313a78ba2c8ac2894cb76e260321e878047769ca6b"
+    },
+    {
+      "name": "error-bars",
+      "file": "error-bars.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "c1eb9fb90bafdf7b9ef91278cd073e3a365c2442f74f48b3e84e64313491d46b"
+    },
+    {
+      "name": "per-point-colors",
+      "file": "per-point-colors.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "552fde68dd6a6991e16a0155edae168a24fc89b8cc739749686b62ee5fec5fb5"
+    },
+    {
+      "name": "data-labels",
+      "file": "data-labels.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "450b9c5220cbdba22f2fba8faeea936cb9eaca841e9e8c041ba99dc983f7a166"
+    }
+  ]
+}

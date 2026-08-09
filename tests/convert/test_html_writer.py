@@ -97,7 +97,7 @@ def test_write_html_model_converts_omml_to_mathml(tmp_path):
     output = tmp_path / "omml.html"
     omml = (
         '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math">'
-        '<m:sSup><m:e><m:r><m:t>x</m:t></m:r></m:e>'
+        "<m:sSup><m:e><m:r><m:t>x</m:t></m:r></m:e>"
         "<m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:oMath>"
     )
     document = DocumentModel(sections=[Section(blocks=[Formula(omml, FormulaFormat.OMML, fallback_text="x^2")])])
@@ -151,9 +151,7 @@ def test_write_html_model_reports_formula_fallback_and_running_header(tmp_path):
 def test_write_html_model_sanitizes_unsafe_mathml(tmp_path):
     output = tmp_path / "unsafe.html"
     mathml = '<math xmlns="http://www.w3.org/1998/Math/MathML"><script>alert(1)</script></math>'
-    document = DocumentModel(
-        sections=[Section(blocks=[Formula(mathml, FormulaFormat.MATHML, fallback_text="safe fallback")])]
-    )
+    document = DocumentModel(sections=[Section(blocks=[Formula(mathml, FormulaFormat.MATHML, fallback_text="safe fallback")])])
 
     report = write_html_model(document, output)
     html = output.read_text(encoding="utf-8")
@@ -359,9 +357,9 @@ def test_write_html_model_renders_combo_bar_and_line_chart(tmp_path):
     html = output.read_text(encoding="utf-8")
 
     assert report.lossless is True
-    assert '<rect ' in html
-    assert '<polyline ' in html
-    assert '<circle ' in html
+    assert "<rect " in html
+    assert "<polyline " in html
+    assert "<circle " in html
     assert "Bars: 70" in html
     assert "Trend: 1" in html
 
@@ -446,7 +444,7 @@ def test_write_html_model_hides_labels_on_hidden_value_axis(tmp_path):
     assert report.lossless is True
     assert "10.0%" not in html
     assert "0.0%" not in html
-    assert '<rect' in html
+    assert "<rect" in html
 
 
 def test_write_html_model_respects_explicit_axis_range_and_unit(tmp_path):
@@ -501,7 +499,7 @@ def test_write_html_model_pie_chart_uses_series_color(tmp_path):
     html = output.read_text(encoding="utf-8")
 
     assert report.lossless is True
-    assert '#70AD47' in html
+    assert "#70AD47" in html
 
 
 def test_write_html_model_renders_bar_data_labels(tmp_path):
@@ -585,3 +583,136 @@ def test_write_html_model_honors_gap_width_and_overlap(tmp_path):
     assert 'width="260"' in html
     assert 'x="94.9"' in html
     assert 'x="425.1"' in html
+
+
+def test_write_html_model_renders_secondary_axis(tmp_path):
+    output = tmp_path / "secondary-axis.html"
+    chart = {
+        "chart_type": "barChart",
+        "title": "Revenue and growth",
+        "categories": ["A", "B"],
+        "legend": True,
+        "axes": {"category": {}, "value": {}, "secondary_value": {"position": "r"}},
+        "series": [
+            {"name": "Revenue", "values": [10, 20], "color": "#4472C4", "chart_type": "barChart"},
+            {"name": "Growth", "values": [100, 300], "color": "#ED7D31", "chart_type": "lineChart", "axis": "secondary_value"},
+        ],
+    }
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[_chart_paragraph(chart)])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert "<rect " in html
+    assert "<polyline " in html
+    assert "<circle " in html
+    # вторичная сетка пунктиром с метками справа
+    assert 'stroke-dasharray="2 2"' in html
+    assert '<text x="693"' in html
+    assert "300" in html
+
+
+def test_write_html_model_renders_trendline(tmp_path):
+    output = tmp_path / "trendline.html"
+    chart = {
+        "chart_type": "lineChart",
+        "title": "Measured",
+        "categories": ["A", "B", "C", "D"],
+        "series": [
+            {"name": "Data", "values": [3, 5, 4, 6], "color": "#4472C4", "trendline": {"type": "linear"}},
+        ],
+    }
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[_chart_paragraph(chart)])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert "<polyline " in html
+    assert 'stroke-dasharray="6 4"' in html
+
+
+def test_write_html_model_renders_moving_average_trendline(tmp_path):
+    output = tmp_path / "moving-avg.html"
+    chart = {
+        "chart_type": "lineChart",
+        "title": "Smoothed",
+        "categories": ["A", "B", "C"],
+        "series": [
+            {"name": "Data", "values": [2, 6, 10], "color": "#4472C4", "trendline": {"type": "movingAvg", "period": 2}},
+        ],
+    }
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[_chart_paragraph(chart)])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert 'stroke-dasharray="6 4"' in html
+
+
+def test_write_html_model_renders_error_bars(tmp_path):
+    output = tmp_path / "error-bars.html"
+    chart = {
+        "chart_type": "lineChart",
+        "title": "Precision",
+        "categories": ["A", "B"],
+        "series": [
+            {"name": "Data", "values": [3, 5], "color": "#4472C4", "error_bars": {"value_type": "fixedVal", "value": 0.8}},
+        ],
+    }
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[_chart_paragraph(chart)])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    # вертикальные планки + горизонтальные колпачки
+    assert 'stroke-width="1.5"' in html
+    assert '<line x1="65"' in html
+
+
+def test_write_html_model_uses_per_point_colors(tmp_path):
+    output = tmp_path / "point-colors.html"
+    chart = {
+        "chart_type": "barChart",
+        "title": "Highlight",
+        "categories": ["A", "B", "C"],
+        "series": [
+            {
+                "name": "S",
+                "values": [4, 7, 5],
+                "color": "#4472C4",
+                "data_points": {0: {"color": "#70AD47"}, 2: {"color": "#C00000"}},
+            },
+        ],
+    }
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[_chart_paragraph(chart)])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert 'fill="#70AD47"' in html
+    assert 'fill="#C00000"' in html
+    assert 'fill="#4472C4"' in html
+
+
+def test_write_html_model_pie_uses_per_point_colors(tmp_path):
+    output = tmp_path / "pie-point-colors.html"
+    chart = {
+        "chart_type": "pieChart",
+        "title": "Slices",
+        "categories": ["A", "B", "C"],
+        "series": [
+            {
+                "name": "S",
+                "values": [3, 2, 1],
+                "color": "#4472C4",
+                "data_points": {1: {"color": "#ED7D31"}},
+            },
+        ],
+    }
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[_chart_paragraph(chart)])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert 'fill="#ED7D31"' in html
+    assert 'fill="#4472C4"' in html

@@ -35,3 +35,15 @@ Regenerate page references only after reviewing an intentional visual change:
 ```powershell
 uv run python -m tests.corpus.visual_references
 ```
+
+`charts.py` builds a pure `DocumentModel` corpus of 14 rich chart fixtures (dual
+axes, trendlines, error bars, per-point colors, combo, percent data labels).
+Charts render deterministically through `pdf_writer` (fitz.Story) into PNG pages
+compared perceptually against committed golden images in `visual/charts/`. The
+per-chart pages and their thresholds live in `visual/charts/manifest.json`.
+
+Regenerate chart references only after reviewing an intentional chart change:
+
+```powershell
+uv run python -m tests.corpus.charts
+```

@@ -1044,36 +1044,37 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
             data["legend_position"] = legend_position.get("val")
     plot_area = chart.find(_c("plotArea"))
     if plot_area is not None:
-        category_axis = plot_area.find(_c("catAx"))
-        if category_axis is None:
-            category_axis = plot_area.find(_c("dateAx"))
-        value_axis = plot_area.find(_c("valAx"))
-        category_axis_title = _chart_element_title(category_axis)
-        value_axis_title = _chart_element_title(value_axis)
-        if category_axis_title:
-            data["category_axis_title"] = category_axis_title
-        if value_axis_title:
-            data["value_axis_title"] = value_axis_title
-        axes: dict[str, Any] = {}
-        category_axis_info = _chart_axis_info(category_axis)
-        if category_axis_info:
-            axes["category"] = category_axis_info
-        value_axis_info = _chart_axis_info(value_axis)
-        if value_axis_info:
-            axes["value"] = value_axis_info
-        if axes:
-            data["axes"] = axes
-        chart_nodes: list[tuple[str, Any]] = []
+        axis_elements = _collect_axes(plot_area)
+        chart_nodes: list[Any] = []
+        node_value_ids: list[str | None] = []
         for child in plot_area:
             tag = _local_name(child)
-            if tag.endswith("Chart"):
-                chart_nodes.append((tag, child))
+            if not tag.endswith("Chart"):
+                continue
+            chart_nodes.append(child)
+            ids = [el.get("val") for el in child.findall(_c("axId")) if el.get("val")]
+            node_value_ids.append(ids[1] if len(ids) > 1 else None)
         if not chart_nodes:
             data["chart_type"] = None
             return data
+        primary_value_id = node_value_ids[0]
+        axes = _build_axes(axis_elements, primary_value_id)
+        if axes:
+            data["axes"] = axes
+        for tag, element, ax_id in axis_elements:
+            axis_title = _chart_element_title(element)
+            if not axis_title:
+                continue
+            if tag in {"catAx", "dateAx"}:
+                data["category_axis_title"] = axis_title
+            elif ax_id == (axes.get("value") or {}).get("ax_id"):
+                data["value_axis_title"] = axis_title
+            else:
+                data["secondary_value_axis_title"] = axis_title
         if len(chart_nodes) > 1:
-            data["combo_types"] = [tag for tag, _node in chart_nodes]
-        primary_tag, chart_node = chart_nodes[0]
+            data["combo_types"] = [_local_name(node) for node in chart_nodes]
+        primary_tag = _local_name(chart_nodes[0])
+        chart_node = chart_nodes[0]
         data["chart_type"] = _chart_base_type(primary_tag)
         if primary_tag != data["chart_type"]:
             data["chart_3d"] = True
@@ -1094,10 +1095,14 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
                         data[key] = _chart_bool(element.get("val"))
                     else:
                         data[key] = _chart_float(element.get("val"))
+        secondary_value_id = (axes.get("secondary_value") or {}).get("ax_id")
         series: list[dict[str, Any]] = []
         categories: list[str] = []
-        for node_tag, node in chart_nodes:
+        for node_index, node in enumerate(chart_nodes):
+            node_tag = _local_name(node)
             series_index = 0
+            node_value_id = node_value_ids[node_index] if node_index < len(node_value_ids) else None
+            secondary = bool(secondary_value_id) and node_value_id == secondary_value_id
             for ser in node.findall(_c("ser")):
                 tx = ser.find(_c("tx"))
                 name = _pt_values(tx)[0] if tx is not None and _pt_values(tx) else ""
@@ -1110,6 +1115,8 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
                 values = _pt_values(val) if val is not None else []
                 item: dict[str, Any] = {"name": name, "values": values}
                 item["chart_type"] = _chart_base_type(node_tag)
+                if secondary:
+                    item["axis"] = "secondary_value"
                 color = _chart_series_color(ser, theme_colors)
                 if color is None:
                     # Без явного цвета PowerPoint берёт акцентные цвета темы по порядку.
@@ -1121,6 +1128,15 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
                 series_data_labels = _read_data_labels(ser)
                 if series_data_labels:
                     item["data_labels"] = series_data_labels
+                trendline = _read_trendline(ser, theme_colors)
+                if trendline:
+                    item["trendline"] = trendline
+                error_bars = _read_error_bars(ser, theme_colors)
+                if error_bars:
+                    item["error_bars"] = error_bars
+                data_points = _read_data_points(ser, theme_colors)
+                if data_points:
+                    item["data_points"] = data_points
                 series.append(item)
                 series_index += 1
         if categories:
@@ -1128,6 +1144,50 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
         if series:
             data["series"] = series
     return data
+
+
+def _collect_axes(plot_area) -> list[tuple[str, Any, str | None]]:
+    """Собрать все оси диаграммы с их ``axId``: (тип, элемент, axId)."""
+    axes: list[tuple[str, Any, str | None]] = []
+    for child in plot_area:
+        tag = _local_name(child)
+        if tag not in {"catAx", "dateAx", "valAx", "serAx"}:
+            continue
+        ax_id_element = child.find(_c("axId"))
+        ax_id = ax_id_element.get("val") if ax_id_element is not None else None
+        axes.append((tag, child, ax_id))
+    return axes
+
+
+def _build_axes(axis_elements: list[tuple[str, Any, str | None]], primary_value_id: str | None) -> dict[str, Any]:
+    """Построить словарь осей, выделив первичную и вторичную оси значений."""
+    axes: dict[str, Any] = {}
+    category_axis: dict[str, Any] | None = None
+    value_axes: dict[str, Any] = {}
+    for tag, element, ax_id in axis_elements:
+        info = _chart_axis_info(element)
+        if info is None:
+            continue
+        info["ax_id"] = ax_id
+        if tag in {"catAx", "dateAx"}:
+            if category_axis is None:
+                category_axis = info
+        elif tag == "valAx":
+            key = ax_id or f"{id(element)}"
+            if key not in value_axes:
+                value_axes[key] = info
+    if category_axis is not None:
+        axes["category"] = category_axis
+    if not value_axes:
+        return axes
+    primary_key = primary_value_id
+    if primary_key not in value_axes:
+        primary_key = next(iter(value_axes))
+    primary_info = value_axes.pop(primary_key)
+    axes["value"] = primary_info
+    if value_axes:
+        axes["secondary_value"] = value_axes.pop(next(iter(value_axes)))
+    return axes
 
 
 def _chart_base_type(tag: str) -> str:
@@ -1285,6 +1345,81 @@ def _chart_element_title(element) -> str | None:
         return values[0]
     text = "".join(node.text or "" for node in title.iter(_a("t"))) if title is not None else ""
     return text or None
+
+
+def _read_trendline(series, theme_colors: dict[str, str] | None = None) -> dict[str, Any] | None:
+    """Прочитать линию тренда серии (тип, порядок, период, видимость формулы/R²)."""
+    trend = series.find(_c("trendline"))
+    if trend is None:
+        return None
+    info: dict[str, Any] = {}
+    trend_type = trend.find(_c("trendlineType"))
+    if trend_type is not None and trend_type.get("val"):
+        info["type"] = trend_type.get("val")
+    for tag, key in (("order", "order"), ("period", "period")):
+        element = trend.find(_c(tag))
+        if element is not None and element.get("val"):
+            try:
+                info[key] = int(float(element.get("val")))
+            except ValueError:
+                pass
+    for tag, key in (("dispRSqr", "show_r_squared"), ("dispEq", "show_equation")):
+        element = trend.find(_c(tag))
+        if element is not None:
+            info[key] = _chart_bool(element.get("val"))
+    color = _chart_series_color(trend, theme_colors)
+    if color:
+        info["color"] = color
+    return info
+
+
+def _read_error_bars(series, theme_colors: dict[str, str] | None = None) -> dict[str, Any] | None:
+    """Прочитать планки погрешностей серии (тип, направление, величина)."""
+    error = series.find(_c("errBars"))
+    if error is None:
+        return None
+    info: dict[str, Any] = {}
+    for tag, key in (("errDir", "direction"), ("errBarType", "bar_type"), ("errValType", "value_type")):
+        element = error.find(_c(tag))
+        if element is not None and element.get("val"):
+            info[key] = element.get("val")
+    fixed = error.find(_c("val"))
+    if fixed is not None and fixed.get("val"):
+        info["value"] = _chart_float(fixed.get("val"))
+    for tag, key in (("yVal", "y_val"), ("plus", "plus"), ("minus", "minus")):
+        values = _pt_values(error.find(_c(tag))) if error.find(_c(tag)) is not None else []
+        if values:
+            info[key] = values
+    num_fmt = error.find(_c("numFmt"))
+    if num_fmt is not None and num_fmt.get("formatCode"):
+        info["num_format"] = num_fmt.get("formatCode")
+    color = _chart_series_color(error, theme_colors)
+    if color:
+        info["color"] = color
+    return info
+
+
+def _read_data_points(series, theme_colors: dict[str, str] | None = None) -> dict[str, Any] | None:
+    """Прочитать форматирование отдельных точек данных (цвет, отрыв у сектора)."""
+    points: dict[str, Any] = {}
+    for point in series.findall(_c("dPt")):
+        idx_el = point.find(_c("idx"))
+        if idx_el is None or idx_el.get("val") is None:
+            continue
+        try:
+            index = int(float(idx_el.get("val")))
+        except ValueError:
+            continue
+        entry: dict[str, Any] = {}
+        color = _chart_series_color(point, theme_colors)
+        if color:
+            entry["color"] = color
+        explosion = point.find(_c("explosion"))
+        if explosion is not None and explosion.get("val"):
+            entry["explosion"] = _chart_float(explosion.get("val"))
+        if entry:
+            points[index] = entry
+    return points or None
 
 
 def _chart_series_color(series, theme_colors: dict[str, str] | None = None) -> str | None:

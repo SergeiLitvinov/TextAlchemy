@@ -81,8 +81,10 @@
     - [x] Рендерить clustered/stacked/percent-stacked bar charts, позиции legend и заголовки осей.
     - [ ] Сохранять theme, деления/формат осей, data labels, 3D/combo charts и расширенные настройки серий.
       - [x] Поддержать theme colors, основные деления/форматы осей, data labels и bar/line combo.
-      - [ ] Рендерить 3D-сцену, secondary axes, тренды/error bars и форматирование отдельных data points без 2D-упрощения.
-      - [ ] Добавить visual golden regression для диаграмм вместо проверки только SVG-разметки.
+      - [x] Рендерить вторичные оси значений с собственной шкалой, линии тренда (linear/movingAvg/exp/poly) и планки погрешностей (fixed/percent/stdDev/stdErr/cust/val).
+      - [x] Форматировать отдельные data points через `c:dPt` (цвет точки, в том числе для pie/doughnut).
+      - [ ] Рендерить 3D-сцену (view3D, serAx, wall/floor) без 2D-упрощения.
+      - [x] Добавить visual golden regression для диаграмм вместо проверки только SVG-разметки (14 фич, перцептуальное сравнение против committed PNG).
 - [x] Расширить golden-тесты OMML/MathML и визуального позиционирования.
 
 ## P1 — шаблонизатор

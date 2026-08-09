@@ -440,43 +440,67 @@ def _chart_svg(chart: dict[str, Any]) -> str | None:
         return None
     if not categories:
         categories = [str(index + 1) for index in range(max(len(item["values"]) for item in series))]
-    grouping = chart.get("grouping")
     axes = chart.get("axes") or {}
     value_axis = axes.get("value") or {}
-    axis_style = _chart_axis_style(series, value_axis)
-    axis_style["gap_width"] = chart.get("gap_width", 150.0)
-    axis_style["overlap"] = chart.get("overlap", 0.0)
     label_style = {
         "chart": chart.get("data_labels") or {},
         "formatter": _number_formatter(chart.get("data_labels", {}).get("num_format")),
     }
-    if chart_type == "barChart" and grouping in {None, "clustered", "standard", "stacked", "percentStacked"}:
-        horizontal = chart.get("bar_direction") == "bar"
-        combo_kinds = _chart_combo_kinds(series)
-        if combo_kinds:
-            body = _combo_chart_svg(categories, series, kinds=combo_kinds, axis_style=axis_style, label_style=label_style)
-        elif grouping in {"stacked", "percentStacked"}:
-            body = _stacked_bar_chart_svg(
+    secondary_series = [item for item in series if item.get("axis") == "secondary_value"]
+    if secondary_series:
+        primary_series = [item for item in series if item.get("axis") != "secondary_value"]
+        if primary_series:
+            primary_style = _chart_axis_style(primary_series, value_axis)
+            primary_style["gap_width"] = chart.get("gap_width", 150.0)
+            primary_style["overlap"] = chart.get("overlap", 0.0)
+            secondary_style = _chart_axis_style(secondary_series, axes.get("secondary_value") or {})
+            secondary_style["gap_width"] = chart.get("gap_width", 150.0)
+            secondary_style["overlap"] = chart.get("overlap", 0.0)
+            body = _dual_axis_chart_svg(
                 categories,
-                series,
-                horizontal=horizontal,
-                percent=grouping == "percentStacked",
-                axis_style=axis_style,
+                primary_series,
+                secondary_series,
+                chart=chart,
+                axis_style=primary_style,
+                secondary_style=secondary_style,
                 label_style=label_style,
             )
         else:
-            body = _bar_chart_svg(categories, series, horizontal=horizontal, axis_style=axis_style, label_style=label_style)
-    elif chart_type == "lineChart" and grouping in {None, "standard"}:
-        body = _line_chart_svg(categories, series, axis_style=axis_style, label_style=label_style)
-    elif chart_type in {"pieChart", "doughnutChart"}:
-        body = _pie_chart_svg(
-            categories,
-            series[0],
-            doughnut=chart_type == "doughnutChart",
-            show_legend=bool(chart.get("legend", True)),
-            label_style=label_style,
-        )
+            body = None
     else:
+        grouping = chart.get("grouping")
+        axis_style = _chart_axis_style(series, value_axis)
+        axis_style["gap_width"] = chart.get("gap_width", 150.0)
+        axis_style["overlap"] = chart.get("overlap", 0.0)
+        if chart_type == "barChart" and grouping in {None, "clustered", "standard", "stacked", "percentStacked"}:
+            horizontal = chart.get("bar_direction") == "bar"
+            combo_kinds = _chart_combo_kinds(series)
+            if combo_kinds:
+                body = _combo_chart_svg(categories, series, kinds=combo_kinds, axis_style=axis_style, label_style=label_style)
+            elif grouping in {"stacked", "percentStacked"}:
+                body = _stacked_bar_chart_svg(
+                    categories,
+                    series,
+                    horizontal=horizontal,
+                    percent=grouping == "percentStacked",
+                    axis_style=axis_style,
+                    label_style=label_style,
+                )
+            else:
+                body = _bar_chart_svg(categories, series, horizontal=horizontal, axis_style=axis_style, label_style=label_style)
+        elif chart_type == "lineChart" and grouping in {None, "standard"}:
+            body = _line_chart_svg(categories, series, axis_style=axis_style, label_style=label_style)
+        elif chart_type in {"pieChart", "doughnutChart"}:
+            body = _pie_chart_svg(
+                categories,
+                series[0],
+                doughnut=chart_type == "doughnutChart",
+                show_legend=bool(chart.get("legend", True)),
+                label_style=label_style,
+            )
+        else:
+            body = None
+    if body is None:
         return None
     title = str(chart.get("title") or "Chart")
     description = _chart_description(categories, series)
@@ -590,6 +614,10 @@ def _numeric_chart_series(raw_series: Any) -> list[dict[str, Any]]:
                     "values": values,
                     "color": safe_color,
                     "chart_type": item.get("chart_type"),
+                    "axis": item.get("axis"),
+                    "data_points": item.get("data_points") if isinstance(item.get("data_points"), dict) else None,
+                    "trendline": item.get("trendline") if isinstance(item.get("trendline"), dict) else None,
+                    "error_bars": item.get("error_bars") if isinstance(item.get("error_bars"), dict) else None,
                 }
             )
     return result
@@ -607,6 +635,30 @@ def _bar_chart_svg(
         return _horizontal_bar_chart_svg(categories, series, axis_style=axis_style, label_style=label_style)
     left, top, width, height = 65.0, 55.0, 650.0, 320.0
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
+    parts = _chart_grid(left, top, width, height, minimum, maximum, axis_style)
+    parts.extend(
+        _bar_series_parts(
+            categories, series, left=left, top=top, width=width, height=height, axis_style=axis_style, label_style=label_style
+        )
+    )
+    for category_index, category in enumerate(categories):
+        parts.append(_svg_label(left + (category_index + 0.5) * width / max(len(categories), 1), 397, category, anchor="middle"))
+    return "".join(parts)
+
+
+def _bar_series_parts(
+    categories: list[str],
+    series: list[dict[str, Any]],
+    *,
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    axis_style: dict[str, Any],
+    label_style: dict[str, Any],
+) -> list[str]:
+    """Столбцы данных серий, отмасштабированных по ``axis_style`` (без сетки и меток категорий)."""
+    minimum, maximum = axis_style["minimum"], axis_style["maximum"]
     baseline = top + height * maximum / (maximum - minimum)
     category_width = width / max(len(categories), 1)
     series_count = max(len(series), 1)
@@ -615,8 +667,8 @@ def _bar_chart_svg(
     bar_width = category_width / (series_count + gap_width)
     bar_step = bar_width * (1.0 - overlap)
     cluster_width = (series_count - 1) * bar_step + bar_width
-    parts = _chart_grid(left, top, width, height, minimum, maximum, axis_style)
     chart_labels = label_style["chart"]
+    parts = []
     for category_index, category in enumerate(categories):
         group_x = left + category_index * category_width + (category_width - cluster_width) / 2
         for series_index, item in enumerate(series):
@@ -627,11 +679,24 @@ def _bar_chart_svg(
             x = group_x + series_index * bar_step
             parts.append(
                 f'<rect x="{x:g}" y="{y:g}" width="{bar_width:g}" height="{bar_height:g}" '
-                f'fill="{item["color"]}"><title>{escape(item["name"])}: {value:g}</title></rect>'
+                f'fill="{_point_color(item, category_index)}">'
+                f"<title>{escape(item['name'])}: {value:g}</title></rect>"
             )
             _append_bar_label(parts, item, value, None, category, x + bar_width / 2, y, chart_labels, anchor="middle")
-        parts.append(_svg_label(left + (category_index + 0.5) * category_width, 397, category, anchor="middle"))
-    return "".join(parts)
+            parts.extend(
+                _error_bar_parts(
+                    item,
+                    category_index,
+                    value,
+                    x + bar_width / 2,
+                    value_y,
+                    minimum=minimum,
+                    maximum=maximum,
+                    top=top,
+                    height=height,
+                )
+            )
+    return parts
 
 
 def _horizontal_bar_chart_svg(
@@ -644,6 +709,32 @@ def _horizontal_bar_chart_svg(
     left, top, width, height = 120.0, 55.0, 595.0, 320.0
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
     baseline = left + width * (-minimum) / (maximum - minimum)
+    parts = [f'<line x1="{baseline:g}" y1="{top:g}" x2="{baseline:g}" y2="{top + height:g}" stroke="#6B7280"/>']
+    parts.extend(
+        _horizontal_bar_series_parts(
+            categories, series, left=left, top=top, width=width, height=height, axis_style=axis_style, label_style=label_style
+        )
+    )
+    for category_index, category in enumerate(categories):
+        label_y = top + (category_index + 0.5) * height / max(len(categories), 1)
+        parts.append(_svg_label(left - 8, label_y, category, anchor="end"))
+    return "".join(parts)
+
+
+def _horizontal_bar_series_parts(
+    categories: list[str],
+    series: list[dict[str, Any]],
+    *,
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    axis_style: dict[str, Any],
+    label_style: dict[str, Any],
+) -> list[str]:
+    """Горизонтальные столбцы серий, отмасштабированных по ``axis_style``."""
+    minimum, maximum = axis_style["minimum"], axis_style["maximum"]
+    baseline = left + width * (-minimum) / (maximum - minimum)
     category_height = height / max(len(categories), 1)
     series_count = max(len(series), 1)
     gap_width = axis_style.get("gap_width", 150.0) / 100.0
@@ -651,11 +742,10 @@ def _horizontal_bar_chart_svg(
     bar_height = category_height / (series_count + gap_width)
     bar_step = bar_height * (1.0 - overlap)
     cluster_height = (series_count - 1) * bar_step + bar_height
-    parts = [f'<line x1="{baseline:g}" y1="{top:g}" x2="{baseline:g}" y2="{top + height:g}" stroke="#6B7280"/>']
     chart_labels = label_style["chart"]
+    parts = []
     for category_index, category in enumerate(categories):
         group_y = top + category_index * category_height + (category_height - cluster_height) / 2
-        parts.append(_svg_label(left - 8, top + (category_index + 0.5) * category_height, category, anchor="end"))
         for series_index, item in enumerate(series):
             value = item["values"][category_index] if category_index < len(item["values"]) else 0.0
             value_x = left + width * (value - minimum) / (maximum - minimum)
@@ -664,16 +754,29 @@ def _horizontal_bar_chart_svg(
             y = group_y + series_index * bar_step
             parts.append(
                 f'<rect x="{x:g}" y="{y:g}" width="{bar_width:g}" height="{bar_height:g}" '
-                f'fill="{item["color"]}"><title>{escape(item["name"])}: {value:g}</title></rect>'
+                f'fill="{_point_color(item, category_index)}">'
+                f"<title>{escape(item['name'])}: {value:g}</title></rect>"
             )
             if value >= 0:
                 label_x, anchor = value_x + 4, "start"
             else:
                 label_x, anchor = value_x - 4, "end"
-            _append_bar_label(
-                parts, item, value, None, category, label_x, y + bar_height * 0.45, chart_labels, anchor=anchor
+            _append_bar_label(parts, item, value, None, category, label_x, y + bar_height * 0.45, chart_labels, anchor=anchor)
+            parts.extend(
+                _error_bar_parts(
+                    item,
+                    category_index,
+                    value,
+                    value_x,
+                    y + bar_height / 2,
+                    minimum=minimum,
+                    maximum=maximum,
+                    top=top,
+                    height=height,
+                    direction="x",
+                )
             )
-    return "".join(parts)
+    return parts
 
 
 def _append_bar_label(
@@ -706,8 +809,33 @@ def _line_chart_svg(
     left, top, width, height = 65.0, 55.0, 650.0, 320.0
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
     parts = _chart_grid(left, top, width, height, minimum, maximum, axis_style)
+    parts.extend(
+        _line_series_parts(
+            categories, series, left=left, top=top, width=width, height=height, axis_style=axis_style, label_style=label_style
+        )
+    )
+    denominator = max(len(categories) - 1, 1)
+    for index, category in enumerate(categories):
+        parts.append(_svg_label(left + width * index / denominator, 397, category, anchor="middle"))
+    return "".join(parts)
+
+
+def _line_series_parts(
+    categories: list[str],
+    series: list[dict[str, Any]],
+    *,
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    axis_style: dict[str, Any],
+    label_style: dict[str, Any],
+) -> list[str]:
+    """Линии и точки серий с трендами и планками погрешностей (без сетки)."""
+    minimum, maximum = axis_style["minimum"], axis_style["maximum"]
     denominator = max(len(categories) - 1, 1)
     chart_labels = label_style["chart"]
+    parts = []
     for item in series:
         points = []
         circles = []
@@ -716,15 +844,15 @@ def _line_chart_svg(
             y = top + height * (maximum - value) / (maximum - minimum)
             points.append(f"{x:g},{y:g}")
             circles.append(
-                f'<circle cx="{x:g}" cy="{y:g}" r="4" fill="{item["color"]}">'
+                f'<circle cx="{x:g}" cy="{y:g}" r="4" fill="{_point_color(item, index)}">'
                 f"<title>{escape(item['name'])}: {value:g}</title></circle>"
             )
             _append_bar_label(parts, item, value, None, categories[index], x, y, chart_labels, anchor="middle")
+            parts.extend(_error_bar_parts(item, index, value, x, y, minimum=minimum, maximum=maximum, top=top, height=height))
         parts.append(f'<polyline points="{" ".join(points)}" fill="none" stroke="{item["color"]}" stroke-width="3"/>')
         parts.extend(circles)
-    for index, category in enumerate(categories):
-        parts.append(_svg_label(left + width * index / denominator, 397, category, anchor="middle"))
-    return "".join(parts)
+        parts.extend(_trendline_parts(item, categories, left=left, top=top, width=width, height=height, axis_style=axis_style))
+    return parts
 
 
 def _chart_combo_kinds(series: list[dict[str, Any]]) -> set[str]:
@@ -745,51 +873,111 @@ def _combo_chart_svg(
 ) -> str:
     """Совместить столбцы (barChart) и линии (lineChart) на общих осях."""
     left, top, width, height = 65.0, 55.0, 650.0, 320.0
-    minimum, maximum = axis_style["minimum"], axis_style["maximum"]
     bar_items = [item for item in series if item.get("chart_type") in {None, "barChart"}]
     line_items = [item for item in series if item.get("chart_type") == "lineChart"]
-    parts = _chart_grid(left, top, width, height, minimum, maximum, axis_style)
-    chart_labels = label_style["chart"]
-    denominator = max(len(categories) - 1, 1)
+    parts = _chart_grid(left, top, width, height, axis_style["minimum"], axis_style["maximum"], axis_style)
     if bar_items:
-        baseline = top + height * maximum / (maximum - minimum)
-        category_width = width / max(len(categories), 1)
-        series_count = max(len(bar_items), 1)
-        gap_width = axis_style.get("gap_width", 150.0) / 100.0
-        overlap = axis_style.get("overlap", 0.0) / 100.0
-        bar_width = category_width / (series_count + gap_width)
-        bar_step = bar_width * (1.0 - overlap)
-        cluster_width = (series_count - 1) * bar_step + bar_width
-        for category_index, category in enumerate(categories):
-            group_x = left + category_index * category_width + (category_width - cluster_width) / 2
-            for series_index, item in enumerate(bar_items):
-                value = item["values"][category_index] if category_index < len(item["values"]) else 0.0
-                value_y = top + height * (maximum - value) / (maximum - minimum)
-                y = min(value_y, baseline)
-                bar_height = max(abs(baseline - value_y), 0.75)
-                x = group_x + series_index * bar_step
-                parts.append(
-                    f'<rect x="{x:g}" y="{y:g}" width="{bar_width:g}" height="{bar_height:g}" '
-                    f'fill="{item["color"]}"><title>{escape(item["name"])}: {value:g}</title></rect>'
-                )
-                _append_bar_label(parts, item, value, None, category, x + bar_width / 2, y, chart_labels, anchor="middle")
-    for item in line_items:
-        points = []
-        circles = []
-        for index, value in enumerate(item["values"][: len(categories)]):
-            x = left + width * index / denominator
-            y = top + height * (maximum - value) / (maximum - minimum)
-            points.append(f"{x:g},{y:g}")
-            circles.append(
-                f'<circle cx="{x:g}" cy="{y:g}" r="4" fill="{item["color"]}">'
-                f"<title>{escape(item['name'])}: {value:g}</title></circle>"
+        parts.extend(
+            _bar_series_parts(
+                categories,
+                bar_items,
+                left=left,
+                top=top,
+                width=width,
+                height=height,
+                axis_style=axis_style,
+                label_style=label_style,
             )
-            _append_bar_label(parts, item, value, None, categories[index], x, y, chart_labels, anchor="middle")
-        parts.append(f'<polyline points="{" ".join(points)}" fill="none" stroke="{item["color"]}" stroke-width="3"/>')
-        parts.extend(circles)
+        )
+    if line_items:
+        parts.extend(
+            _line_series_parts(
+                categories,
+                line_items,
+                left=left,
+                top=top,
+                width=width,
+                height=height,
+                axis_style=axis_style,
+                label_style=label_style,
+            )
+        )
     for index, category in enumerate(categories):
         parts.append(_svg_label(left + (index + 0.5) * width / max(len(categories), 1), 397, category, anchor="middle"))
     return "".join(parts)
+
+
+def _dual_axis_chart_svg(
+    categories: list[str],
+    primary_series: list[dict[str, Any]],
+    secondary_series: list[dict[str, Any]],
+    *,
+    chart: dict[str, Any],
+    axis_style: dict[str, Any],
+    secondary_style: dict[str, Any],
+    label_style: dict[str, Any],
+) -> str:
+    """Совместить серии двух осей значений (левая/правая) в одном поле построения."""
+    left, top, width, height = 65.0, 55.0, 620.0, 320.0
+    horizontal = chart.get("bar_direction") == "bar"
+    parts = _chart_grid(left, top, width, height, axis_style["minimum"], axis_style["maximum"], axis_style)
+    parts.extend(_chart_grid_right(left, top, width, height, secondary_style))
+    parts.extend(
+        _dual_axis_series(
+            categories,
+            primary_series,
+            left=left,
+            top=top,
+            width=width,
+            height=height,
+            axis_style=axis_style,
+            label_style=label_style,
+            horizontal=horizontal,
+        )
+    )
+    parts.extend(
+        _dual_axis_series(
+            categories,
+            secondary_series,
+            left=left,
+            top=top,
+            width=width,
+            height=height,
+            axis_style=secondary_style,
+            label_style=label_style,
+            horizontal=horizontal,
+        )
+    )
+    for index, category in enumerate(categories):
+        parts.append(_svg_label(left + (index + 0.5) * width / max(len(categories), 1), 397, category, anchor="middle"))
+    return "".join(parts)
+
+
+def _dual_axis_series(
+    categories: list[str],
+    series: list[dict[str, Any]],
+    *,
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    axis_style: dict[str, Any],
+    label_style: dict[str, Any],
+    horizontal: bool,
+) -> list[str]:
+    """Отрисовать группу серий одной оси: столбцами или линиями по типу серий."""
+    kinds = _chart_combo_kinds(series)
+    if kinds and "lineChart" in kinds:
+        return _line_series_parts(
+            categories, series, left=left, top=top, width=width, height=height, axis_style=axis_style, label_style=label_style
+        )
+    if horizontal:
+        return _horizontal_bar_series_parts(
+            categories, series, left=left, top=top, width=width, height=height, axis_style=axis_style, label_style=label_style
+        )
+    return _bar_series_parts(
+        categories, series, left=left, top=top, width=width, height=height, axis_style=axis_style, label_style=label_style
+    )
 
 
 def _pie_chart_svg(
@@ -814,7 +1002,7 @@ def _pie_chart_svg(
         x1, y1 = center_x + radius * math.cos(angle), center_y + radius * math.sin(angle)
         x2, y2 = center_x + radius * math.cos(end), center_y + radius * math.sin(end)
         large = 1 if sweep > math.pi else 0
-        color = series.get("color") or _CHART_COLORS[index % len(_CHART_COLORS)]
+        color = _point_color(series, index) or _CHART_COLORS[index % len(_CHART_COLORS)]
         path = f"M {center_x:g} {center_y:g} L {x1:g} {y1:g} A {radius:g} {radius:g} 0 {large} 1 {x2:g} {y2:g} Z"
         parts.append(f'<path d="{path}" fill="{color}" stroke="white"><title>{escape(category)}: {value:g}</title></path>')
         percent = 100.0 * value / total if total else 0.0
@@ -887,9 +1075,7 @@ def _stacked_bar_chart_svg(
             total_value = _stack_total(values, category_index, value)
             segment_percent = 100.0 * value / total_value if total_value else 0.0
             percent_label = segment_percent if percent or segment_percent != 0.0 else None
-            _append_bar_label(
-                parts, item, original, percent_label, category, x + bar_width / 2, y, chart_labels, anchor="middle"
-            )
+            _append_bar_label(parts, item, original, percent_label, category, x + bar_width / 2, y, chart_labels, anchor="middle")
         parts.append(_svg_label(left + (category_index + 0.5) * category_width, 397, category, anchor="middle"))
     return "".join(parts)
 
@@ -979,6 +1165,221 @@ def _series_value(series: dict[str, Any], index: int) -> float:
     return values[index] if index < len(values) else 0.0
 
 
+def _point_color(item: dict[str, Any], index: int) -> str:
+    """Цвет отдельной точки данных (``c:dPt``) либо цвет серии."""
+    points = item.get("data_points")
+    if isinstance(points, dict):
+        point = points.get(index)
+        if isinstance(point, dict):
+            color = point.get("color")
+            if isinstance(color, str) and _COLOR_RE.match(color):
+                return color
+    return item["color"]
+
+
+def _error_bar_parts(
+    item: dict[str, Any],
+    index: int,
+    value: float,
+    x: float,
+    y: float,
+    *,
+    minimum: float,
+    maximum: float,
+    top: float,
+    height: float,
+    direction: str = "y",
+) -> list[str]:
+    """Планки погрешностей точки данных (``c:errBars``) в виде линий с колпачками."""
+    error = item.get("error_bars")
+    if not isinstance(error, dict):
+        return []
+    plus, minus = _error_bar_offsets(item, error, index, value)
+    if plus is None and minus is None:
+        return []
+    span = maximum - minimum
+    if span == 0:
+        return []
+    color = error.get("color") or item["color"]
+    parts: list[str] = []
+    if direction == "x":
+        x_plus = x - height * plus / span if plus is not None else x
+        x_minus = x + height * minus / span if minus is not None else x
+        parts.append(
+            f'<line x1="{min(x_plus, x_minus):g}" y1="{y:g}" x2="{max(x_plus, x_minus):g}" y2="{y:g}" '
+            f'stroke="{color}" stroke-width="1.5"/>'
+        )
+        for end_x in (x_plus, x_minus):
+            parts.append(
+                f'<line x1="{end_x:g}" y1="{y - 6:g}" x2="{end_x:g}" y2="{y + 6:g}" stroke="{color}" stroke-width="1.5"/>'
+            )
+    else:
+        y_plus = y - height * plus / span if plus is not None else y
+        y_minus = y + height * minus / span if minus is not None else y
+        parts.append(f'<line x1="{x:g}" y1="{y_plus:g}" x2="{x:g}" y2="{y_minus:g}" stroke="{color}" stroke-width="1.5"/>')
+        for end_y in (y_plus, y_minus):
+            parts.append(
+                f'<line x1="{x - 6:g}" y1="{end_y:g}" x2="{x + 6:g}" y2="{end_y:g}" stroke="{color}" stroke-width="1.5"/>'
+            )
+    return parts
+
+
+def _error_bar_offsets(
+    item: dict[str, Any], error: dict[str, Any], index: int, value: float
+) -> tuple[float | None, float | None]:
+    """Величины (plus, minus) планок погрешности в единицах оси по типу ``c:errValType``."""
+    value_type = error.get("value_type")
+    if value_type == "fixedVal":
+        amount = float(error.get("value", 0.0) or 0.0)
+        return amount, amount
+    if value_type == "percentage":
+        percent = float(error.get("value", 0.0) or 0.0)
+        amount = abs(value) * percent / 100.0
+        return amount, amount
+    if value_type == "stdDev":
+        deviation = _standard_deviation(item["values"])
+        return deviation, deviation
+    if value_type == "stdErr":
+        deviation = _standard_deviation(item["values"]) / math.sqrt(max(len(item["values"]), 1))
+        return deviation, deviation
+    if value_type == "cust":
+        return _error_series_value(error.get("plus"), index), _error_series_value(error.get("minus"), index)
+    if value_type == "val":
+        amount = _error_series_value(error.get("y_val"), index)
+        return amount, amount
+    return None, None
+
+
+def _error_series_value(raw: Any, index: int) -> float | None:
+    """Значение планки из числовой серии (``c:yVal``/``c:plus``/``c:minus``)."""
+    if not isinstance(raw, list):
+        return None
+    try:
+        values = [float(item) for item in raw]
+    except (TypeError, ValueError):
+        return None
+    if index < len(values):
+        return values[index]
+    return None
+
+
+def _standard_deviation(values: list[float]) -> float:
+    """Выборочное стандартное отклонение по всей серии."""
+    numbers = [float(v) for v in values if isinstance(v, (int, float))]
+    if not numbers:
+        return 0.0
+    mean = sum(numbers) / len(numbers)
+    variance = sum((value - mean) ** 2 for value in numbers) / len(numbers)
+    return math.sqrt(variance)
+
+
+def _trendline_parts(
+    item: dict[str, Any],
+    categories: list[str],
+    *,
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    axis_style: dict[str, Any],
+) -> list[str]:
+    """Линия тренда серии (``c:trendline``): linear, movingAvg, exp или poly."""
+    trend = item.get("trendline")
+    if not isinstance(trend, dict):
+        return []
+    points = item["values"][: len(categories)]
+    if len(points) < 2:
+        return []
+    trend_type = trend.get("type") or "linear"
+    color = trend.get("color") or item["color"]
+    minimum, maximum = axis_style["minimum"], axis_style["maximum"]
+    denominator = max(len(categories) - 1, 1)
+    dash_style = f'fill="none" stroke="{color}" stroke-width="2" stroke-dasharray="6 4"'
+    if trend_type == "movingAvg":
+        period = max(int(trend.get("period", 2) or 2), 1)
+        averages = []
+        for index in range(len(points)):
+            window = points[max(0, index - period + 1) : index + 1]
+            averages.append(sum(window) / len(window))
+        coordinates = []
+        for index, average in enumerate(averages):
+            x = left + width * index / denominator
+            y = top + height * (maximum - average) / (maximum - minimum)
+            coordinates.append(f"{x:g},{y:g}")
+        return [f'<polyline points="{" ".join(coordinates)}" {dash_style}/>']
+    if trend_type == "exp":
+        log_x = [index for index, point in enumerate(points) if point > 0]
+        log_points = [math.log(points[index]) for index in log_x]
+        if len(log_x) < 2:
+            return []
+        slope, intercept = _least_squares(log_x, log_points)
+        y0 = math.exp(intercept)
+        y1 = math.exp(intercept + slope * (len(points) - 1))
+        y0_px = top + height * (maximum - y0) / (maximum - minimum)
+        y1_px = top + height * (maximum - y1) / (maximum - minimum)
+        return [f'<line x1="{left:g}" y1="{y0_px:g}" x2="{left + width:g}" y2="{y1_px:g}" {dash_style}/>']
+    if trend_type == "poly":
+        order = min(max(int(trend.get("order", 2) or 2), 1), 6)
+        coefficients = _polyfit(list(range(len(points))), list(points), order)
+        if coefficients is None:
+            return []
+        coordinates = []
+        for index in range(len(points)):
+            y_value = sum(c * index**degree for degree, c in enumerate(coefficients))
+            x = left + width * index / denominator
+            y = top + height * (maximum - y_value) / (maximum - minimum)
+            coordinates.append(f"{x:g},{y:g}")
+        return [f'<polyline points="{" ".join(coordinates)}" {dash_style}/>']
+    slope, intercept = _least_squares(list(range(len(points))), list(points))
+    y0 = intercept
+    y1 = intercept + slope * (len(points) - 1)
+    y0_px = top + height * (maximum - y0) / (maximum - minimum)
+    y1_px = top + height * (maximum - y1) / (maximum - minimum)
+    return [f'<line x1="{left:g}" y1="{y0_px:g}" x2="{left + width:g}" y2="{y1_px:g}" {dash_style}/>']
+
+
+def _least_squares(x: list[float], y: list[float]) -> tuple[float, float]:
+    """Метод наименьших квадратов: (наклон, свободный член) прямой ``y = kx + b``."""
+    count = len(x)
+    if count == 0:
+        return 0.0, 0.0
+    sx = sum(x)
+    sy = sum(y)
+    sxx = sum(xi * xi for xi in x)
+    sxy = sum(xi * yi for xi, yi in zip(x, y, strict=False))
+    denominator = count * sxx - sx * sx
+    if math.isclose(denominator, 0.0):
+        return 0.0, sy / count
+    slope = (count * sxy - sx * sy) / denominator
+    intercept = (sy - slope * sx) / count
+    return slope, intercept
+
+
+def _polyfit(x: list[float], y: list[float], order: int) -> list[float] | None:
+    """Полиномиальная регрессия через нормальные уравнения с методом Гаусса."""
+    degree = order + 1
+    if len(x) < degree:
+        return None
+    matrix = [[0.0] * (degree + 1) for _ in range(degree)]
+    for row in range(degree):
+        for col in range(degree):
+            matrix[row][col] = sum(xi ** (row + col) for xi in x)
+        matrix[row][degree] = sum(yi * xi**row for xi, yi in zip(x, y, strict=False))
+    for col in range(degree):
+        pivot = max(range(col, degree), key=lambda row: abs(matrix[row][col]))
+        if pivot != col:
+            matrix[col], matrix[pivot] = matrix[pivot], matrix[col]
+        if abs(matrix[col][col]) < 1e-12:
+            return None
+        for row in range(degree):
+            if row == col:
+                continue
+            factor = matrix[row][col] / matrix[col][col]
+            for col_index in range(col, degree + 1):
+                matrix[row][col_index] -= factor * matrix[col][col_index]
+    return [matrix[k][degree] / matrix[k][k] for k in range(degree)]
+
+
 def _chart_range(series: list[dict[str, Any]]) -> tuple[float, float]:
     values = [value for item in series for value in item["values"]]
     minimum = min(0.0, min(values, default=0.0))
@@ -1000,22 +1401,45 @@ def _chart_grid(
     axis_style = axis_style or {}
     formatter = axis_style.get("formatter") or _format_chart_general
     show_labels = bool(axis_style.get("show_labels", True))
-    major_unit = axis_style.get("major_unit")
     parts = []
-    steps: list[float]
-    if isinstance(major_unit, (int, float)) and major_unit > 0:
-        count = max(1, int(round((maximum - minimum) / major_unit)))
-        steps = [minimum + major_unit * step for step in range(count + 1)]
-        steps = [value for value in steps if minimum <= value <= maximum]
-    else:
-        steps = [maximum - (maximum - minimum) * step / 5 for step in range(6)]
-    for value in steps:
+    for value in _axis_steps(minimum, maximum, axis_style.get("major_unit")):
         fraction = (maximum - value) / (maximum - minimum)
         y = top + height * fraction
         parts.append(f'<line x1="{left:g}" y1="{y:g}" x2="{left + width:g}" y2="{y:g}" stroke="#D1D5DB"/>')
         if show_labels:
             parts.append(_svg_label(left - 8, y + 4, formatter(value), anchor="end"))
     return parts
+
+
+def _chart_grid_right(
+    left: float,
+    top: float,
+    width: float,
+    height: float,
+    axis_style: dict[str, Any] | None = None,
+) -> list[str]:
+    """Вторичная сетка с метками справа (для диаграмм с двумя осями значений)."""
+    axis_style = axis_style or {}
+    formatter = axis_style.get("formatter") or _format_chart_general
+    show_labels = bool(axis_style.get("show_labels", True))
+    minimum, maximum = axis_style["minimum"], axis_style["maximum"]
+    parts = []
+    for value in _axis_steps(minimum, maximum, axis_style.get("major_unit")):
+        fraction = (maximum - value) / (maximum - minimum)
+        y = top + height * fraction
+        parts.append(f'<line x1="{left:g}" y1="{y:g}" x2="{left + width:g}" y2="{y:g}" stroke="#E5E7EB" stroke-dasharray="2 2"/>')
+        if show_labels:
+            parts.append(_svg_label(left + width + 8, y + 4, formatter(value), anchor="start"))
+    return parts
+
+
+def _axis_steps(minimum: float, maximum: float, major_unit: Any) -> list[float]:
+    """Значения делений оси по явному шагу или равномерно на 5 частей."""
+    if isinstance(major_unit, (int, float)) and major_unit > 0:
+        count = max(1, int(round((maximum - minimum) / major_unit)))
+        steps = [minimum + major_unit * step for step in range(count + 1)]
+        return [value for value in steps if minimum <= value <= maximum]
+    return [maximum - (maximum - minimum) * step / 5 for step in range(6)]
 
 
 def _chart_decorations(chart: dict[str, Any], series: list[dict[str, Any]]) -> str:
@@ -1042,6 +1466,12 @@ def _chart_decorations(chart: dict[str, Any], series: list[dict[str, Any]]) -> s
                 '<text x="18" y="220" text-anchor="middle" font-family="Arial" font-size="13" '
                 f'transform="rotate(-90 18 220)">{escape(str(value_title))}</text>'
             )
+    secondary_value_title = chart.get("secondary_value_axis_title")
+    if secondary_value_title:
+        parts.append(
+            '<text x="790" y="220" text-anchor="middle" font-family="Arial" font-size="13" '
+            f'transform="rotate(90 790 220)">{escape(str(secondary_value_title))}</text>'
+        )
     return "".join(parts)
 
 
@@ -1062,8 +1492,7 @@ def _chart_legend(series: list[dict[str, Any]], position: str) -> list[str]:
 def _svg_label(x: float, y: float, value: str, *, anchor: str, fill: str | None = None) -> str:
     fill_attr = f' fill="{escape(fill, quote=True)}"' if fill else ' fill="#374151"'
     return (
-        f'<text x="{x:g}" y="{y:g}" text-anchor="{anchor}" font-family="Arial" font-size="12"{fill_attr}>'
-        f"{escape(value)}</text>"
+        f'<text x="{x:g}" y="{y:g}" text-anchor="{anchor}" font-family="Arial" font-size="12"{fill_attr}>{escape(value)}</text>'
     )
 
 

@@ -300,7 +300,7 @@ class TestReadPptxModel:
     def test_chart_series_scheme_color_resolves_against_theme(self):
         xml = (
             f'<ser xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
-            f"<c:spPr><a:solidFill><a:schemeClr val=\"accent2\"/></a:solidFill></c:spPr>"
+            f'<c:spPr><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></c:spPr>'
             f"</ser>"
         )
         element = etree.fromstring(xml)
@@ -312,7 +312,7 @@ class TestReadPptxModel:
         chart_xml = (
             f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
             f"<c:chart><c:plotArea>"
-            f"<c:barChart><c:barDir val=\"col\"/><c:grouping val=\"clustered\"/>"
+            f'<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>'
             f"<c:ser>"
             f"<c:tx><c:strRef><c:strCache><c:pt><c:v>Score</c:v></c:pt></c:strCache></c:strRef></c:tx>"
             f"<c:cat><c:strRef><c:strCache>"
@@ -324,12 +324,12 @@ class TestReadPptxModel:
             f"</c:ser>"
             f"</c:barChart>"
             f"<c:valAx>"
-            f"<c:scaling><c:autoMin val=\"0\"/><c:autoMax val=\"0\"/><c:max val=\"100\"/></c:scaling>"
-            f"<c:numFmt formatCode=\"0.0%\" sourceLinked=\"0\"/>"
-            f"<c:tickLblPos val=\"none\"/>"
+            f'<c:scaling><c:autoMin val="0"/><c:autoMax val="0"/><c:max val="100"/></c:scaling>'
+            f'<c:numFmt formatCode="0.0%" sourceLinked="0"/>'
+            f'<c:tickLblPos val="none"/>'
             f"</c:valAx>"
-            f"<c:catAx><c:scaling><c:orientation val=\"minMax\"/></c:scaling>"
-            f"<c:tickLblPos val=\"nextTo\"/></c:catAx>"
+            f'<c:catAx><c:scaling><c:orientation val="minMax"/></c:scaling>'
+            f'<c:tickLblPos val="nextTo"/></c:catAx>'
             f"</c:plotArea></c:chart></c:chartSpace>"
         )
 
@@ -357,11 +357,11 @@ class TestReadPptxModel:
             f"<c:chart><c:plotArea>"
             f"<c:pieChart>"
             f"<c:dLbls>"
-            f"<c:showLegendKey val=\"0\"/><c:showVal val=\"1\"/>"
-            f"<c:showCatName val=\"0\"/><c:showSerName val=\"1\"/>"
-            f"<c:showPercent val=\"0\"/>"
-            f"<c:numFmt formatCode=\"0.0\" sourceLinked=\"0\"/>"
-            f"<c:dLblPos val=\"ctr\"/>"
+            f'<c:showLegendKey val="0"/><c:showVal val="1"/>'
+            f'<c:showCatName val="0"/><c:showSerName val="1"/>'
+            f'<c:showPercent val="0"/>'
+            f'<c:numFmt formatCode="0.0" sourceLinked="0"/>'
+            f'<c:dLblPos val="ctr"/>'
             f"</c:dLbls>"
             f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
             f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt></c:strCache></c:strRef></c:cat>"
@@ -390,8 +390,8 @@ class TestReadPptxModel:
         chart_xml = (
             f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
             f"<c:chart><c:plotArea>"
-            f"<c:barChart><c:barDir val=\"col\"/><c:grouping val=\"clustered\"/>"
-            f"<c:varyColors val=\"1\"/><c:gapWidth val=\"200\"/><c:overlap val=\"-27\"/>"
+            f'<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>'
+            f'<c:varyColors val="1"/><c:gapWidth val="200"/><c:overlap val="-27"/>'
             f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
             f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt></c:strCache></c:strRef></c:cat>"
             f"<c:val><c:numRef><c:numCache><c:pt><c:v>10</c:v></c:pt></c:numCache></c:numRef></c:val>"
@@ -415,7 +415,7 @@ class TestReadPptxModel:
         chart_xml = (
             f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
             f"<c:chart><c:plotArea>"
-            f"<c:bar3DChart><c:barDir val=\"col\"/><c:grouping val=\"clustered\"/>"
+            f'<c:bar3DChart><c:barDir val="col"/><c:grouping val="clustered"/>'
             f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
             f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt></c:strCache></c:strRef></c:cat>"
             f"<c:val><c:numRef><c:numCache><c:pt><c:v>10</c:v></c:pt></c:numCache></c:numRef></c:val>"
@@ -439,7 +439,7 @@ class TestReadPptxModel:
         chart_xml = (
             f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
             f"<c:chart><c:plotArea>"
-            f"<c:barChart><c:barDir val=\"col\"/><c:grouping val=\"clustered\"/>"
+            f'<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>'
             f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>Bars</c:v></c:pt></c:strCache></c:strRef></c:tx>"
             f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt><c:pt><c:v>B</c:v></c:pt></c:strCache></c:strRef></c:cat>"
             f"<c:val><c:numRef><c:numCache>"
@@ -447,7 +447,7 @@ class TestReadPptxModel:
             f"</c:numCache></c:numRef></c:val>"
             f"</c:ser>"
             f"</c:barChart>"
-            f"<c:lineChart><c:grouping val=\"standard\"/>"
+            f'<c:lineChart><c:grouping val="standard"/>'
             f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>Trend</c:v></c:pt></c:strCache></c:strRef></c:tx>"
             f"<c:val><c:numRef><c:numCache>"
             f"<c:pt><c:v>1</c:v></c:pt><c:pt><c:v>3</c:v></c:pt>"
@@ -471,6 +471,145 @@ class TestReadPptxModel:
         assert data["series"][1]["name"] == "Trend"
         assert data["series"][1]["chart_type"] == "lineChart"
         assert data["categories"] == ["A", "B"]
+
+    def test_read_chart_secondary_axis_marks_series(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f'<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>'
+            f'<c:axId val="1"/><c:axId val="2"/>'
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>Bars</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt><c:pt><c:v>B</c:v></c:pt></c:strCache></c:strRef></c:cat>"
+            f"<c:val><c:numRef><c:numCache>"
+            f"<c:pt><c:v>10</c:v></c:pt><c:pt><c:v>20</c:v></c:pt>"
+            f"</c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f"</c:barChart>"
+            f'<c:lineChart><c:grouping val="standard"/>'
+            f'<c:axId val="1"/><c:axId val="3"/>'
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>Growth</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:val><c:numRef><c:numCache>"
+            f"<c:pt><c:v>100</c:v></c:pt><c:pt><c:v>300</c:v></c:pt>"
+            f"</c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f"</c:lineChart>"
+            f'<c:catAx><c:axId val="1"/></c:catAx>'
+            f'<c:valAx><c:axId val="2"/></c:valAx>'
+            f'<c:valAx><c:axId val="3"/><c:axPos val="r"/>'
+            f"<c:title><c:tx><c:rich><a:p><a:r><a:t>Right</a:t></a:r></a:p></c:rich></c:tx></c:title>"
+            f"</c:valAx>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        assert data["axes"]["value"]["ax_id"] == "2"
+        assert data["axes"]["secondary_value"]["ax_id"] == "3"
+        assert data["axes"]["secondary_value"]["position"] == "r"
+        assert data["series"][0].get("axis") is None
+        assert data["series"][1]["axis"] == "secondary_value"
+        assert data["secondary_value_axis_title"] == "Right"
+
+    def test_read_chart_trendline(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f'<c:lineChart><c:grouping val="standard"/>'
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:val><c:numRef><c:numCache>"
+            f"<c:pt><c:v>1</c:v></c:pt><c:pt><c:v>3</c:v></c:pt>"
+            f"</c:numCache></c:numRef></c:val>"
+            f"<c:trendline>"
+            f'<c:trendlineType val="poly"/>'
+            f'<c:order val="2"/>'
+            f'<c:dispRSqr val="1"/>'
+            f'<c:dispEq val="0"/>'
+            f'<c:spPr><a:solidFill><a:srgbClr val="FF8800"/></a:solidFill></c:spPr>'
+            f"</c:trendline>"
+            f"</c:ser>"
+            f"</c:lineChart>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        trend = data["series"][0]["trendline"]
+        assert trend["type"] == "poly"
+        assert trend["order"] == 2
+        assert trend["show_r_squared"] is True
+        assert trend["show_equation"] is False
+        assert trend["color"] == "#FF8800"
+
+    def test_read_chart_error_bars(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f'<c:lineChart><c:grouping val="standard"/>'
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:val><c:numRef><c:numCache>"
+            f"<c:pt><c:v>1</c:v></c:pt><c:pt><c:v>3</c:v></c:pt>"
+            f"</c:numCache></c:numRef></c:val>"
+            f"<c:errBars>"
+            f'<c:errDir val="y"/>'
+            f'<c:errBarType val="both"/>'
+            f'<c:errValType val="fixedVal"/>'
+            f'<c:val val="0.5"/>'
+            f"</c:errBars>"
+            f"</c:ser>"
+            f"</c:lineChart>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        error = data["series"][0]["error_bars"]
+        assert error["direction"] == "y"
+        assert error["bar_type"] == "both"
+        assert error["value_type"] == "fixedVal"
+        assert error["value"] == 0.5
+
+    def test_read_chart_data_points(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f'<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>'
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt><c:pt><c:v>B</c:v></c:pt></c:strCache></c:strRef></c:cat>"
+            f"<c:val><c:numRef><c:numCache>"
+            f"<c:pt><c:v>10</c:v></c:pt><c:pt><c:v>20</c:v></c:pt>"
+            f"</c:numCache></c:numRef></c:val>"
+            f'<c:dPt><c:idx val="0"/>'
+            f'<c:spPr><a:solidFill><a:srgbClr val="70AD47"/></a:solidFill></c:spPr>'
+            f"</c:dPt>"
+            f"</c:ser>"
+            f"</c:barChart>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        points = data["series"][0]["data_points"]
+        assert points == {0: {"color": "#70AD47"}}
 
     def test_extracts_image_resource(self, tmp_path):
         path = tmp_path / "rich.pptx"
