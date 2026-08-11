@@ -69,11 +69,9 @@ _JOBS_HISTORY_LIMIT = 20
 
 def _public_task_payload(task: dict[str, object]) -> dict[str, object]:
     """Публичная проекция метаданных задачи (без артефактов и служебных полей)."""
-    return {
-        key: value
-        for key, value in task.items()
-        if key not in {"artifact", "content", "_ts", "media_type", "filename"}
-    } | ({"filename": task["filename"]} if task.get("filename") else {})
+    return {key: value for key, value in task.items() if key not in {"artifact", "content", "_ts", "media_type", "filename"}} | (
+        {"filename": task["filename"]} if task.get("filename") else {}
+    )
 
 
 def _resolve_conversion(
@@ -265,6 +263,59 @@ async def api_convert_inspect(file: UploadFile = File(...)):
         workspace.cleanup()
 
 
+def _persist_conversion_task(
+    task_id: str,
+    source_path: Path,
+    source: DocFormat,
+    target: DocFormat,
+    mode: ConversionMode,
+) -> None:
+    """Atomically-enough persist the descriptor and source before queueing."""
+    _register_task(
+        task_id,
+        {
+            "status": "queued",
+            "queue_kind": "convert",
+            "error": None,
+            "report": None,
+            "source_format": source.value,
+            "target_format": target.value,
+            "mode": mode.value,
+        },
+    )
+    try:
+        tasks_store.store_source(task_id, source_path, source_path.name)
+    except Exception:
+        tasks_store.delete(task_id)
+        raise
+
+
+def _run_stored_conversion(task_id: str) -> None:
+    """Execute a conversion using only its persisted descriptor and source."""
+    task = tasks_store.get(task_id)
+    source_path = tasks_store.source_path(task_id)
+    if task is None or source_path is None:
+        if task is not None:
+            _register_task(task_id, {**task, "status": "error", "error": "Сохранённый исходник задачи недоступен"})
+        return
+    try:
+        source = DocFormat(task["source_format"])
+        target = DocFormat(task["target_format"])
+        mode = ConversionMode(task["mode"])
+    except (KeyError, ValueError) as error:
+        _register_task(task_id, {**task, "status": "error", "error": f"Некорректное описание задачи: {error}"})
+        return
+    workspace = create_web_workspace()
+    output_path = _output_path_for(workspace, source_path, source, target)
+    _register_task(task_id, {**task, "status": "running", "error": None})
+    _run_convert(task_id, source_path, output_path, source, target, mode, workspace, False)
+
+
+def resume_conversion_task(task_id: str) -> None:
+    """Queue a persisted conversion; public callback used by app lifespan."""
+    task_queue.submit(_run_stored_conversion, task_id)
+
+
 @app.post("/api/convert")
 async def api_convert(
     file: UploadFile = File(...),
@@ -301,28 +352,13 @@ async def api_convert(
     if target not in _OUTPUT_SUFFIXES:
         workspace.cleanup()
         raise HTTPException(status_code=400, detail=f"Формат результата {target.value} пока недоступен в Web UI")
-    output_path = (
-        workspace.artifact_path(f"{source_path.stem}-html")
-        if source is DocFormat.PPTX and target is DocFormat.HTML
-        else workspace.artifact_path(f"{source_path.stem}{_OUTPUT_SUFFIXES[target]}")
-    )
     task_id = str(uuid.uuid4())
-    _register_task(
-        task_id,
-        {
-            "status": "running",
-            "error": None,
-            "report": None,
-            "source_format": source.value,
-            "target_format": target.value,
-            "mode": conversion_mode.value,
-        },
-    )
     try:
-        task_queue.submit(_run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True)
-    except RuntimeError as error:
+        _persist_conversion_task(task_id, source_path, source, target, conversion_mode)
         workspace.cleanup()
-        tasks_store.delete(task_id)
+        resume_conversion_task(task_id)
+    except Exception as error:
+        workspace.cleanup()
         raise HTTPException(status_code=503, detail="Очередь конвертации временно недоступна") from error
     return {
         "success": True,
@@ -375,11 +411,7 @@ async def api_convert_preview(task_id: str, side: str = "source", page: int = 1,
     if task["status"] != "done":
         raise HTTPException(status_code=409, detail="Preview is not ready")
     preview_dir = tasks_store.preview_dir(task_id)
-    file = (
-        tasks_store.source_path(task_id)
-        if side == "source"
-        else tasks_store.result_path(task_id, task.get("artifact", ""))
-    )
+    file = tasks_store.source_path(task_id) if side == "source" else tasks_store.result_path(task_id, task.get("artifact", ""))
     if file is None or not file.is_file():
         raise HTTPException(status_code=404, detail="Source file is not available")
     try:
@@ -467,23 +499,13 @@ async def api_convert_batch(
         raise
 
     tasks: list[dict[str, object]] = []
-    submissions: list[tuple[str, ArtifactWorkspace, Path, Path, DocFormat, DocFormat]] = []
+    submissions: list[str] = []
     try:
         for workspace, source_path, source, target in prepared:
             task_id = str(uuid.uuid4())
-            _register_task(
-                task_id,
-                {
-                    "status": "running",
-                    "error": None,
-                    "report": None,
-                    "source_format": source.value,
-                    "target_format": target.value,
-                    "mode": conversion_mode.value,
-                },
-            )
-            output_path = _output_path_for(workspace, source_path, source, target)
-            submissions.append((task_id, workspace, source_path, output_path, source, target))
+            _persist_conversion_task(task_id, source_path, source, target, conversion_mode)
+            workspace.cleanup()
+            submissions.append(task_id)
             tasks.append(
                 {
                     "name": source_path.name,
@@ -510,24 +532,12 @@ async def api_convert_batch(
         for task in tasks:
             tasks_store.delete(str(task["task_id"]))
         raise
-    for task_id, workspace, source_path, output_path, source, target in submissions:
+    for task_id in submissions:
         try:
-            task_queue.submit(
-                _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True
-            )
+            resume_conversion_task(task_id)
         except RuntimeError as error:
-            workspace.cleanup()
-            _register_task(
-                task_id,
-                {
-                    "status": "error",
-                    "error": f"Очередь конвертации временно недоступна: {error}",
-                    "report": None,
-                    "source_format": source.value,
-                    "target_format": target.value,
-                    "mode": conversion_mode.value,
-                },
-            )
+            task = tasks_store.get(task_id) or {}
+            _register_task(task_id, {**task, "status": "queued", "error": f"Ожидает перезапуска очереди: {error}"})
     return {"success": True, "job_id": job_id, "tasks": tasks}
 
 
@@ -537,7 +547,7 @@ async def api_convert_jobs():
     result = []
     for job in jobs:
         files = job.get("files", [])
-        counts = {"running": 0, "done": 0, "error": 0, "expired": 0, "interrupted": 0}
+        counts = {"queued": 0, "running": 0, "done": 0, "error": 0, "expired": 0, "interrupted": 0}
         for item in files:
             task = tasks_store.get(item["task_id"])
             status = task["status"] if task else "expired"
@@ -599,8 +609,7 @@ async def api_convert_job_rerun(job_id: str):
     except (KeyError, ValueError):
         conversion_mode = ConversionMode.BALANCED
     executor = ConversionExecutor()
-    workspaces: list[ArtifactWorkspace] = []
-    submissions: list[tuple[str, ArtifactWorkspace, Path, Path, DocFormat, DocFormat]] = []
+    submissions: list[str] = []
     launched: list[str] = []
     try:
         for item in job.get("files", []):
@@ -613,13 +622,11 @@ async def api_convert_job_rerun(job_id: str):
             plan = executor.plan(source, target, mode=conversion_mode)
             if plan is None or not _web_plan_supported(plan):
                 continue
-            workspace = create_web_workspace()
-            workspaces.append(workspace)
-            output_path = _output_path_for(workspace, source_path, source, target)
             _register_task(
                 task_id,
                 {
-                    "status": "running",
+                    "status": "queued",
+                    "queue_kind": "convert",
                     "error": None,
                     "report": None,
                     "source_format": source.value,
@@ -627,37 +634,32 @@ async def api_convert_job_rerun(job_id: str):
                     "mode": conversion_mode.value,
                 },
             )
-            submissions.append((task_id, workspace, source_path, output_path, source, target))
+            submissions.append(task_id)
     except Exception as error:
-        for workspace in workspaces:
-            workspace.cleanup()
-        for task_id, _workspace, _source_path, _output_path, _source, _target in submissions:
+        for task_id in submissions:
+            task = tasks_store.get(task_id) or {}
             _register_task(
                 task_id,
                 {
+                    **task,
                     "status": "error",
                     "error": f"Не удалось перезапустить задачу: {error}",
                     "report": None,
                 },
             )
         raise
-    for task_id, workspace, source_path, output_path, source, target in submissions:
+    for task_id in submissions:
         try:
-            task_queue.submit(
-                _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, False
-            )
+            resume_conversion_task(task_id)
             launched.append(task_id)
         except RuntimeError as error:
-            workspace.cleanup()
+            task = tasks_store.get(task_id) or {}
             _register_task(
                 task_id,
                 {
-                    "status": "error",
-                    "error": f"Не удалось перезапустить задачу: {error}",
-                    "report": None,
-                    "source_format": source.value,
-                    "target_format": target.value,
-                    "mode": conversion_mode.value,
+                    **task,
+                    "status": "queued",
+                    "error": f"Ожидает перезапуска очереди: {error}",
                 },
             )
     return {"success": True, "job_id": job_id, "launched": launched}

@@ -1,4 +1,5 @@
 """Тесты web.tasks и web.queue — on-disk хранилище и in-process очередь."""
+
 from __future__ import annotations
 
 import time
@@ -6,7 +7,13 @@ import zipfile
 
 import pytest
 
-from textalchemy.web.queue import INTERRUPTED_MESSAGE, INTERRUPTED_STATUS, TaskQueue, recover_interrupted_tasks
+from textalchemy.web.queue import (
+    INTERRUPTED_MESSAGE,
+    INTERRUPTED_STATUS,
+    TaskQueue,
+    recover_interrupted_tasks,
+    recover_persisted_tasks,
+)
 from textalchemy.web.tasks import TaskStore
 
 
@@ -194,6 +201,8 @@ def test_recover_interrupted_is_idempotent(tmp_path):
     store.set("running-1", {"status": "running"})
     assert recover_interrupted_tasks(store) == 1
     assert store.get("running-1")["status"] == INTERRUPTED_STATUS
+    assert recover_interrupted_tasks(store) == 0
+    assert store.get("running-1")["status"] == INTERRUPTED_STATUS
 
 
 def test_recover_interrupted_is_not_limited_to_history_page(tmp_path):
@@ -203,8 +212,35 @@ def test_recover_interrupted_is_not_limited_to_history_page(tmp_path):
 
     assert recover_interrupted_tasks(store) == 105
     assert all(task["status"] == INTERRUPTED_STATUS for task in store.list_tasks(limit=None))
-    assert recover_interrupted_tasks(store) == 0
-    assert store.get("running-1")["status"] == INTERRUPTED_STATUS
+
+
+def test_recover_persisted_tasks_resumes_known_queue_kind(tmp_path):
+    store = TaskStore(tmp_path)
+    store.set("queued-1", {"status": "queued", "queue_kind": "convert"})
+    resumed = []
+
+    summary = recover_persisted_tasks(store, {"convert": resumed.append})
+
+    assert resumed == ["queued-1"]
+    assert summary.resumed == 1
+    assert summary.interrupted == 0
+    assert store.get("queued-1")["status"] == "queued"
+
+
+def test_recover_persisted_tasks_interrupts_unknown_or_broken_handler(tmp_path):
+    store = TaskStore(tmp_path)
+    store.set("unknown", {"status": "running", "queue_kind": "unknown"})
+    store.set("broken", {"status": "queued", "queue_kind": "convert"})
+
+    def fail(_task_id):
+        raise RuntimeError("cannot resume")
+
+    summary = recover_persisted_tasks(store, {"convert": fail})
+
+    assert summary.resumed == 0
+    assert summary.interrupted == 2
+    assert store.get("unknown")["status"] == INTERRUPTED_STATUS
+    assert store.get("broken")["status"] == INTERRUPTED_STATUS
 
 
 def test_task_queue_runs_tasks_and_waits_for_idle():
@@ -228,6 +264,7 @@ def test_task_queue_runs_tasks_and_waits_for_idle():
 def test_task_queue_survives_failing_task():
     queue = TaskQueue(max_workers=1)
     try:
+
         def boom():
             raise RuntimeError("worker must survive")
 

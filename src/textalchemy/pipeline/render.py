@@ -198,10 +198,13 @@ def render_latex_pandoc(*, text: Text, input_path: Union[str, Path, None] = None
 )
 def render_docx(*, text: Text, output_path: Union[str, Path]) -> Path:
     """Записать ``Text`` в DOCX. Возвращает путь к созданному файлу."""
+    import io
+
     from docx import Document
 
+    from textalchemy.core.io import atomic_write_bytes
+
     out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
     d = Document()
     for block in text.blocks:
         if block.type.value == "heading":
@@ -218,7 +221,9 @@ def render_docx(*, text: Text, output_path: Union[str, Path]) -> Path:
             for j, cell in enumerate(row):
                 if j < cols:
                     t.cell(i, j).text = cell
-    d.save(str(out))
+    buffer = io.BytesIO()
+    d.save(buffer)
+    atomic_write_bytes(out, buffer.getvalue())
     return out
 
 

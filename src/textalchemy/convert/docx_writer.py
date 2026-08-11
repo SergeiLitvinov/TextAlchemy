@@ -30,7 +30,6 @@ def write_docx_model(document: DocumentModel, output_path: str | Path) -> Conver
     from docx.enum.section import WD_SECTION
 
     output = Path(output_path)
-    output.parent.mkdir(parents=True, exist_ok=True)
     report = ConversionReport(output)
     target = Document()
     _write_metadata(target, document.metadata)
@@ -54,7 +53,14 @@ def write_docx_model(document: DocumentModel, output_path: str | Path) -> Conver
 
     _restore_package_graph(target, document, report)
     try:
-        target.save(output)
+        from textalchemy.core.artifacts import ArtifactWorkspace
+        from textalchemy.core.io import atomic_copy
+
+        with ArtifactWorkspace(prefix="textalchemy_docx_writer_") as workspace:
+            staged = workspace.artifact_path("output.docx")
+            target.save(staged)
+            workspace.validate_artifact(staged)
+            atomic_copy(staged, output)
     except Exception as error:  # noqa: BLE001 - diagnostic boundary must return a report
         report.add(IssueSeverity.ERROR, "docx-write", str(error))
         return report

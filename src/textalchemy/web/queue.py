@@ -4,12 +4,14 @@
 ``TaskStore`` на диске. При старте приложения задачи, оставшиеся в статусе
 ``running`` после рестарта, помечаются ``interrupted``.
 """
+
 from __future__ import annotations
 
 import logging
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Callable
+from dataclasses import dataclass
+from typing import Any, Callable, Mapping
 
 logger = logging.getLogger(__name__)
 
@@ -72,26 +74,50 @@ class TaskQueue:
 task_queue = TaskQueue()
 
 
-def recover_interrupted_tasks(tasks_store: Any) -> int:
-    """Пометить задачи, оставшиеся ``running`` после рестарта, как прерванные."""
-    recovered = 0
+@dataclass(frozen=True)
+class RecoverySummary:
+    """Результат восстановления сохранённой очереди при старте."""
+
+    resumed: int = 0
+    interrupted: int = 0
+
+
+def recover_persisted_tasks(
+    tasks_store: Any,
+    handlers: Mapping[str, Callable[[str], None]],
+) -> RecoverySummary:
+    """Повторно поставить сохранённые задачи; неизвестные пометить прерванными."""
+    resumed = 0
+    interrupted = 0
     for task in tasks_store.list_tasks(limit=None):
         task_id = task.pop("task_id", None)
-        if task_id is None or task.get("status") != "running":
+        if task_id is None or task.get("status") not in {"queued", "running"}:
             continue
-        tasks_store.set(
-            task_id,
-            {**task, "status": INTERRUPTED_STATUS, "error": INTERRUPTED_MESSAGE, "report": None},
-        )
-        recovered += 1
-    return recovered
+        handler = handlers.get(str(task.get("queue_kind") or ""))
+        if handler is not None:
+            try:
+                handler(task_id)
+                resumed += 1
+                continue
+            except Exception:  # noqa: BLE001 - invalid persisted jobs must not break application startup
+                logger.exception("failed to resume persisted task %s", task_id)
+        tasks_store.set(task_id, {**task, "status": INTERRUPTED_STATUS, "error": INTERRUPTED_MESSAGE, "report": None})
+        interrupted += 1
+    return RecoverySummary(resumed=resumed, interrupted=interrupted)
+
+
+def recover_interrupted_tasks(tasks_store: Any) -> int:
+    """Compatibility helper: mark every unfinished task as interrupted."""
+    return recover_persisted_tasks(tasks_store, {}).interrupted
 
 
 __all__ = [
     "INTERRUPTED_MESSAGE",
     "INTERRUPTED_STATUS",
     "MAX_WORKERS",
+    "RecoverySummary",
     "TaskQueue",
     "recover_interrupted_tasks",
+    "recover_persisted_tasks",
     "task_queue",
 ]

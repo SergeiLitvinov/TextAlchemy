@@ -16,7 +16,6 @@ def write_pdf_model(document: DocumentModel, output_path: str | Path) -> Convers
     import fitz
 
     output = Path(output_path)
-    output.parent.mkdir(parents=True, exist_ok=True)
     report = ConversionReport(output)
     target = fitz.open()
     totals = {"paragraphs": 0, "tables": 0, "images": 0, "formulas": 0, "pages": 0}
@@ -30,7 +29,14 @@ def write_pdf_model(document: DocumentModel, output_path: str | Path) -> Convers
             target.insert_pdf(section_pdf)
             section_pdf.close()
         _set_metadata(target, document.metadata)
-        target.save(output, garbage=4, deflate=True)
+        from textalchemy.core.artifacts import ArtifactWorkspace
+        from textalchemy.core.io import atomic_copy
+
+        with ArtifactWorkspace(prefix="textalchemy_pdf_writer_") as workspace:
+            staged = workspace.artifact_path("output.pdf")
+            target.save(staged, garbage=4, deflate=True)
+            workspace.validate_artifact(staged)
+            atomic_copy(staged, output)
     except Exception as error:  # noqa: BLE001 - backend failures must be represented in the report
         report.add(IssueSeverity.ERROR, "pdf-write", str(error))
         return report

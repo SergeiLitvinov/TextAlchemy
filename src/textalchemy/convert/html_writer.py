@@ -451,25 +451,114 @@ def _shade_hex(color: str, factor: float) -> str:
     return f"#{red:02X}{green:02X}{blue:02X}"
 
 
-def _chart_3d_depth(chart: dict[str, Any]) -> float:
-    """Глубина 3D-выдавливания в px по ``view3D/depthPercent`` (по умолчанию 150%)."""
+def _chart_3d_scene(chart: dict[str, Any]) -> dict[str, Any] | None:
+    """Build a deterministic perspective projection from OOXML ``view3D``."""
     if not chart.get("chart_3d"):
-        return 0.0
+        return None
     view = chart.get("view3d") or {}
     depth_percent = float(view.get("depth_percent") or 150.0)
-    return max(3.0, min(18.0, 8.0 * depth_percent / 150.0))
+    depth = max(6.0, min(36.0, 18.0 * depth_percent / 150.0))
+    rot_x = max(-90.0, min(90.0, float(view.get("rot_x") or 15.0)))
+    rot_y = float(view.get("rot_y") or 20.0) % 360.0
+    perspective = max(0.0, min(240.0, float(view.get("perspective") or 30.0)))
+    perspective_scale = 1.0 + perspective / 480.0
+    dx = depth * math.sin(math.radians(rot_y)) * perspective_scale
+    dy = -depth * math.sin(math.radians(rot_x)) * perspective_scale
+    # A zero rotation still needs visible depth for right-angle-axes views.
+    if abs(dx) < 1.0:
+        dx = depth * 0.35
+    if abs(dy) < 1.0:
+        dy = -depth * 0.22
+    return {
+        "depth": depth,
+        "dx": dx,
+        "dy": dy,
+        "shape": str(chart.get("chart_3d_shape") or "box"),
+        "side_wall": chart.get("side_wall") or {},
+        "back_wall": chart.get("back_wall") or {},
+        "floor": chart.get("floor") or {},
+    }
 
 
-def _bar_3d_faces(x: float, y: float, width: float, height: float, color: str, depth: float) -> list[str]:
-    """Боковая и верхняя грани 3D-столбца как 2D-проекция (параллелограммы)."""
-    if depth <= 0 or height <= 1.0:
+def _chart_3d_walls(left: float, top: float, width: float, height: float, scene: dict[str, Any] | None) -> list[str]:
+    """Render back/side/floor planes before the chart data."""
+    if scene is None:
         return []
+    dx, dy = scene["dx"], scene["dy"]
+    right, bottom = left + width, top + height
+    back_fill = scene["back_wall"].get("fill", "#F3F4F6")
+    side_fill = scene["side_wall"].get("fill", "#E5E7EB")
+    floor_fill = scene["floor"].get("fill", "#F9FAFB")
     return [
-        f'<path d="M {x + width:g} {y:g} L {x + width + depth:g} {y - depth:g} '
-        f'L {x + width + depth:g} {y - depth + height:g} L {x + width:g} {y + height:g} Z" '
+        f'<path class="chart-3d-back-wall" d="M {left + dx:g} {top + dy:g} H {right + dx:g} '
+        f'V {bottom + dy:g} H {left + dx:g} Z" fill="{back_fill}" stroke="#D1D5DB"/>',
+        f'<path class="chart-3d-side-wall" d="M {right:g} {top:g} L {right + dx:g} {top + dy:g} '
+        f'L {right + dx:g} {bottom + dy:g} L {right:g} {bottom:g} Z" fill="{side_fill}" stroke="#D1D5DB"/>',
+        f'<path class="chart-3d-floor" d="M {left:g} {bottom:g} L {right:g} {bottom:g} '
+        f'L {right + dx:g} {bottom + dy:g} L {left + dx:g} {bottom + dy:g} Z" '
+        f'fill="{floor_fill}" stroke="#D1D5DB"/>',
+    ]
+
+
+def _bar_3d_faces(
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    color: str,
+    scene: dict[str, Any] | None,
+) -> list[str]:
+    """Render projected side/top faces using the configured view rotation."""
+    if scene is None or height <= 1.0:
+        return []
+    dx, dy = scene["dx"], scene["dy"]
+    return [
+        f'<path d="M {x + width:g} {y:g} L {x + width + dx:g} {y + dy:g} '
+        f'L {x + width + dx:g} {y + dy + height:g} L {x + width:g} {y + height:g} Z" '
         f'fill="{_shade_hex(color, -0.35)}"/>',
-        f'<path d="M {x:g} {y:g} L {x + depth:g} {y - depth:g} L {x + width + depth:g} {y - depth:g} '
+        f'<path d="M {x:g} {y:g} L {x + dx:g} {y + dy:g} L {x + width + dx:g} {y + dy:g} '
         f'L {x + width:g} {y:g} Z" fill="{_shade_hex(color, 0.35)}"/>',
+    ]
+
+
+def _bar_mark_svg(
+    x: float,
+    y: float,
+    width: float,
+    height: float,
+    color: str,
+    title: str,
+    scene: dict[str, Any] | None,
+) -> list[str]:
+    """Render a box/cylinder/cone/pyramid data mark as editable SVG."""
+    shape = scene["shape"].lower() if scene is not None else "box"
+    safe_title = escape(title)
+    if shape in {"cylinder", "cyl"} and scene is not None:
+        cap = min(width * 0.28, 7.0)
+        return [
+            f'<path d="M {x:g} {y:g} V {y + height:g} A {width / 2:g} {cap:g} 0 0 0 {x + width:g} '
+            f'{y + height:g} V {y:g} Z" fill="{color}"><title>{safe_title}</title></path>',
+            f'<ellipse cx="{x + width / 2:g}" cy="{y:g}" rx="{width / 2:g}" ry="{cap:g}" fill="{_shade_hex(color, 0.3)}"/>',
+            f'<ellipse cx="{x + width / 2 + scene["dx"]:g}" cy="{y + scene["dy"]:g}" '
+            f'rx="{width / 2:g}" ry="{cap:g}" fill="{_shade_hex(color, -0.3)}" opacity="0.7"/>',
+        ]
+    if shape in {"cone", "pyramid"} and scene is not None:
+        center = x + width / 2
+        back_center = center + scene["dx"]
+        back_y = y + scene["dy"]
+        return [
+            f'<path d="M {back_center:g} {back_y:g} L {x + scene["dx"]:g} {y + height + scene["dy"]:g} '
+            f'L {x + width + scene["dx"]:g} {y + height + scene["dy"]:g} Z" '
+            f'fill="{_shade_hex(color, -0.35)}"/>',
+            f'<path d="M {center:g} {y:g} L {x:g} {y + height:g} L {x + width:g} {y + height:g} Z" '
+            f'fill="{color}"><title>{safe_title}</title></path>',
+            f'<path d="M {center:g} {y:g} L {back_center:g} {back_y:g} '
+            f'L {x + width + scene["dx"]:g} {y + height + scene["dy"]:g} L {x + width:g} {y + height:g} Z" '
+            f'fill="{_shade_hex(color, -0.2)}"/>',
+        ]
+    return [
+        f'<rect x="{x:g}" y="{y:g}" width="{width:g}" height="{height:g}" fill="{color}"><title>{safe_title}</title></rect>',
+        *_bar_3d_faces(x, y, width, height, color, scene),
     ]
 
 
@@ -513,7 +602,7 @@ def _chart_svg(chart: dict[str, Any]) -> str | None:
         axis_style = _chart_axis_style(series, value_axis)
         axis_style["gap_width"] = chart.get("gap_width", 150.0)
         axis_style["overlap"] = chart.get("overlap", 0.0)
-        three_d = _chart_3d_depth(chart)
+        three_d = _chart_3d_scene(chart)
         if chart_type == "barChart" and grouping in {None, "clustered", "standard", "stacked", "percentStacked"}:
             horizontal = chart.get("bar_direction") == "bar"
             combo_kinds = _chart_combo_kinds(series)
@@ -534,7 +623,7 @@ def _chart_svg(chart: dict[str, Any]) -> str | None:
                     categories, series, horizontal=horizontal, axis_style=axis_style, label_style=label_style, depth=three_d
                 )
         elif chart_type == "lineChart" and grouping in {None, "standard"}:
-            body = _line_chart_svg(categories, series, axis_style=axis_style, label_style=label_style)
+            body = _line_chart_svg(categories, series, axis_style=axis_style, label_style=label_style, scene=three_d)
         elif chart_type in {"pieChart", "doughnutChart"}:
             body = _pie_chart_svg(
                 categories,
@@ -542,7 +631,8 @@ def _chart_svg(chart: dict[str, Any]) -> str | None:
                 doughnut=chart_type == "doughnutChart",
                 show_legend=bool(chart.get("legend", True)),
                 label_style=label_style,
-                tilt=0.78 if three_d else 1.0,
+                tilt=max(0.45, 1.0 - abs(three_d["dy"]) / 80.0) if three_d else 1.0,
+                scene=three_d,
             )
         else:
             body = None
@@ -676,13 +766,14 @@ def _bar_chart_svg(
     horizontal: bool,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
-    depth: float = 0.0,
+    depth: dict[str, Any] | None = None,
 ) -> str:
     if horizontal:
-        return _horizontal_bar_chart_svg(categories, series, axis_style=axis_style, label_style=label_style)
+        return _horizontal_bar_chart_svg(categories, series, axis_style=axis_style, label_style=label_style, scene=depth)
     left, top, width, height = 65.0, 55.0, 650.0, 320.0
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
-    parts = _chart_grid(left, top, width, height, minimum, maximum, axis_style)
+    parts = _chart_3d_walls(left, top, width, height, depth)
+    parts.extend(_chart_grid(left, top, width, height, minimum, maximum, axis_style))
     parts.extend(
         _bar_series_parts(
             categories,
@@ -711,7 +802,7 @@ def _bar_series_parts(
     height: float,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
-    depth: float = 0.0,
+    depth: dict[str, Any] | None = None,
 ) -> list[str]:
     """������� ������ �����, ������������������ �� ``axis_style`` (��� ����� � ����� ���������)."""
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
@@ -733,13 +824,13 @@ def _bar_series_parts(
             y = min(value_y, baseline)
             bar_height = max(abs(baseline - value_y), 0.75)
             x = group_x + series_index * bar_step
+            if depth is not None and series_count > 1:
+                series_depth = series_index / (series_count - 1)
+                x += depth["dx"] * series_depth
+                y += depth["dy"] * series_depth
+                value_y += depth["dy"] * series_depth
             color = _point_color(item, category_index)
-            parts.append(
-                f'<rect x="{x:g}" y="{y:g}" width="{bar_width:g}" height="{bar_height:g}" '
-                f'fill="{color}">'
-                f"<title>{escape(item['name'])}: {value:g}</title></rect>"
-            )
-            parts.extend(_bar_3d_faces(x, y, bar_width, bar_height, color, depth))
+            parts.extend(_bar_mark_svg(x, y, bar_width, bar_height, color, f"{item['name']}: {value:g}", depth))
             _append_bar_label(parts, item, value, None, category, x + bar_width / 2, y, chart_labels, anchor="middle")
             parts.extend(
                 _error_bar_parts(
@@ -763,14 +854,24 @@ def _horizontal_bar_chart_svg(
     *,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
+    scene: dict[str, Any] | None = None,
 ) -> str:
     left, top, width, height = 120.0, 55.0, 595.0, 320.0
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
     baseline = left + width * (-minimum) / (maximum - minimum)
-    parts = [f'<line x1="{baseline:g}" y1="{top:g}" x2="{baseline:g}" y2="{top + height:g}" stroke="#6B7280"/>']
+    parts = _chart_3d_walls(left, top, width, height, scene)
+    parts.append(f'<line x1="{baseline:g}" y1="{top:g}" x2="{baseline:g}" y2="{top + height:g}" stroke="#6B7280"/>')
     parts.extend(
         _horizontal_bar_series_parts(
-            categories, series, left=left, top=top, width=width, height=height, axis_style=axis_style, label_style=label_style
+            categories,
+            series,
+            left=left,
+            top=top,
+            width=width,
+            height=height,
+            axis_style=axis_style,
+            label_style=label_style,
+            scene=scene,
         )
     )
     for category_index, category in enumerate(categories):
@@ -789,6 +890,7 @@ def _horizontal_bar_series_parts(
     height: float,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
+    scene: dict[str, Any] | None = None,
 ) -> list[str]:
     """Горизонтальные столбцы серий, отмасштабированных по ``axis_style``."""
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
@@ -810,11 +912,18 @@ def _horizontal_bar_series_parts(
             x = min(value_x, baseline)
             bar_width = max(abs(value_x - baseline), 0.75)
             y = group_y + series_index * bar_step
+            if scene is not None and series_count > 1:
+                series_depth = series_index / (series_count - 1)
+                x += scene["dx"] * series_depth
+                y += scene["dy"] * series_depth
+                value_x += scene["dx"] * series_depth
+            color = _point_color(item, category_index)
             parts.append(
                 f'<rect x="{x:g}" y="{y:g}" width="{bar_width:g}" height="{bar_height:g}" '
-                f'fill="{_point_color(item, category_index)}">'
+                f'fill="{color}">'
                 f"<title>{escape(item['name'])}: {value:g}</title></rect>"
             )
+            parts.extend(_bar_3d_faces(x, y, bar_width, bar_height, color, scene))
             if value >= 0:
                 label_x, anchor = value_x + 4, "start"
             else:
@@ -863,13 +972,23 @@ def _line_chart_svg(
     *,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
+    scene: dict[str, Any] | None = None,
 ) -> str:
     left, top, width, height = 65.0, 55.0, 650.0, 320.0
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
-    parts = _chart_grid(left, top, width, height, minimum, maximum, axis_style)
+    parts = _chart_3d_walls(left, top, width, height, scene)
+    parts.extend(_chart_grid(left, top, width, height, minimum, maximum, axis_style))
     parts.extend(
         _line_series_parts(
-            categories, series, left=left, top=top, width=width, height=height, axis_style=axis_style, label_style=label_style
+            categories,
+            series,
+            left=left,
+            top=top,
+            width=width,
+            height=height,
+            axis_style=axis_style,
+            label_style=label_style,
+            scene=scene,
         )
     )
     denominator = max(len(categories) - 1, 1)
@@ -888,13 +1007,15 @@ def _line_series_parts(
     height: float,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
+    scene: dict[str, Any] | None = None,
 ) -> list[str]:
     """Линии и точки серий с трендами и планками погрешностей (без сетки)."""
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
     denominator = max(len(categories) - 1, 1)
     chart_labels = label_style["chart"]
     parts = []
-    for item in series:
+    for series_index, item in enumerate(series):
+        series_parts: list[str] = []
         points = []
         circles = []
         for index, value in enumerate(item["values"][: len(categories)]):
@@ -905,11 +1026,23 @@ def _line_series_parts(
                 f'<circle cx="{x:g}" cy="{y:g}" r="4" fill="{_point_color(item, index)}">'
                 f"<title>{escape(item['name'])}: {value:g}</title></circle>"
             )
-            _append_bar_label(parts, item, value, None, categories[index], x, y, chart_labels, anchor="middle")
-            parts.extend(_error_bar_parts(item, index, value, x, y, minimum=minimum, maximum=maximum, top=top, height=height))
-        parts.append(f'<polyline points="{" ".join(points)}" fill="none" stroke="{item["color"]}" stroke-width="3"/>')
-        parts.extend(circles)
-        parts.extend(_trendline_parts(item, categories, left=left, top=top, width=width, height=height, axis_style=axis_style))
+            _append_bar_label(series_parts, item, value, None, categories[index], x, y, chart_labels, anchor="middle")
+            series_parts.extend(
+                _error_bar_parts(item, index, value, x, y, minimum=minimum, maximum=maximum, top=top, height=height)
+            )
+        series_parts.append(f'<polyline points="{" ".join(points)}" fill="none" stroke="{item["color"]}" stroke-width="3"/>')
+        series_parts.extend(circles)
+        series_parts.extend(
+            _trendline_parts(item, categories, left=left, top=top, width=width, height=height, axis_style=axis_style)
+        )
+        if scene is not None and len(series) > 1:
+            fraction = series_index / (len(series) - 1)
+            parts.append(
+                f'<g class="chart-3d-series" transform="translate({scene["dx"] * fraction:g} '
+                f'{scene["dy"] * fraction:g})">{"".join(series_parts)}</g>'
+            )
+        else:
+            parts.extend(series_parts)
     return parts
 
 
@@ -1046,16 +1179,21 @@ def _pie_chart_svg(
     show_legend: bool,
     label_style: dict[str, Any],
     tilt: float = 1.0,
+    scene: dict[str, Any] | None = None,
 ) -> str:
     values = [max(value, 0.0) for value in series["values"][: len(categories)]]
     total = sum(values)
     if total <= 0:
         return _svg_label(400, 220, "No positive data", anchor="middle")
     center_x, center_y, radius = 310.0, 225.0, 145.0
+    if scene is not None:
+        center_x += scene["dx"] * 0.12
     radius_y = radius * tilt
     hole_radius_y = 72.0 * tilt
+    extrusion = min(24.0, max(4.0, abs(scene["dy"]) * 0.75)) if scene is not None else 0.0
     angle = -math.pi / 2
     parts = []
+    bottom_parts = []
     labels, formatter = _series_label_context(series, label_style["chart"])
     for index, (category, value) in enumerate(zip(categories, values, strict=False)):
         sweep = 2 * math.pi * value / total
@@ -1065,6 +1203,12 @@ def _pie_chart_svg(
         large = 1 if sweep > math.pi else 0
         color = _point_color(series, index) or _CHART_COLORS[index % len(_CHART_COLORS)]
         path = f"M {center_x:g} {center_y:g} L {x1:g} {y1:g} A {radius:g} {radius_y:g} 0 {large} 1 {x2:g} {y2:g} Z"
+        if extrusion:
+            bottom_path = (
+                f"M {center_x:g} {center_y + extrusion:g} L {x1:g} {y1 + extrusion:g} "
+                f"A {radius:g} {radius_y:g} 0 {large} 1 {x2:g} {y2 + extrusion:g} Z"
+            )
+            bottom_parts.append(f'<path class="chart-3d-pie-depth" d="{bottom_path}" fill="{_shade_hex(color, -0.35)}"/>')
         parts.append(f'<path d="{path}" fill="{color}" stroke="white"><title>{escape(category)}: {value:g}</title></path>')
         percent = 100.0 * value / total if total else 0.0
         text = _data_label_text(series, value, percent=percent, category=category, labels=labels, formatter=formatter)
@@ -1086,7 +1230,7 @@ def _pie_chart_svg(
         angle = end
     if doughnut:
         parts.append(f'<ellipse cx="{center_x:g}" cy="{center_y:g}" rx="72" ry="{hole_radius_y:g}" fill="white"/>')
-    return "".join(parts)
+    return "".join(bottom_parts + parts)
 
 
 def _stacked_bar_chart_svg(
@@ -1097,7 +1241,7 @@ def _stacked_bar_chart_svg(
     percent: bool,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
-    depth: float = 0.0,
+    depth: dict[str, Any] | None = None,
 ) -> str:
     values, minimum, maximum = _stacked_values(categories, series, percent=percent)
     if percent:
@@ -1105,13 +1249,22 @@ def _stacked_bar_chart_svg(
         maximum = axis_style["maximum"]
     if horizontal:
         return _horizontal_stacked_bars(
-            categories, series, values, minimum, maximum, percent=percent, axis_style=axis_style, label_style=label_style
+            categories,
+            series,
+            values,
+            minimum,
+            maximum,
+            percent=percent,
+            axis_style=axis_style,
+            label_style=label_style,
+            scene=depth,
         )
     left, top, width, height = 65.0, 55.0, 650.0, 320.0
     category_width = width / max(len(categories), 1)
     gap_width = axis_style.get("gap_width", 150.0) / 100.0
     bar_width = category_width / (1.0 + gap_width)
-    parts = _chart_grid(left, top, width, height, minimum, maximum, axis_style)
+    parts = _chart_3d_walls(left, top, width, height, depth)
+    parts.extend(_chart_grid(left, top, width, height, minimum, maximum, axis_style))
     chart_labels = label_style["chart"]
     for category_index, category in enumerate(categories):
         positive = 0.0
@@ -1131,11 +1284,7 @@ def _stacked_bar_chart_svg(
             segment_height = max(abs(start_y - end_y), 0.75)
             original = _series_value(item, category_index)
             color = item["color"]
-            parts.append(
-                f'<rect x="{x:g}" y="{y:g}" width="{bar_width:g}" height="{segment_height:g}" '
-                f'fill="{color}"><title>{escape(item["name"])}: {original:g}</title></rect>'
-            )
-            parts.extend(_bar_3d_faces(x, y, bar_width, segment_height, color, depth))
+            parts.extend(_bar_mark_svg(x, y, bar_width, segment_height, color, f"{item['name']}: {original:g}", depth))
             total_value = _stack_total(values, category_index, value)
             segment_percent = 100.0 * value / total_value if total_value else 0.0
             percent_label = segment_percent if percent or segment_percent != 0.0 else None
@@ -1158,13 +1307,15 @@ def _horizontal_stacked_bars(
     percent: bool,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
+    scene: dict[str, Any] | None = None,
 ) -> str:
     left, top, width, height = 120.0, 55.0, 595.0, 320.0
     category_height = height / max(len(categories), 1)
     gap_width = axis_style.get("gap_width", 150.0) / 100.0
     bar_height = category_height / (1.0 + gap_width)
     baseline = left + width * (-minimum) / (maximum - minimum)
-    parts = [f'<line x1="{baseline:g}" y1="{top:g}" x2="{baseline:g}" y2="{top + height:g}" stroke="#6B7280"/>']
+    parts = _chart_3d_walls(left, top, width, height, scene)
+    parts.append(f'<line x1="{baseline:g}" y1="{top:g}" x2="{baseline:g}" y2="{top + height:g}" stroke="#6B7280"/>')
     chart_labels = label_style["chart"]
     for category_index, category in enumerate(categories):
         positive = 0.0
@@ -1188,6 +1339,7 @@ def _horizontal_stacked_bars(
                 f'<rect x="{x:g}" y="{y:g}" width="{segment_width:g}" height="{bar_height:g}" '
                 f'fill="{item["color"]}"><title>{escape(item["name"])}: {original:g}</title></rect>'
             )
+            parts.extend(_bar_3d_faces(x, y, segment_width, bar_height, item["color"], scene))
             total_value = _stack_total(values, category_index, value)
             segment_percent = 100.0 * value / total_value if total_value else 0.0
             percent_label = segment_percent if percent or segment_percent != 0.0 else None

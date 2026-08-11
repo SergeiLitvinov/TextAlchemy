@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from textalchemy.convert.base import BaseConverter, ConversionResult
+from textalchemy.core.artifacts import ArtifactWorkspace
+from textalchemy.core.io import atomic_replace_directory
 
 from ._renderer import (
     convert_pptx as _convert_pptx_impl,
@@ -55,11 +57,16 @@ class PptxToHtmlConverter(BaseConverter):
                     success=False,
                     error=f"Input file not found: {input_path}",
                 )
-            output_path.mkdir(parents=True, exist_ok=True)
-            (output_path / self.SUBDIR).mkdir(parents=True, exist_ok=True)
-            _convert_pptx_impl(input_path, output_path)
-            if self.copy_assets:
-                self._copy_static_assets(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with ArtifactWorkspace(parent=output_path.parent, prefix=".textalchemy_pptx_html_") as workspace:
+                staged = workspace.artifact_path("rendered")
+                staged.mkdir()
+                (staged / self.SUBDIR).mkdir(parents=True, exist_ok=True)
+                _convert_pptx_impl(input_path, staged)
+                if self.copy_assets:
+                    self._copy_static_assets(staged)
+                workspace.validate_artifact(staged)
+                atomic_replace_directory(staged, output_path)
             return ConversionResult(
                 input_path=input_path,
                 output_path=output_path,

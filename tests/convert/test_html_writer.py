@@ -722,7 +722,9 @@ def test_write_html_model_renders_3d_bar_depth_faces(tmp_path):
     output = tmp_path / "bar-3d.html"
     chart = {
         "chart_type": "barChart",
-        "chart_3d": {"type": "bar3D", "depth_percent": 100, "rot_x": 15, "rot_y": 20},
+        "chart_3d": True,
+        "chart_3d_type": "bar3DChart",
+        "view3d": {"depth_percent": 100, "rot_x": 15, "rot_y": 20},
         "title": "3D",
         "categories": ["A", "B"],
         "series": [{"name": "S", "values": [70, 60], "color": "#4472C4"}],
@@ -751,15 +753,17 @@ def test_write_html_model_2d_bar_has_no_3d_faces(tmp_path):
     html = output.read_text(encoding="utf-8")
 
     assert report.lossless is True
-    assert '#2C4A7F' not in html
-    assert '#85A3D8' not in html
+    assert "#2C4A7F" not in html
+    assert "#85A3D8" not in html
 
 
 def test_write_html_model_renders_3d_pie_as_tilted_ellipse(tmp_path):
     output = tmp_path / "pie-3d.html"
     chart = {
         "chart_type": "pieChart",
-        "chart_3d": {"type": "pie3D", "depth_percent": 100, "rot_x": 20},
+        "chart_3d": True,
+        "chart_3d_type": "pie3DChart",
+        "view3d": {"depth_percent": 100, "rot_x": 20},
         "title": "Pie",
         "categories": ["A", "B"],
         "series": [{"name": "S", "values": [60, 40], "color": "#70AD47"}],
@@ -769,15 +773,17 @@ def test_write_html_model_renders_3d_pie_as_tilted_ellipse(tmp_path):
     html = output.read_text(encoding="utf-8")
 
     assert report.lossless is True
-    # 3D-круг приплюснут по вертикали: ry = 0.78 * rx
-    assert "A 145 113.1" in html
+    assert "A 145 " in html and "A 145 145" not in html
+    assert 'class="chart-3d-pie-depth"' in html
 
 
 def test_write_html_model_renders_3d_doughnut_hole(tmp_path):
     output = tmp_path / "doughnut-3d.html"
     chart = {
         "chart_type": "doughnutChart",
-        "chart_3d": {"type": "doughnut3D", "depth_percent": 50},
+        "chart_3d": True,
+        "chart_3d_type": "doughnut3DChart",
+        "view3d": {"depth_percent": 50},
         "title": "Donut",
         "categories": ["A"],
         "series": [{"name": "S", "values": [100], "color": "#4472C4"}],
@@ -787,4 +793,29 @@ def test_write_html_model_renders_3d_doughnut_hole(tmp_path):
     html = output.read_text(encoding="utf-8")
 
     assert report.lossless is True
+    assert "<ellipse" in html
+
+
+def test_write_html_model_3d_scene_uses_view_walls_and_cylinder_shape(tmp_path):
+    output = tmp_path / "cylinder-3d.html"
+    chart = {
+        "chart_type": "barChart",
+        "chart_3d": True,
+        "chart_3d_type": "bar3DChart",
+        "chart_3d_shape": "cylinder",
+        "view3d": {"rot_x": 35, "rot_y": 55, "perspective": 80, "depth_percent": 180},
+        "side_wall": {"fill": "#112233"},
+        "back_wall": {"fill": "#223344"},
+        "floor": {"fill": "#334455"},
+        "categories": ["A"],
+        "series": [{"name": "S", "values": [70], "color": "#4472C4"}],
+    }
+
+    report = write_html_model(DocumentModel(sections=[Section(blocks=[_chart_paragraph(chart)])]), output)
+    html = output.read_text(encoding="utf-8")
+
+    assert report.lossless is True
+    assert 'class="chart-3d-side-wall"' in html and 'fill="#112233"' in html
+    assert 'class="chart-3d-back-wall"' in html and 'fill="#223344"' in html
+    assert 'class="chart-3d-floor"' in html and 'fill="#334455"' in html
     assert "<ellipse" in html

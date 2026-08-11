@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from textalchemy.core.exceptions import ExtractError
+from textalchemy.core.io import atomic_write_text
 
 
 def extract_text(input_path: str | Path, output_path: str | Path | None = None) -> str:
@@ -17,8 +18,7 @@ def extract_text(input_path: str | Path, output_path: str | Path | None = None) 
     except Exception as e:
         raise ExtractError(f"Failed to extract text: {e}") from e
     if output_path:
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(output_path).write_text(text, encoding="utf-8")
+        atomic_write_text(output_path, text, encoding="utf-8")
     return text
 
 
@@ -34,6 +34,5 @@ def extract_text_with_tables(input_path: str | Path, output_path: str | Path | N
     except Exception as e:
         raise ExtractError(f"Failed to extract text: {e}") from e
     if output_path:
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(output_path).write_text(text, encoding="utf-8")
+        atomic_write_text(output_path, text, encoding="utf-8")
     return text

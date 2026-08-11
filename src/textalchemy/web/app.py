@@ -3,6 +3,7 @@
 Выделено из ``main.py``, чтобы роуты (``web/routes/*.py``) могли импортировать
 общие объекты без циклических зависимостей.
 """
+
 from __future__ import annotations
 
 import json
@@ -20,7 +21,7 @@ from jinja2 import Environment, FileSystemLoader
 from textalchemy import __version__
 from textalchemy.core.database import Database
 from textalchemy.organize.bibliography import BibItem
-from textalchemy.web.queue import recover_interrupted_tasks, task_queue
+from textalchemy.web.queue import recover_persisted_tasks, task_queue
 from textalchemy.web.tasks import TaskStore
 
 _VERSION = __version__
@@ -30,9 +31,15 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     del application
-    recovered = recover_interrupted_tasks(tasks_store)
-    if recovered:
-        logger.warning("Помечено %d задач, прерванных предыдущим запуском", recovered)
+    # Lazy import avoids the app/routes import cycle while allowing persisted
+    # conversion descriptors to be requeued after a process restart.
+    from textalchemy.web.routes.convert import resume_conversion_task
+
+    recovery = recover_persisted_tasks(tasks_store, {"convert": resume_conversion_task})
+    if recovery.resumed:
+        logger.info("Возобновлено %d задач после перезапуска", recovery.resumed)
+    if recovery.interrupted:
+        logger.warning("Помечено %d невосстановимых задач", recovery.interrupted)
     yield
 
 
@@ -144,18 +151,22 @@ def _default_config():
 
 
 def _load_config():
+    from textalchemy.core.io import atomic_write_text
+
     _ensure_data()
     p = _config_path()
     if not p.exists():
         cfg = _default_config()
-        p.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_text(p, json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
         return cfg
     return json.loads(p.read_text(encoding="utf-8"))
 
 
 def _save_config(cfg):
+    from textalchemy.core.io import atomic_write_text
+
     _ensure_data()
-    _config_path().write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+    atomic_write_text(_config_path(), json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 # ── Background task management ───────────────────────────────────────────────
@@ -174,9 +185,27 @@ def _register_task(task_id: str, payload: dict[str, Any]) -> None:
 
 
 __all__ = [
-    "app", "templates", "db", "data_dir", "templates_dir", "static_dir",
-    "_VERSION", "_bibitem_to_dict", "_dict_to_bibitem",
-    "_ensure_data", "_migrate_json_to_db", "_load_bib", "_save_bib",
-    "_bib_path", "_matching_path", "_config_path", "_default_config",
-    "_load_config", "_save_config", "tasks_store", "task_queue", "_register_task", "_prune_tasks",
+    "app",
+    "templates",
+    "db",
+    "data_dir",
+    "templates_dir",
+    "static_dir",
+    "_VERSION",
+    "_bibitem_to_dict",
+    "_dict_to_bibitem",
+    "_ensure_data",
+    "_migrate_json_to_db",
+    "_load_bib",
+    "_save_bib",
+    "_bib_path",
+    "_matching_path",
+    "_config_path",
+    "_default_config",
+    "_load_config",
+    "_save_config",
+    "tasks_store",
+    "task_queue",
+    "_register_task",
+    "_prune_tasks",
 ]

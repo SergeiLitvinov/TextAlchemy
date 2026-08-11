@@ -52,10 +52,7 @@ class Config:
         naming_fields = {f for f in NamingConfig.__dataclass_fields__}
         matching_fields = {f for f in MatchingConfig.__dataclass_fields__}
         report_fields = {f for f in ReportConfig.__dataclass_fields__}
-        base_fields = {
-            f for f in Config.__dataclass_fields__
-            if f not in ("naming", "matching", "report")
-        }
+        base_fields = {f for f in Config.__dataclass_fields__ if f not in ("naming", "matching", "report")}
 
         def _filter(d: dict, fields: set) -> dict:
             return {k: v for k, v in d.items() if k in fields}
@@ -94,12 +91,9 @@ class Config:
         }
 
     def save(self, path: str | Path) -> None:
-        p = Path(path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(
-            json.dumps(self.to_dict(), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        from textalchemy.core.io import atomic_write_text
+
+        atomic_write_text(path, json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def generate_default_config() -> Config:

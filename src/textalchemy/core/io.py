@@ -6,6 +6,7 @@
 
 Поведение каждой функции зафиксировано; старые модули — re-export.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -48,9 +49,7 @@ def check_archive_safety(
         with zipfile.ZipFile(p) as zf:
             infos = zf.infolist()
             if len(infos) > max_entries:
-                raise ArchiveSafetyError(
-                    f"Слишком много записей в архиве: {len(infos)} > {max_entries}"
-                )
+                raise ArchiveSafetyError(f"Слишком много записей в архиве: {len(infos)} > {max_entries}")
             total_size = 0
             total_compressed = 0
             seen: set[str] = set()
@@ -78,9 +77,7 @@ def check_archive_safety(
             if total_size > max_total_size:
                 raise ArchiveSafetyError(f"Суммарный размер архива превышает лимит: {total_size} байт")
             if total_compressed > 0 and total_size > total_compressed * max_ratio:
-                raise ArchiveSafetyError(
-                    f"Подозрительный коэффициент сжатия: {total_size} / {total_compressed}"
-                )
+                raise ArchiveSafetyError(f"Подозрительный коэффициент сжатия: {total_size} / {total_compressed}")
     except (zipfile.BadZipFile, OSError) as e:
         raise ArchiveSafetyError(f"Некорректный zip-архив: {e}") from e
 
@@ -158,16 +155,30 @@ def read_text_file(path: PathLike) -> str:
 
 def write_text_file(path: PathLike, content: str) -> None:
     """Записать текст в utf-8."""
-    Path(path).write_text(content, encoding="utf-8")
+    atomic_write_text(path, content, encoding="utf-8")
 
 
-def atomic_write_text(path: PathLike, content: str, encoding: str = "utf-8") -> Path:
+def _check_output_quota(size: int, max_bytes: int | None) -> None:
+    if max_bytes is not None and size > max_bytes:
+        from textalchemy.core.artifacts import ArtifactLimitError
+
+        raise ArtifactLimitError(f"artifact quota exceeded ({max_bytes} bytes)")
+
+
+def atomic_write_text(
+    path: PathLike,
+    content: str,
+    encoding: str = "utf-8",
+    *,
+    max_bytes: int | None = 100 * 1024 * 1024,
+) -> Path:
     """Атомарно записать текст: во временный файл рядом, затем ``os.replace``.
 
     Исключает частично записанный файл при сбое/прерывании и сохраняет
     существующий файл нетронутым до момента фиксации.
     """
     target = Path(path)
+    _check_output_quota(len(content.encode(encoding)), max_bytes)
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_name(f".{target.name}.{uuid.uuid4().hex}.partial")
     try:
@@ -178,9 +189,10 @@ def atomic_write_text(path: PathLike, content: str, encoding: str = "utf-8") -> 
     return target
 
 
-def atomic_write_bytes(path: PathLike, data: bytes) -> Path:
+def atomic_write_bytes(path: PathLike, data: bytes, *, max_bytes: int | None = 100 * 1024 * 1024) -> Path:
     """Атомарно записать байты (см. ``atomic_write_text``)."""
     target = Path(path)
+    _check_output_quota(len(data), max_bytes)
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_name(f".{target.name}.{uuid.uuid4().hex}.partial")
     try:
@@ -191,11 +203,12 @@ def atomic_write_bytes(path: PathLike, data: bytes) -> Path:
     return target
 
 
-def atomic_copy(src: PathLike, dst: PathLike) -> Path:
+def atomic_copy(src: PathLike, dst: PathLike, *, max_bytes: int | None = 100 * 1024 * 1024) -> Path:
     """Атомарно скопировать файл: во временный файл в каталоге назначения, затем ``os.replace``."""
     import shutil
 
     target = Path(dst)
+    _check_output_quota(Path(src).stat().st_size, max_bytes)
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_name(f".{target.name}.{uuid.uuid4().hex}.partial")
     try:
@@ -203,6 +216,42 @@ def atomic_copy(src: PathLike, dst: PathLike) -> Path:
         os.replace(partial, target)
     finally:
         partial.unlink(missing_ok=True)
+    return target
+
+
+def atomic_replace_directory(src: PathLike, dst: PathLike) -> Path:
+    """Replace a generated directory with rollback if the final rename fails.
+
+    ``src`` and ``dst`` must share a parent filesystem so directory renames are
+    atomic. Existing output is retained as a short-lived sibling backup.
+    """
+    import shutil
+
+    source = Path(src).resolve()
+    target = Path(dst).resolve()
+    if not source.is_dir():
+        raise ValueError("source directory does not exist")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if source.parent.anchor != target.parent.anchor:
+        raise ValueError("source and target directories must be on the same filesystem")
+    backup = target.with_name(f".{target.name}.{uuid.uuid4().hex}.backup")
+    moved_existing = False
+    committed = False
+    try:
+        if target.exists():
+            if not target.is_dir():
+                raise ValueError("target exists and is not a directory")
+            os.replace(target, backup)
+            moved_existing = True
+        os.replace(source, target)
+        committed = True
+    except Exception:
+        if moved_existing and backup.exists() and not target.exists():
+            os.replace(backup, target)
+        raise
+    finally:
+        if committed and backup.exists():
+            shutil.rmtree(backup)
     return target
 
 
@@ -217,6 +266,7 @@ def validate_pdf(file_path: PathLike) -> bool:
     """Можно ли открыть файл как PDF (через pypdf)."""
     try:
         import pypdf
+
         with open(file_path, "rb") as f:
             reader = pypdf.PdfReader(f)
             _ = len(reader.pages)
@@ -258,11 +308,16 @@ def list_files(
 
 
 def create_zip_archive(files: list[Path], output_path: Path) -> Path:
-    """Упаковать список файлов в zip."""
-    with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for file in files:
-            zf.write(file, file.name)
-    return output_path
+    """Упаковать список файлов в zip с квотой и атомарной фиксацией."""
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
+    with ArtifactWorkspace(prefix="textalchemy_zip_") as workspace:
+        staged = workspace.artifact_path("archive.zip")
+        with zipfile.ZipFile(staged, "w", zipfile.ZIP_DEFLATED) as zf:
+            for file in files:
+                zf.write(file, file.name)
+        workspace.validate_artifact(staged)
+        return atomic_copy(staged, output_path)
 
 
 __all__ = [
@@ -280,6 +335,7 @@ __all__ = [
     "atomic_write_text",
     "atomic_write_bytes",
     "atomic_copy",
+    "atomic_replace_directory",
     "progress_bar",
     "validate_pdf",
     "get_file_info",

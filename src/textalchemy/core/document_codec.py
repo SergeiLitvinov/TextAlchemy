@@ -98,9 +98,10 @@ def document_from_json(value: str | bytes) -> DocumentModel:
 
 
 def save_document(document: DocumentModel, path: str | Path, *, indent: int | None = 2) -> Path:
+    from textalchemy.core.io import atomic_write_text
+
     output = Path(path)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(document_to_json(document, indent=indent), encoding="utf-8")
+    atomic_write_text(output, document_to_json(document, indent=indent), encoding="utf-8")
     return output
 
 
@@ -253,10 +254,7 @@ def _migrate_legacy_package_resources(document: DocumentModel) -> None:
                 related = document.resources[related_resource_id]
                 if related.data is None:
                     continue
-                target = str(
-                    related.properties.get("partname")
-                    or f"/word/media/{related.filename or related_resource_id}"
-                )
+                target = str(related.properties.get("partname") or f"/word/media/{related.filename or related_resource_id}")
                 graph.add_part(PackagePart(target, related.media_type, related.data))
                 migrated.add(str(related_resource_id))
             else:

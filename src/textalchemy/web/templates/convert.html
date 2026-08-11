@@ -442,7 +442,7 @@
         try {
             const data = await api('/api/convert/jobs/' + jobId);
             renderBatchProgress(data.tasks);
-            const running = data.tasks.some((task) => task.status === 'running');
+            const running = data.tasks.some((task) => task.status === 'queued' || task.status === 'running');
             if (running) {
                 $('batchProgressState').textContent = 'Конвертируем…';
                 setTimeout(() => pollJob(jobId), 900);
@@ -457,6 +457,7 @@
 
     function renderBatchProgress(tasks) {
         const stateLabels = {
+            queued: 'В очереди…',
             running: 'Конвертация…',
             done: 'Готово',
             error: 'Ошибка',
@@ -708,7 +709,7 @@
             const details = document.createElement('details');
             details.className = 'job-entry';
             details.dataset.job = job.job_id;
-            if (job.counts.running) details.open = true;
+            if (job.counts.queued || job.counts.running) details.open = true;
 
             const summary = document.createElement('summary');
             const title = document.createElement('span');
@@ -717,7 +718,7 @@
             const badge = document.createElement('span');
             badge.className = 'job-state';
             const total = Object.values(job.counts).reduce((a, b) => a + b, 0);
-            if (job.counts.running) {
+            if (job.counts.queued || job.counts.running) {
                 badge.className += ' running';
                 badge.textContent = 'Конвертация…';
             } else if (job.counts.error) {
@@ -749,6 +750,7 @@
 
     function renderJobDetail(job) {
         const stateLabels = {
+            queued: 'В очереди…',
             running: 'Конвертация…',
             done: 'Готово',
             error: 'Ошибка',

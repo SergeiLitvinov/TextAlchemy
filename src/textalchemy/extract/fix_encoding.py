@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from textalchemy.core.exceptions import ExtractError
+from textalchemy.core.io import atomic_write_text
 
 REPLACEMENTS: dict[str, str] = {
     "\u2014": "-",
@@ -40,9 +41,7 @@ def fix_encoding(file_path: str | Path, output_path: str | Path | None = None) -
             text = text.replace(old, new)
 
     if output_path:
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(text, encoding="utf-8")
+        atomic_write_text(output_path, text, encoding="utf-8")
 
     summary = f"Replaced {replaced} characters"
     if issues:

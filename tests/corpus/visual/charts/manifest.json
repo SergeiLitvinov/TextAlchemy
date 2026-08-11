@@ -115,28 +115,28 @@
       "file": "bar-3d.png",
       "width": 794,
       "height": 1123,
-      "sha256": "ffcd263bd0eb29e3cffa6ccaedc7f74cadf91a82ebce8e9690fb62ba2f5a0d11"
+      "sha256": "18566dc364cd5e4e316ef54f3f5b8ed4d3c7d348305e2b0f5cd2d9bb02a83ba0"
     },
     {
       "name": "bar-3d-stacked",
       "file": "bar-3d-stacked.png",
       "width": 794,
       "height": 1123,
-      "sha256": "d117785ae03968be5465d6fe45e6e3ce249d81b229dfcaaa5489ff62ae16fa54"
+      "sha256": "5ddd1f431e18a79fd8f763f5f0be523669b49349e7ad5b5c4e0f1c89d4bf02e1"
     },
     {
       "name": "pie-3d",
       "file": "pie-3d.png",
       "width": 794,
       "height": 1123,
-      "sha256": "c1468e1e38a5e02735cb8ff8643cd3d7d2761c7c6bddf73942b1b861f48db853"
+      "sha256": "e00ffcbadcc7e6089924033ede44b474155bcc4d1b61f358c8f24a2eeed1411a"
     },
     {
       "name": "doughnut-3d",
       "file": "doughnut-3d.png",
       "width": 794,
       "height": 1123,
-      "sha256": "bb6eee383a0f5438fc7794d06f173e816a16e09bbc3441cb4d0398d08310ab82"
+      "sha256": "3eff8fb25992afe87e4b355a9e027ec847c88c0414adb7a172e8a21ca58dd8e4"
     }
   ]
 }

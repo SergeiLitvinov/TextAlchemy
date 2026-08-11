@@ -394,11 +394,17 @@ class OcrEngine:
                     img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
 
                     if save_images:
+                        import io
+
+                        from textalchemy.core.io import atomic_write_bytes
+
                         save_path = Path.cwd() / f"page_{page_num + 1}.png"
+                        buffer = io.BytesIO()
+                        img.save(buffer, format="PNG")
+                        atomic_write_bytes(save_path, buffer.getvalue())
                     else:
                         save_path = ws.artifact_path(f"page_{page_num}.png")
-                    img.save(save_path)
-                    if not save_images:
+                        img.save(save_path)
                         ws.validate_artifact(save_path)
                     result = self.recognize(save_path, handwriting=handwriting)
 

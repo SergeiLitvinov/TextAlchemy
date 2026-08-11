@@ -161,10 +161,13 @@ def extract_emails_from_document(
 
 def emails_to_docx(emails: Sequence[str], source_name: str, output_path: str | Path) -> Path:
     """Сохранение списка email в Word документ."""
+    import io
+
     from docx import Document as DocxDocument
 
+    from textalchemy.core.io import atomic_write_bytes
+
     out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
 
     doc = DocxDocument()
     doc.add_heading(f"Email из файла: {Path(source_name).name}", 0)
@@ -178,18 +181,21 @@ def emails_to_docx(emails: Sequence[str], source_name: str, output_path: str | P
         for email in sorted(emails):
             doc.add_paragraph(email)
 
-    doc.save(str(out))
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    atomic_write_bytes(out, buffer.getvalue())
     logger.info("DOCX saved: %s", out)
     return out
 
 
 def emails_to_text(emails: Sequence[str], source_name: str, output_path: str | Path) -> Path:
     """Сохранение списка email в текстовый файл (по одному email на строку)."""
+    from textalchemy.core.io import atomic_write_text
+
     out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
 
     content = "\n".join(sorted(emails)) if emails else "Email адреса не найдены."
-    out.write_text(content, encoding="utf-8")
+    atomic_write_text(out, content, encoding="utf-8")
     logger.info("TXT saved: %s", out)
     return out
 
@@ -198,8 +204,9 @@ def save_debug_text(
     full_text: str, pdf_name: str, total_pages: int, text_pages: int, ocr_pages: int, output_path: str | Path
 ) -> Path:
     """Сохранение отладочного файла с распознанным текстом."""
+    from textalchemy.core.io import atomic_write_text
+
     out = Path(output_path)
-    out.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [
         "=== РАСПОЗНАННЫЙ ТЕКСТ ===",
@@ -210,7 +217,7 @@ def save_debug_text(
         "=" * 50 + "\n",
         full_text,
     ]
-    out.write_text("\n".join(lines), encoding="utf-8")
+    atomic_write_text(out, "\n".join(lines), encoding="utf-8")
     logger.info("Debug text saved: %s", out)
     return out
 

@@ -1,4 +1,5 @@
 """API матчинга, превью переименования, статистики и конфигурации."""
+
 from __future__ import annotations
 
 import json
@@ -46,16 +47,20 @@ async def api_run_matching(
         entry = {"file": m.document.path.name}
         if m.matched and m.item is not None:
             new_name = name_from_match(match=m, ext=m.document.path.suffix.lower()) or m.document.path.name
-            results["matched"].append({
-                "original": m.document.path.name,
-                "new": new_name,
-                "score": round(m.score, 2) if m.score else 0,
-            })
+            results["matched"].append(
+                {
+                    "original": m.document.path.name,
+                    "new": new_name,
+                    "score": round(m.score, 2) if m.score else 0,
+                }
+            )
         else:
             results["unmatched"].append(entry)
 
     _ensure_data()
-    _matching_path().write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
+    from textalchemy.core.io import atomic_write_text
+
+    atomic_write_text(_matching_path(), json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
 
     cfg = _load_config()
     cfg["source_dir"] = source_dir
@@ -99,19 +104,23 @@ async def api_preview_rename(
     for m in matches:
         if m.matched and m.item is not None:
             new_name = name_from_match(match=m, ext=m.document.path.suffix.lower()) or m.document.path.name
-            preview.append({
-                "original": m.document.path.name,
-                "new": new_name,
-                "match": True,
-                "score": round(m.score, 2) if m.score else 0,
-            })
+            preview.append(
+                {
+                    "original": m.document.path.name,
+                    "new": new_name,
+                    "match": True,
+                    "score": round(m.score, 2) if m.score else 0,
+                }
+            )
         else:
-            preview.append({
-                "original": m.document.path.name,
-                "new": m.document.path.name,
-                "match": False,
-                "score": 0,
-            })
+            preview.append(
+                {
+                    "original": m.document.path.name,
+                    "new": m.document.path.name,
+                    "match": False,
+                    "score": 0,
+                }
+            )
 
     return {"preview": preview, "total": len(preview), "matched": sum(1 for p in preview if p["match"])}
 

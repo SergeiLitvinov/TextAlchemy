@@ -337,6 +337,7 @@ input[type="file"] { max-width: 100%; }
 
 .batch-progress-item small { color: var(--text-muted); flex: 1 0 100%; margin-top: 0.15rem; }
 
+.batch-progress-item.queued,
 .batch-progress-item.running { border-left-color: var(--primary); }
 .batch-progress-item.done { border-left-color: #16a34a; }
 .batch-progress-item.error { border-left-color: #dc2626; }
@@ -352,6 +353,7 @@ input[type="file"] { max-width: 100%; }
     background: var(--border);
 }
 
+.job-state.queued,
 .job-state.running { color: #1e40af; background: #dbeafe; }
 .job-state.done { color: #166534; background: #dcfce7; }
 .job-state.error { color: #991b1b; background: #fee2e2; }

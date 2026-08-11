@@ -1,4 +1,5 @@
 """Тесты core.io — единый набор утилит (заменил дубли в core/file_utils и organize/utils)."""
+
 from __future__ import annotations
 
 import os
@@ -6,9 +7,11 @@ import zipfile
 
 import pytest
 
+from textalchemy.core.artifacts import ArtifactLimitError
 from textalchemy.core.io import (
     ArchiveSafetyError,
     atomic_copy,
+    atomic_replace_directory,
     atomic_write_bytes,
     atomic_write_text,
     check_archive_safety,
@@ -298,6 +301,12 @@ class TestAtomicWrites:
         atomic_write_bytes(target, b"\x00\x01\x02")
         assert target.read_bytes() == b"\x00\x01\x02"
 
+    def test_atomic_outputs_enforce_common_quota(self, tmp_path):
+        target = tmp_path / "too-large.bin"
+        with pytest.raises(ArtifactLimitError):
+            atomic_write_bytes(target, b"123", max_bytes=2)
+        assert not target.exists()
+
     def test_atomic_write_overwrites_existing(self, tmp_path):
         target = tmp_path / "out.txt"
         target.write_text("old", encoding="utf-8")
@@ -313,12 +322,28 @@ class TestAtomicWrites:
         leftovers = [p for p in (tmp_path / "sub").iterdir() if ".partial" in p.name]
         assert leftovers == []
 
+    def test_atomic_replace_directory_replaces_existing_tree(self, tmp_path):
+        source = tmp_path / "staged"
+        source.mkdir()
+        (source / "new.txt").write_text("new", encoding="utf-8")
+        target = tmp_path / "output"
+        target.mkdir()
+        (target / "old.txt").write_text("old", encoding="utf-8")
+
+        atomic_replace_directory(source, target)
+
+        assert not source.exists()
+        assert (target / "new.txt").read_text(encoding="utf-8") == "new"
+        assert not (target / "old.txt").exists()
+        assert not list(tmp_path.glob(".*.backup"))
+
 
 class TestLegacyImports:
     """Старые имена функций продолжают работать через re-export."""
 
     def test_core_file_utils(self):
         from textalchemy.core import file_utils
+
         # Функции — это те же объекты, что и в core.io
         assert file_utils.sanitize_filename is sanitize_filename
         assert file_utils.ensure_dir is ensure_dir
@@ -327,10 +352,12 @@ class TestLegacyImports:
         assert file_utils.find_duplicates is find_duplicates_by_paths
         # compute_file_hash — обёртка из core.hashing
         from textalchemy.core.hashing import compute_file_hash
+
         assert file_utils.compute_file_hash is compute_file_hash
 
     def test_organize_utils(self):
         from textalchemy.organize import utils
+
         assert utils.calculate_file_hash is compute_hash
         assert utils.sanitize_path is sanitize_path
         assert utils.ensure_folder is ensure_folder
@@ -340,4 +367,3 @@ class TestLegacyImports:
         assert utils.list_files is list_files
         assert utils.progress_bar is progress_bar
         assert utils.validate_pdf is validate_pdf
-

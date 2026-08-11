@@ -5,9 +5,13 @@
 размеру шрифта и жирности, чтобы последующие этапы (DOCX→LaTeX,
 библиография) видели реальную структуру.
 """
+
 from __future__ import annotations
 
+import io
 from pathlib import Path
+
+from textalchemy.core.io import atomic_write_bytes
 
 
 def _font_size(run) -> float | None:
@@ -42,6 +46,7 @@ def apply_heading_styles(path: str | Path) -> None:
     paras = [p for p in doc.paragraphs]
 
     sizes: list[float] = []
+    changed = False
     for p in paras:
         sz = _paragraph_size(p)
         if sz is not None:
@@ -80,11 +85,15 @@ def apply_heading_styles(path: str | Path) -> None:
             level = 3
         try:
             p.style = f"Heading {level}"
+            changed = True
         except Exception:  # noqa: BLE001
             # Стиль может отсутствовать в шаблоне — игнорируем.
             pass
 
-    doc.save(str(path))
+    if changed:
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        atomic_write_bytes(path, buffer.getvalue())
 
 
 def ensure_min_font(path: str | Path, min_pt: float = 8.0) -> None:
@@ -103,4 +112,6 @@ def ensure_min_font(path: str | Path, min_pt: float = 8.0) -> None:
                 except Exception:  # noqa: BLE001
                     pass
     if changed:
-        doc.save(str(path))
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        atomic_write_bytes(path, buffer.getvalue())

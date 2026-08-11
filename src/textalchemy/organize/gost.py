@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from textalchemy.organize.bibliography import BibItem, BibliographyParser
 
 
@@ -118,9 +116,11 @@ class GostFormatter:
         return " ".join(parts)
 
     def format_bibliography(self, items: list[BibItem]) -> str:
-        return "\n".join(f"{i+1}. {self.format_item(item)}" for i, item in enumerate(items))
+        return "\n".join(f"{i + 1}. {self.format_item(item)}" for i, item in enumerate(items))
 
     def convert_file(self, input_path: str, output_path: str) -> None:
+        from textalchemy.core.io import atomic_write_text
+
         items = BibliographyParser.parse_file(input_path)
         result = self.format_bibliography(items)
-        Path(output_path).write_text(result, encoding="utf-8")
+        atomic_write_text(output_path, result, encoding="utf-8")

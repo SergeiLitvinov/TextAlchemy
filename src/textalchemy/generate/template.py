@@ -56,11 +56,13 @@ class TemplateEngine:
         templates: List[DocumentTemplate] = []
         for f in sorted(self.templates_dir.iterdir()):
             if f.suffix.lower() in (".docx", ".doc", ".dotx"):
-                templates.append(DocumentTemplate(
-                    name=f.stem,
-                    description=f"Template: {f.name}",
-                    template_type=f.suffix[1:],
-                ))
+                templates.append(
+                    DocumentTemplate(
+                        name=f.stem,
+                        description=f"Template: {f.name}",
+                        template_type=f.suffix[1:],
+                    )
+                )
         return templates
 
     def resolve_template(self, template_name: str) -> Path:
@@ -94,7 +96,12 @@ class TemplateEngine:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
+            import io
+
             from docx import Document
+
+            from textalchemy.core.io import atomic_write_bytes
+
             check_archive_safety(template_path)
             doc = Document(str(template_path))
             params = params or {}
@@ -114,7 +121,9 @@ class TemplateEngine:
                         for para in cell.paragraphs:
                             _replace_in_paragraph(para, items)
 
-            doc.save(str(output_path))
+            buffer = io.BytesIO()
+            doc.save(buffer)
+            atomic_write_bytes(output_path, buffer.getvalue())
         except Exception as e:
             raise GenerateError(f"Failed to generate document: {e}") from e
 
