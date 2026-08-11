@@ -109,6 +109,34 @@
       "width": 794,
       "height": 1123,
       "sha256": "450b9c5220cbdba22f2fba8faeea936cb9eaca841e9e8c041ba99dc983f7a166"
+    },
+    {
+      "name": "bar-3d",
+      "file": "bar-3d.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "ffcd263bd0eb29e3cffa6ccaedc7f74cadf91a82ebce8e9690fb62ba2f5a0d11"
+    },
+    {
+      "name": "bar-3d-stacked",
+      "file": "bar-3d-stacked.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "d117785ae03968be5465d6fe45e6e3ce249d81b229dfcaaa5489ff62ae16fa54"
+    },
+    {
+      "name": "pie-3d",
+      "file": "pie-3d.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "c1468e1e38a5e02735cb8ff8643cd3d7d2761c7c6bddf73942b1b861f48db853"
+    },
+    {
+      "name": "doughnut-3d",
+      "file": "doughnut-3d.png",
+      "width": 794,
+      "height": 1123,
+      "sha256": "bb6eee383a0f5438fc7794d06f173e816a16e09bbc3441cb4d0398d08310ab82"
     }
   ]
 }

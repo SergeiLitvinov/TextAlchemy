@@ -31,12 +31,21 @@ def _isolate_task_store(monkeypatch, tmp_path_factory):
     from textalchemy.web.routes import convert as convert_route
 
     monkeypatch.setattr(convert_route, "tasks_store", store)
+    yield
+    _wait_for_convert_tasks()
 
 
 def _client_task_store():
     from textalchemy.web.routes import convert as convert_route
 
     return convert_route.tasks_store
+
+
+def _wait_for_convert_tasks(timeout=15.0):
+    """Дождаться завершения фоновых задач очереди (воркер вне event loop)."""
+    from textalchemy.web.queue import task_queue
+
+    assert task_queue.wait_idle(timeout=timeout), "background convert tasks did not finish in time"
 
 
 def test_web_version_uses_package_metadata():
@@ -583,6 +592,7 @@ def test_api_convert_returns_report_and_separate_artifact(monkeypatch):
     )
     assert started.status_code == 200
     endpoints = started.json()
+    _wait_for_convert_tasks()
 
     status = client.get(endpoints["status"])
     assert status.status_code == 200
@@ -642,6 +652,7 @@ def test_api_convert_compares_source_and_result_structure(monkeypatch):
     )
 
     assert response.status_code == 200, response.text
+    _wait_for_convert_tasks()
     status = client.get(response.json()["status"]).json()
     assert status["source_inspection"]["source_path"] == "source.docx"
     assert status["target_inspection"]["source_path"] == "source.pdf"
@@ -695,6 +706,7 @@ def test_api_convert_sanitizes_uploaded_path(monkeypatch, tmp_path):
     )
 
     assert response.status_code == 200
+    _wait_for_convert_tasks()
     assert captured["source"].name == "article.pdf"
     assert list(tmp_path.iterdir()) == []
 
@@ -711,6 +723,7 @@ def test_api_convert_legacy_format_remains_supported(monkeypatch):
         data={"fmt": "pdf"},
     )
     assert response.status_code == 200
+    _wait_for_convert_tasks()
     assert client.get(response.json()["status"]).json()["status"] == "done"
 
 
@@ -726,6 +739,7 @@ def test_api_convert_serves_single_file_html(monkeypatch):
         data={"source_format": "docx", "target_format": "html", "mode": "balanced"},
     )
     endpoints = response.json()
+    _wait_for_convert_tasks()
     result = client.get(endpoints["result"])
     assert result.status_code == 200
     assert result.headers["content-type"].startswith("text/html")
@@ -758,6 +772,7 @@ def test_api_convert_single_preserves_source_for_preview(monkeypatch):
         data={"source_format": "pdf", "target_format": "docx"},
     )
     assert response.status_code == 200
+    _wait_for_convert_tasks()
     assert convert_route.tasks_store.source_path(response.json()["task_id"]) is not None
 
 
@@ -854,6 +869,7 @@ def test_api_convert_batch_runs_each_file_and_cleans(monkeypatch, tmp_path):
     assert len(body["tasks"]) == 2
     assert {task["name"] for task in body["tasks"]} == {"a.pdf", "b.pdf"}
     assert {task["source_format"] for task in body["tasks"]} == {"pdf"}
+    _wait_for_convert_tasks()
 
     job = client.get(f"/api/convert/jobs/{body['job_id']}").json()
     assert [task["status"] for task in job["tasks"]] == ["done", "done"]
@@ -935,6 +951,7 @@ def test_api_convert_jobs_lists_history(monkeypatch):
 
     monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
     created = client.post("/api/convert/batch", files=_batch_files()).json()
+    _wait_for_convert_tasks()
 
     history = client.get("/api/convert/jobs").json()
     assert history["jobs"]
@@ -957,6 +974,7 @@ def test_api_convert_job_delete_removes_tasks(monkeypatch):
 
     monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
     created = client.post("/api/convert/batch", files=_batch_files()).json()
+    _wait_for_convert_tasks()
 
     response = client.delete(f"/api/convert/jobs/{created['job_id']}")
     assert response.status_code == 200
@@ -975,15 +993,41 @@ def test_api_convert_job_rerun_uses_stored_sources(monkeypatch):
 
     monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
     created = client.post("/api/convert/batch", files=_batch_files()).json()
+    _wait_for_convert_tasks()
     assert len(calls) == 2
 
     rerun = client.post(f"/api/convert/jobs/{created['job_id']}/rerun")
     assert rerun.status_code == 200
     assert len(rerun.json()["launched"]) == 2
+    _wait_for_convert_tasks()
     assert len(calls) == 4
 
     job = client.get(f"/api/convert/jobs/{created['job_id']}").json()
     assert [task["status"] for task in job["tasks"]] == ["done", "done"]
+
+
+def test_api_convert_jobs_report_interrupted_tasks(monkeypatch):
+    def fake_execute(_executor, request):
+        request.output_path.write_bytes(b"converted")
+        return ConversionReport(request.output_path)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
+    created = client.post("/api/convert/batch", files=_batch_files()).json()
+    _wait_for_convert_tasks()
+
+    store = _client_task_store()
+    for task in created["tasks"]:
+        task_id = task["task_id"]
+        meta = store.get(task_id)
+        store.set(task_id, {**meta, "status": "interrupted", "error": "Задача прервана перезапуском сервера"})
+
+    job = client.get(f"/api/convert/jobs/{created['job_id']}").json()
+    assert [entry["status"] for entry in job["tasks"]] == ["interrupted", "interrupted"]
+    assert all("прервана" in entry["error"] for entry in job["tasks"])
+
+    history = client.get("/api/convert/jobs").json()
+    latest = history["jobs"][0]
+    assert latest["counts"]["interrupted"] == 2
 
 
 # ── Import ─────────────────────────────────────────

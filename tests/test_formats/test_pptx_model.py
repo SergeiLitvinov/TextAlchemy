@@ -435,6 +435,92 @@ class TestReadPptxModel:
         assert data["chart_3d"] is True
         assert data["series"][0]["chart_type"] == "barChart"
 
+    def test_read_chart_3d_view_ser_axis_wall_floor(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f'<c:bar3DChart><c:barDir val="col"/><c:grouping val="clustered"/>'
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt></c:strCache></c:strRef></c:cat>"
+            f"<c:val><c:numRef><c:numCache><c:pt><c:v>10</c:v></c:pt></c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f'<c:axId val="1"/><c:axId val="2"/><c:axId val="3"/>'
+            f"</c:bar3DChart>"
+            f'<c:catAx><c:axId val="1"/><c:delete val="0"/><c:axPos val="b"/></c:catAx>'
+            f'<c:serAx><c:axId val="2"/><c:delete val="0"/><c:axPos val="b"/></c:serAx>'
+            f'<c:valAx><c:axId val="3"/><c:delete val="0"/><c:axPos val="l"/></c:valAx>'
+            f"</c:plotArea>"
+            f'<c:view3D><c:rotX val="15"/><c:rotY val="20"/><c:rAngAx val="1"/>'
+            f'<c:perspective val="30"/><c:depthPercent val="130"/></c:view3D>'
+            f'<c:sideWall><c:thickness val="5"/><c:spPr><a:solidFill>'
+            f'<a:srgbClr val="C9C9C9"/></a:solidFill></c:spPr></c:sideWall>'
+            f'<c:backWall><c:thickness val="3"/></c:backWall>'
+            f'<c:floor><c:thickness val="5"/></c:floor>'
+            f"</c:chart>"
+            f"</c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        assert data["chart_3d"] is True
+        assert data["chart_3d_type"] == "bar3DChart"
+        assert data["view3d"] == {
+            "rot_x": 15.0,
+            "rot_y": 20.0,
+            "right_angle_axes": True,
+            "perspective": 30.0,
+            "depth_percent": 130.0,
+        }
+        assert data["side_wall"]["thickness"] == 5.0
+        assert data["side_wall"]["fill"] == "#C9C9C9"
+        assert data["back_wall"]["thickness"] == 3.0
+        assert data["floor"]["thickness"] == 5.0
+        assert "series" in data["axes"]
+        assert data["axes"]["series"]["ax_id"] == "2"
+
+    def test_read_chart_3d_line_and_cone_types(self, monkeypatch):
+        chart_xml = (
+            f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            f"<c:chart><c:plotArea>"
+            f'<c:line3DChart><c:grouping val="standard"/>'
+            f"<c:ser><c:tx><c:strRef><c:strCache><c:pt><c:v>S</c:v></c:pt></c:strCache></c:strRef></c:tx>"
+            f"<c:cat><c:strRef><c:strCache><c:pt><c:v>A</c:v></c:pt></c:strCache></c:strRef></c:cat>"
+            f"<c:val><c:numRef><c:numCache><c:pt><c:v>10</c:v></c:pt></c:numCache></c:numRef></c:val>"
+            f"</c:ser>"
+            f"</c:line3DChart>"
+            f"</c:plotArea></c:chart></c:chartSpace>"
+        )
+
+        class FakePart:
+            blob = chart_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: FakePart())
+        monkeypatch.setattr(pptx_mod, "_load_theme_colors", lambda _slide: dict(pptx_mod._THEME_COLORS))
+
+        data = pptx_mod._read_chart_data(object(), "rId1")
+        assert data["chart_type"] == "lineChart"
+        assert data["chart_3d"] is True
+        assert data["chart_3d_type"] == "line3DChart"
+
+        cone_xml = chart_xml.replace(
+            '<c:line3DChart><c:grouping val="standard"/>',
+            '<c:bar3DChart><c:barDir val="col"/><c:grouping val="standard"/><c:shape val="cylinder"/>',
+        ).replace("</c:line3DChart>", "</c:bar3DChart>")
+
+        class ConePart:
+            blob = cone_xml.encode()
+
+        monkeypatch.setattr(pptx_mod, "_related_part", lambda _slide, _rid: ConePart())
+        cone = pptx_mod._read_chart_data(object(), "rId1")
+        assert cone["chart_type"] == "barChart"
+        assert cone["chart_3d"] is True
+        assert cone["chart_3d_shape"] == "cylinder"
+
     def test_read_chart_combo_marks_series_by_chart_node(self, monkeypatch):
         chart_xml = (
             f'<c:chartSpace xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'

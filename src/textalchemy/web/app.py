@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 import platformdirs
 from fastapi import FastAPI
@@ -19,10 +20,21 @@ from jinja2 import Environment, FileSystemLoader
 from textalchemy import __version__
 from textalchemy.core.database import Database
 from textalchemy.organize.bibliography import BibItem
+from textalchemy.web.queue import recover_interrupted_tasks, task_queue
 from textalchemy.web.tasks import TaskStore
 
 _VERSION = __version__
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
+    del application
+    recovered = recover_interrupted_tasks(tasks_store)
+    if recovered:
+        logger.warning("Помечено %d задач, прерванных предыдущим запуском", recovered)
+    yield
+
 
 app = FastAPI(
     title="TextAlchemy",
@@ -33,6 +45,7 @@ app = FastAPI(
     version=_VERSION,
     docs_url="/api/docs",
     redoc_url="/api/redoc",
+    lifespan=_lifespan,
 )
 
 templates_dir = Path(__file__).parent / "templates"
@@ -165,5 +178,5 @@ __all__ = [
     "_VERSION", "_bibitem_to_dict", "_dict_to_bibitem",
     "_ensure_data", "_migrate_json_to_db", "_load_bib", "_save_bib",
     "_bib_path", "_matching_path", "_config_path", "_default_config",
-    "_load_config", "_save_config", "tasks_store", "_register_task", "_prune_tasks",
+    "_load_config", "_save_config", "tasks_store", "task_queue", "_register_task", "_prune_tasks",
 ]

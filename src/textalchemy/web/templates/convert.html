@@ -424,6 +424,10 @@
                 setLoading($('convertBtn'), false);
                 setStatus(`Не удалось конвертировать: ${data.error}`, 'error');
                 if (data.report) renderReport(data, true);
+            } else if (data.status === 'interrupted') {
+                setProgress(false, 0, '');
+                setLoading($('convertBtn'), false);
+                setStatus(data.error || 'Задача прервана перезапуском сервера', 'error');
             } else {
                 setProgress(true, 70, 'Конвертация и проверка результата…');
                 setTimeout(() => pollTask(url), 900);
@@ -456,6 +460,7 @@
             running: 'Конвертация…',
             done: 'Готово',
             error: 'Ошибка',
+            interrupted: 'Прервана',
             expired: 'Истёк срок',
         };
         $('batchProgressList').innerHTML = tasks.map((task) => {
@@ -466,7 +471,8 @@
             const preview = task.status === 'done'
                 ? `<button type="button" class="btn-link" data-preview-task="${esc(task.task_id)}">Просмотр</button>`
                 : '';
-            const error = task.status === 'error' && task.error ? `<small>${esc(task.error)}</small>` : '';
+            const error = (task.status === 'error' || task.status === 'interrupted') && task.error
+                ? `<small>${esc(task.error)}</small>` : '';
             return `<li class="batch-progress-item ${esc(task.status)}"><span class="file-name">${esc(task.name)}</span>` +
                 `<span class="job-state ${esc(task.status)}">${esc(label)}</span>${download}${preview}${error}</li>`;
         }).join('');
@@ -717,6 +723,9 @@
             } else if (job.counts.error) {
                 badge.className += ' error';
                 badge.textContent = `${job.counts.error} ошибок`;
+            } else if (job.counts.interrupted) {
+                badge.className += ' error';
+                badge.textContent = `${job.counts.interrupted} прервано`;
             } else {
                 badge.className += ' done';
                 badge.textContent = `${job.counts.done}/${total} готово`;
@@ -743,6 +752,7 @@
             running: 'Конвертация…',
             done: 'Готово',
             error: 'Ошибка',
+            interrupted: 'Прервана',
             expired: 'Истёк срок',
         };
         const rows = job.tasks.map((task) => {
@@ -750,7 +760,8 @@
             const download = task.status === 'done' && task.result_url
                 ? `<button type="button" class="btn-link" data-download-url="${esc(task.result_url)}" data-filename="${esc(task.filename || task.name)}">Скачать</button>`
                 : '';
-            const error = task.status === 'error' && task.error ? `<small>${esc(task.error)}</small>` : '';
+            const error = (task.status === 'error' || task.status === 'interrupted') && task.error
+                ? `<small>${esc(task.error)}</small>` : '';
             const preview = task.status === 'done'
                 ? `<button type="button" class="btn-link" data-preview-task="${esc(task.task_id)}">Просмотр</button>`
                 : '';

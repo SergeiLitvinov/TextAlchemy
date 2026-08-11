@@ -18,7 +18,15 @@ class Pdf2DocxConverter(BaseConverter):
         input_path, output_path = prepared
         try:
             import pdf2docx
-            pdf2docx.parse(str(input_path), str(output_path), multi_processing=True)
+
+            from textalchemy.core.artifacts import ArtifactWorkspace
+            from textalchemy.core.io import atomic_copy
+
+            with ArtifactWorkspace(prefix="textalchemy_pdf2docx_") as workspace:
+                staged = workspace.artifact_path("output.docx")
+                pdf2docx.parse(str(input_path), str(staged), multi_processing=True)
+                workspace.validate_artifact(staged)
+                atomic_copy(staged, output_path)
         except Exception as e:
             return ConversionResult(input_path, output_path, False, str(e))
         return ConversionResult(input_path, output_path, output_path.exists())
@@ -46,67 +54,67 @@ class PyMuPdfConverter(BaseConverter):
         if prepared is None:
             return ConversionResult(Path(input_path), Path(output_path), False, "Input file not found")
         input_path, output_path = prepared
+        from textalchemy.core.artifacts import ArtifactWorkspace
+        from textalchemy.core.io import atomic_copy
+
         try:
             import fitz
             from docx import Document as DocxDocument
             from docx.shared import Inches, Pt
 
-            d = DocxDocument()
-            with fitz.open(str(input_path)) as doc:
-                for page_num in range(len(doc)):
-                    page = doc[page_num]
-                    text_dict = page.get_text("dict") or {}
-                    blocks = text_dict.get("blocks", []) if isinstance(text_dict, dict) else []
-                    # Собираем видимый текст; если нет ни одного символа — скан.
-                    has_text = False
-                    for b in blocks:
-                        if b.get("type") != 0:
-                            continue
-                        for line in b.get("lines", []):
-                            for span in line.get("spans", []):
-                                if (span.get("text") or "").strip():
-                                    has_text = True
-                                    break
-                            if has_text:
-                                break
+            with ArtifactWorkspace(prefix="textalchemy_pymupdf_") as workspace:
+                d = DocxDocument()
+                with fitz.open(str(input_path)) as doc:
+                    for page_num in range(len(doc)):
+                        page = doc[page_num]
+                        text_dict = page.get_text("dict") or {}
+                        blocks = text_dict.get("blocks", []) if isinstance(text_dict, dict) else []
+                        visible_text = "".join(
+                            span.get("text", "")
+                            for block in blocks
+                            if block.get("type") == 0
+                            for line in block.get("lines", [])
+                            for span in line.get("spans", [])
+                        )
+                        has_text = len(visible_text.strip()) >= self.text_threshold
                         if has_text:
-                            break
-                    if has_text:
-                        # Текстовая страница — текстом, с сохранением размера шрифта.
-                        for b in blocks:
-                            if b.get("type") != 0:
-                                continue
-                            for line in b.get("lines", []):
-                                spans = line.get("spans", [])
-                                line_text = "".join(s.get("text", "") for s in spans).strip()
-                                if not line_text:
+                            # Текстовая страница — текстом, с сохранением размера шрифта.
+                            for block in blocks:
+                                if block.get("type") != 0:
                                     continue
-                                para = d.add_paragraph()
-                                for s in spans:
-                                    run = para.add_run(s.get("text", ""))
-                                    size = s.get("size")
-                                    if size:
-                                        try:
-                                            run.font.size = Pt(float(size))
-                                        except Exception:  # noqa: BLE001
-                                            pass
-                    else:
-                        # Реально пустая страница (скан, формулы) — картинкой.
-                        pix = page.get_pixmap(dpi=self.render_dpi)
-                        img_path = output_path.parent / f".__pymupdf_page_{page_num}.png"
-                        pix.save(str(img_path))
-                        try:
+                                for line in block.get("lines", []):
+                                    spans = line.get("spans", [])
+                                    if not "".join(span.get("text", "") for span in spans).strip():
+                                        continue
+                                    paragraph = d.add_paragraph()
+                                    for span in spans:
+                                        run = paragraph.add_run(span.get("text", ""))
+                                        size = span.get("size")
+                                        if size:
+                                            try:
+                                                run.font.size = Pt(float(size))
+                                            except Exception:  # noqa: BLE001
+                                                pass
+                        else:
+                            # Реально пустая страница (скан, формулы) — картинкой.
+                            pix = page.get_pixmap(dpi=self.render_dpi)
+                            image_path = workspace.artifact_path(f"page_{page_num}.png")
+                            pix.save(str(image_path))
+                            workspace.validate_artifact(image_path)
                             width_in = 6.0
                             ratio = pix.height / max(pix.width, 1)
                             d.add_picture(
-                                str(img_path),
+                                str(image_path),
                                 width=Inches(width_in),
                                 height=Inches(width_in * ratio),
                             )
-                        finally:
-                            img_path.unlink(missing_ok=True)
-                    d.add_page_break()
-            d.save(str(output_path))
+                            image_path.unlink(missing_ok=True)
+                            workspace.validate_artifact(workspace.path)
+                        d.add_page_break()
+                staged = workspace.artifact_path("output.docx")
+                d.save(str(staged))
+                workspace.validate_artifact(staged)
+                atomic_copy(staged, output_path)
         except Exception as e:
             return ConversionResult(input_path, output_path, False, str(e))
         return ConversionResult(input_path, output_path, output_path.exists())

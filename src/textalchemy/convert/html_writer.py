@@ -432,6 +432,47 @@ def _pptx_affine(properties: Any) -> tuple[list[float], float, float] | None:
 _CHART_COLORS = ("#4472C4", "#ED7D31", "#A5A5A5", "#FFC000", "#5B9BD5", "#70AD47")
 
 
+def _shade_hex(color: str, factor: float) -> str:
+    """Осветлить (``factor > 0``) или затемнить (``factor < 0``) hex-цвет для 3D-граней."""
+    match = re.match(r"#([0-9a-fA-F]{6})", color)
+    if not match:
+        return color
+    value = int(match.group(1), 16)
+    red, green, blue = (value >> 16) & 0xFF, (value >> 8) & 0xFF, value & 0xFF
+    if factor >= 0:
+        red = int(red + (255 - red) * factor)
+        green = int(green + (255 - green) * factor)
+        blue = int(blue + (255 - blue) * factor)
+    else:
+        factor = -factor
+        red = int(red * (1 - factor))
+        green = int(green * (1 - factor))
+        blue = int(blue * (1 - factor))
+    return f"#{red:02X}{green:02X}{blue:02X}"
+
+
+def _chart_3d_depth(chart: dict[str, Any]) -> float:
+    """Глубина 3D-выдавливания в px по ``view3D/depthPercent`` (по умолчанию 150%)."""
+    if not chart.get("chart_3d"):
+        return 0.0
+    view = chart.get("view3d") or {}
+    depth_percent = float(view.get("depth_percent") or 150.0)
+    return max(3.0, min(18.0, 8.0 * depth_percent / 150.0))
+
+
+def _bar_3d_faces(x: float, y: float, width: float, height: float, color: str, depth: float) -> list[str]:
+    """Боковая и верхняя грани 3D-столбца как 2D-проекция (параллелограммы)."""
+    if depth <= 0 or height <= 1.0:
+        return []
+    return [
+        f'<path d="M {x + width:g} {y:g} L {x + width + depth:g} {y - depth:g} '
+        f'L {x + width + depth:g} {y - depth + height:g} L {x + width:g} {y + height:g} Z" '
+        f'fill="{_shade_hex(color, -0.35)}"/>',
+        f'<path d="M {x:g} {y:g} L {x + depth:g} {y - depth:g} L {x + width + depth:g} {y - depth:g} '
+        f'L {x + width:g} {y:g} Z" fill="{_shade_hex(color, 0.35)}"/>',
+    ]
+
+
 def _chart_svg(chart: dict[str, Any]) -> str | None:
     chart_type = chart.get("chart_type")
     categories = [str(value) for value in chart.get("categories") or []]
@@ -472,6 +513,7 @@ def _chart_svg(chart: dict[str, Any]) -> str | None:
         axis_style = _chart_axis_style(series, value_axis)
         axis_style["gap_width"] = chart.get("gap_width", 150.0)
         axis_style["overlap"] = chart.get("overlap", 0.0)
+        three_d = _chart_3d_depth(chart)
         if chart_type == "barChart" and grouping in {None, "clustered", "standard", "stacked", "percentStacked"}:
             horizontal = chart.get("bar_direction") == "bar"
             combo_kinds = _chart_combo_kinds(series)
@@ -485,9 +527,12 @@ def _chart_svg(chart: dict[str, Any]) -> str | None:
                     percent=grouping == "percentStacked",
                     axis_style=axis_style,
                     label_style=label_style,
+                    depth=three_d,
                 )
             else:
-                body = _bar_chart_svg(categories, series, horizontal=horizontal, axis_style=axis_style, label_style=label_style)
+                body = _bar_chart_svg(
+                    categories, series, horizontal=horizontal, axis_style=axis_style, label_style=label_style, depth=three_d
+                )
         elif chart_type == "lineChart" and grouping in {None, "standard"}:
             body = _line_chart_svg(categories, series, axis_style=axis_style, label_style=label_style)
         elif chart_type in {"pieChart", "doughnutChart"}:
@@ -497,6 +542,7 @@ def _chart_svg(chart: dict[str, Any]) -> str | None:
                 doughnut=chart_type == "doughnutChart",
                 show_legend=bool(chart.get("legend", True)),
                 label_style=label_style,
+                tilt=0.78 if three_d else 1.0,
             )
         else:
             body = None
@@ -630,6 +676,7 @@ def _bar_chart_svg(
     horizontal: bool,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
+    depth: float = 0.0,
 ) -> str:
     if horizontal:
         return _horizontal_bar_chart_svg(categories, series, axis_style=axis_style, label_style=label_style)
@@ -638,7 +685,15 @@ def _bar_chart_svg(
     parts = _chart_grid(left, top, width, height, minimum, maximum, axis_style)
     parts.extend(
         _bar_series_parts(
-            categories, series, left=left, top=top, width=width, height=height, axis_style=axis_style, label_style=label_style
+            categories,
+            series,
+            left=left,
+            top=top,
+            width=width,
+            height=height,
+            axis_style=axis_style,
+            label_style=label_style,
+            depth=depth,
         )
     )
     for category_index, category in enumerate(categories):
@@ -656,8 +711,9 @@ def _bar_series_parts(
     height: float,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
+    depth: float = 0.0,
 ) -> list[str]:
-    """Столбцы данных серий, отмасштабированных по ``axis_style`` (без сетки и меток категорий)."""
+    """������� ������ �����, ������������������ �� ``axis_style`` (��� ����� � ����� ���������)."""
     minimum, maximum = axis_style["minimum"], axis_style["maximum"]
     baseline = top + height * maximum / (maximum - minimum)
     category_width = width / max(len(categories), 1)
@@ -677,11 +733,13 @@ def _bar_series_parts(
             y = min(value_y, baseline)
             bar_height = max(abs(baseline - value_y), 0.75)
             x = group_x + series_index * bar_step
+            color = _point_color(item, category_index)
             parts.append(
                 f'<rect x="{x:g}" y="{y:g}" width="{bar_width:g}" height="{bar_height:g}" '
-                f'fill="{_point_color(item, category_index)}">'
+                f'fill="{color}">'
                 f"<title>{escape(item['name'])}: {value:g}</title></rect>"
             )
+            parts.extend(_bar_3d_faces(x, y, bar_width, bar_height, color, depth))
             _append_bar_label(parts, item, value, None, category, x + bar_width / 2, y, chart_labels, anchor="middle")
             parts.extend(
                 _error_bar_parts(
@@ -987,23 +1045,26 @@ def _pie_chart_svg(
     doughnut: bool,
     show_legend: bool,
     label_style: dict[str, Any],
+    tilt: float = 1.0,
 ) -> str:
     values = [max(value, 0.0) for value in series["values"][: len(categories)]]
     total = sum(values)
     if total <= 0:
         return _svg_label(400, 220, "No positive data", anchor="middle")
     center_x, center_y, radius = 310.0, 225.0, 145.0
+    radius_y = radius * tilt
+    hole_radius_y = 72.0 * tilt
     angle = -math.pi / 2
     parts = []
     labels, formatter = _series_label_context(series, label_style["chart"])
     for index, (category, value) in enumerate(zip(categories, values, strict=False)):
         sweep = 2 * math.pi * value / total
         end = angle + sweep
-        x1, y1 = center_x + radius * math.cos(angle), center_y + radius * math.sin(angle)
-        x2, y2 = center_x + radius * math.cos(end), center_y + radius * math.sin(end)
+        x1, y1 = center_x + radius * math.cos(angle), center_y + radius_y * math.sin(angle)
+        x2, y2 = center_x + radius * math.cos(end), center_y + radius_y * math.sin(end)
         large = 1 if sweep > math.pi else 0
         color = _point_color(series, index) or _CHART_COLORS[index % len(_CHART_COLORS)]
-        path = f"M {center_x:g} {center_y:g} L {x1:g} {y1:g} A {radius:g} {radius:g} 0 {large} 1 {x2:g} {y2:g} Z"
+        path = f"M {center_x:g} {center_y:g} L {x1:g} {y1:g} A {radius:g} {radius_y:g} 0 {large} 1 {x2:g} {y2:g} Z"
         parts.append(f'<path d="{path}" fill="{color}" stroke="white"><title>{escape(category)}: {value:g}</title></path>')
         percent = 100.0 * value / total if total else 0.0
         text = _data_label_text(series, value, percent=percent, category=category, labels=labels, formatter=formatter)
@@ -1017,14 +1078,14 @@ def _pie_chart_svg(
             else:
                 label_radius, fill = radius + 20, None
             label_x = center_x + label_radius * math.cos(mid)
-            label_y = center_y + label_radius * math.sin(mid)
+            label_y = center_y + label_radius * tilt * math.sin(mid)
             parts.append(_svg_label(label_x, label_y + 4, text, anchor="middle", fill=fill))
         if show_legend:
             parts.append(f'<rect x="500" y="{85 + index * 26:g}" width="14" height="14" fill="{color}"/>')
             parts.append(_svg_label(522, 97 + index * 26, category, anchor="start"))
         angle = end
     if doughnut:
-        parts.append('<circle cx="310" cy="225" r="72" fill="white"/>')
+        parts.append(f'<ellipse cx="{center_x:g}" cy="{center_y:g}" rx="72" ry="{hole_radius_y:g}" fill="white"/>')
     return "".join(parts)
 
 
@@ -1036,6 +1097,7 @@ def _stacked_bar_chart_svg(
     percent: bool,
     axis_style: dict[str, Any],
     label_style: dict[str, Any],
+    depth: float = 0.0,
 ) -> str:
     values, minimum, maximum = _stacked_values(categories, series, percent=percent)
     if percent:
@@ -1068,10 +1130,12 @@ def _stacked_bar_chart_svg(
             y = min(start_y, end_y)
             segment_height = max(abs(start_y - end_y), 0.75)
             original = _series_value(item, category_index)
+            color = item["color"]
             parts.append(
                 f'<rect x="{x:g}" y="{y:g}" width="{bar_width:g}" height="{segment_height:g}" '
-                f'fill="{item["color"]}"><title>{escape(item["name"])}: {original:g}</title></rect>'
+                f'fill="{color}"><title>{escape(item["name"])}: {original:g}</title></rect>'
             )
+            parts.extend(_bar_3d_faces(x, y, bar_width, segment_height, color, depth))
             total_value = _stack_total(values, category_index, value)
             segment_percent = 100.0 * value / total_value if total_value else 0.0
             percent_label = segment_percent if percent or segment_percent != 0.0 else None

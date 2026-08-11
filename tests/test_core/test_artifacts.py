@@ -80,3 +80,27 @@ def test_workspace_uses_portable_windows_safe_names(tmp_path, name):
         path = workspace.artifact_path(name)
         assert path.name.startswith("_") or not path.name.endswith((".", " "))
         assert path.parent == workspace.path
+
+
+def test_validate_artifact_recounts_external_files_and_deletions(tmp_path):
+    with ArtifactWorkspace(parent=tmp_path, max_bytes=8) as workspace:
+        first = workspace.artifact_path("first.bin")
+        first.write_bytes(b"12345")
+        workspace.validate_artifact(first)
+        assert workspace.used_bytes == 5
+
+        second = workspace.artifact_path("second.bin")
+        second.write_bytes(b"1234")
+        with pytest.raises(ArtifactLimitError):
+            workspace.validate_artifact(second)
+
+        second.unlink()
+        workspace.validate_artifact(workspace.path)
+        assert workspace.used_bytes == 5
+
+
+def test_write_upload_replacement_does_not_double_count(tmp_path):
+    with ArtifactWorkspace(parent=tmp_path, max_bytes=9) as workspace:
+        asyncio.run(workspace.write_upload(_Upload([b"123456"]), "same.bin"))
+        asyncio.run(workspace.write_upload(_Upload([b"abc"]), "same.bin"))
+        assert workspace.used_bytes == 3

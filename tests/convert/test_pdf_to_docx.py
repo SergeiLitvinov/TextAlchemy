@@ -87,8 +87,10 @@ def test_pymupdf_scan_page_uses_image(tmp_path):
 
     pdf = tmp_path / "in.pdf"
     doc = fitz.open()
-    # Страница без текста (пустая) — будет отрендерена как картинка
-    doc.new_page()
+    # Короткий текст ниже порога не стоит восстанавливать как отдельный
+    # абзац: страница сохраняется изображением вместе с остальной графикой.
+    page = doc.new_page()
+    page.insert_text((72, 72), "Short")
     doc.save(str(pdf))
     doc.close()
 
@@ -136,6 +138,50 @@ def test_convert_nonexistent():
     result = conv.convert("nonexistent.pdf", "out.docx")
     assert not result.success
     assert "not found" in (result.error or "").lower()
+
+
+def test_pymupdf_scan_page_leaves_no_artifacts(tmp_path):
+    """Скан-страницы рендерятся во временный workspace, а не рядом с выводом."""
+    try:
+        import fitz
+    except ImportError:
+        pytest.skip("pymupdf not installed")
+
+    pdf = tmp_path / "in.pdf"
+    doc = fitz.open()
+    doc.new_page()
+    doc.save(str(pdf))
+    doc.close()
+
+    out = tmp_path / "out.docx"
+    result = PyMuPdfConverter(render_dpi=72).convert(pdf, out)
+    assert result.success
+    assert out.is_file()
+    # В каталоге вывода не должно остаться ни временных PNG, ни partial-файлов.
+    leftovers = [p.name for p in tmp_path.iterdir() if p.name not in {out.name, pdf.name}]
+    assert leftovers == [], f"unexpected leftovers: {leftovers}"
+
+
+def test_pymupdf_text_page_writes_no_workspace_scrap(tmp_path):
+    """Текстовая страница не создаёт временных PNG вообще."""
+    try:
+        import fitz
+    except ImportError:
+        pytest.skip("pymupdf not installed")
+
+    pdf = tmp_path / "in.pdf"
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "Hello PDF world — quite some text here to exceed threshold")
+    doc.save(str(pdf))
+    doc.close()
+
+    out = tmp_path / "out.docx"
+    result = PyMuPdfConverter(text_threshold=10).convert(pdf, out)
+    assert result.success
+    assert out.is_file()
+    remaining = [p.name for p in tmp_path.iterdir()]
+    assert remaining == ["in.pdf", "out.docx"], remaining
 
 
 def _make_pdf_with_headings(tmp_path):

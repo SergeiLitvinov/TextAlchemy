@@ -104,12 +104,16 @@ def docx_to_latex(input_path: str | Path, output_path: str | Path | None = None,
     result = "\n".join(lines)
 
     if output_path:
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        Path(output_path).write_text(result, encoding="utf-8")
+        from textalchemy.core.io import atomic_write_text
+
+        atomic_write_text(output_path, result, encoding="utf-8")
     return result
 
 
 def docx_to_latex_pandoc(input_path: str | Path, output_path: str | Path, doc_type: str = "manuscript") -> str:
+    from textalchemy.core.artifacts import ArtifactWorkspace
+    from textalchemy.core.io import atomic_write_text
+
     input_path = Path(input_path)
     output_path = Path(output_path)
     if not input_path.exists():
@@ -118,46 +122,49 @@ def docx_to_latex_pandoc(input_path: str | Path, output_path: str | Path, doc_ty
     lua_filter = Path(__file__).parent.parent / "extract" / "lua-filters" / "sanitize.lua"
     lua_filter_str = str(lua_filter) if lua_filter.exists() else ""
 
-    cmd = [
-        "pandoc",
-        str(input_path),
-        "-o",
-        str(output_path),
-        "--from",
-        "docx",
-        "--to",
-        "latex",
-        "--standalone",
-        "--top-level-division=chapter",
-    ]
-    if lua_filter_str:
-        cmd.extend(["--lua-filter", lua_filter_str])
+    with ArtifactWorkspace(prefix="textalchemy_pandoc_") as workspace:
+        staged = workspace.artifact_path("output.tex")
+        cmd = [
+            "pandoc",
+            str(input_path),
+            "-o",
+            str(staged),
+            "--from",
+            "docx",
+            "--to",
+            "latex",
+            "--standalone",
+            "--top-level-division=chapter",
+        ]
+        if lua_filter_str:
+            cmd.extend(["--lua-filter", lua_filter_str])
 
-    try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
-    except FileNotFoundError:
-        raise ExtractError("pandoc not found. Install pandoc or use 'latex' (python-docx) format.")
-    except subprocess.TimeoutExpired:
-        raise ExtractError("pandoc timed out")
-    except subprocess.CalledProcessError as e:
-        raise ExtractError(f"pandoc error: {e.stderr[:500]}")
+        try:
+            subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=120)
+        except FileNotFoundError as error:
+            raise ExtractError("pandoc not found. Install pandoc or use 'latex' (python-docx) format.") from error
+        except subprocess.TimeoutExpired as error:
+            raise ExtractError("pandoc timed out") from error
+        except subprocess.CalledProcessError as error:
+            raise ExtractError(f"pandoc error: {error.stderr[:500]}") from error
 
-    tex = output_path.read_text(encoding="utf-8")
-    title_text = "Document"
-    author_text = "Author"
-    russian_support = (
-        "\\usepackage[T2A]{fontenc}\n"
-        "\\usepackage[utf8]{inputenc}\n"
-        "\\usepackage[russian]{babel}\n"
-        "\\usepackage{amsmath,amsfonts,amssymb}\n"
-        "\\usepackage{graphicx}\n"
-        "\\usepackage{geometry}\n"
-        "\\geometry{a4paper, margin=2cm}\n"
-    )
-    tex = tex.replace("\\begin{document}", russian_support + "\n\\begin{document}")
-    tex = tex.replace(
-        "\\maketitle",
-        f"\\title{{{title_text}}}\n\\author{{{author_text}}}\n\\date{{\\today}}\n\\maketitle",
-    )
-    output_path.write_text(tex, encoding="utf-8")
-    return tex
+        workspace.validate_artifact(staged)
+        tex = staged.read_text(encoding="utf-8")
+        title_text = "Document"
+        author_text = "Author"
+        russian_support = (
+            "\\usepackage[T2A]{fontenc}\n"
+            "\\usepackage[utf8]{inputenc}\n"
+            "\\usepackage[russian]{babel}\n"
+            "\\usepackage{amsmath,amsfonts,amssymb}\n"
+            "\\usepackage{graphicx}\n"
+            "\\usepackage{geometry}\n"
+            "\\geometry{a4paper, margin=2cm}\n"
+        )
+        tex = tex.replace("\\begin{document}", russian_support + "\n\\begin{document}")
+        tex = tex.replace(
+            "\\maketitle",
+            f"\\title{{{title_text}}}\n\\author{{{author_text}}}\n\\date{{\\today}}\n\\maketitle",
+        )
+        atomic_write_text(output_path, tex, encoding="utf-8")
+        return tex

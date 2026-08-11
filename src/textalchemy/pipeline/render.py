@@ -150,7 +150,6 @@ def render_latex_pandoc(*, text: Text, input_path: Union[str, Path, None] = None
     """Если есть ``input_path`` (DOCX), конвертирует pandoc-ом. Иначе fallback на ``render.latex``."""
     import shutil
     import subprocess
-    import tempfile
 
     if not shutil.which("pandoc"):
         logger.warning("pandoc не найден, fallback на render.latex")
@@ -159,33 +158,34 @@ def render_latex_pandoc(*, text: Text, input_path: Union[str, Path, None] = None
     if input_path is None:
         return render_latex(text=text)
 
-    with tempfile.NamedTemporaryFile(suffix=".tex", delete=False, mode="w", encoding="utf-8") as f:
-        out = Path(f.name)
+    from textalchemy.core.artifacts import ArtifactWorkspace
+
     try:
-        subprocess.run(
-            [
-                "pandoc",
-                str(input_path),
-                "-o",
-                str(out),
-                "--from",
-                "docx",
-                "--to",
-                "latex",
-                "--standalone",
-                "--top-level-division=chapter",
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        return out.read_text(encoding="utf-8")
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as e:
-        logger.warning("pandoc failed: %s, fallback на render.latex", e)
+        with ArtifactWorkspace(prefix="textalchemy_pandoc_") as workspace:
+            out = workspace.artifact_path("output.tex")
+            subprocess.run(
+                [
+                    "pandoc",
+                    str(input_path),
+                    "-o",
+                    str(out),
+                    "--from",
+                    "docx",
+                    "--to",
+                    "latex",
+                    "--standalone",
+                    "--top-level-division=chapter",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            workspace.validate_artifact(out)
+            return out.read_text(encoding="utf-8")
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as error:
+        logger.warning("pandoc failed: %s, fallback на render.latex", error)
         return render_latex(text=text)
-    finally:
-        out.unlink(missing_ok=True)
 
 
 @operation(

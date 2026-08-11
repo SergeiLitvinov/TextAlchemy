@@ -54,19 +54,16 @@ def cmd_recognize(args: argparse.Namespace) -> int:
         out_path = Path(args.output)
         fmt = out_path.suffix.lower().lstrip(".") or args.output_format
         if fmt == "docx":
+            import io
+
             from docx import Document as DocxDocument
             docx = DocxDocument()
             for paragraph in text.split("\n\n"):
                 if paragraph.strip():
                     docx.add_paragraph(paragraph.strip())
-            import tempfile
-            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
-                tmp_path = tmp.name
-            try:
-                docx.save(tmp_path)
-                atomic_write_bytes(out_path, Path(tmp_path).read_bytes())
-            finally:
-                Path(tmp_path).unlink(missing_ok=True)
+            buffer = io.BytesIO()
+            docx.save(buffer)
+            atomic_write_bytes(out_path, buffer.getvalue())
         elif fmt == "tex":
             from textalchemy.core.latex import escape_latex
             latex = (

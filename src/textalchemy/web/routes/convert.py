@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from fastapi import BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi import File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 
 from textalchemy.convert.executor import ConversionExecutor, ConversionRequest, infer_format
@@ -14,7 +14,7 @@ from textalchemy.core.conversion_graph import ConversionPlan
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.inspection import compare_inspections, inspect_path
 from textalchemy.core.types import DocFormat
-from textalchemy.web.app import _register_task, app, tasks_store
+from textalchemy.web.app import _register_task, app, task_queue, tasks_store
 from textalchemy.web.preview import (
     DEFAULT_PREVIEW_DPI,
     MAX_PREVIEW_DPI,
@@ -267,15 +267,12 @@ async def api_convert_inspect(file: UploadFile = File(...)):
 
 @app.post("/api/convert")
 async def api_convert(
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     source_format: str = Form("auto"),
     target_format: str = Form(""),
     mode: str = Form("balanced"),
-    fmt: str = Form(""),
-    tool: str = Form(""),  # retained for compatibility with older clients
+    fmt: str = Form(""),  # retained for compatibility with older clients
 ):
-    del tool
     workspace = create_web_workspace()
     try:
         source_path = await save_upload(workspace, file, fallback="document")
@@ -321,7 +318,12 @@ async def api_convert(
             "mode": conversion_mode.value,
         },
     )
-    background_tasks.add_task(_run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True)
+    try:
+        task_queue.submit(_run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True)
+    except RuntimeError as error:
+        workspace.cleanup()
+        tasks_store.delete(task_id)
+        raise HTTPException(status_code=503, detail="Очередь конвертации временно недоступна") from error
     return {
         "success": True,
         "task_id": task_id,
@@ -429,7 +431,6 @@ def _output_path_for(workspace: ArtifactWorkspace, source_path: Path, source: Do
 
 @app.post("/api/convert/batch")
 async def api_convert_batch(
-    background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     target_format: str = Form(""),
     mode: str = Form("balanced"),
@@ -466,6 +467,7 @@ async def api_convert_batch(
         raise
 
     tasks: list[dict[str, object]] = []
+    submissions: list[tuple[str, ArtifactWorkspace, Path, Path, DocFormat, DocFormat]] = []
     try:
         for workspace, source_path, source, target in prepared:
             task_id = str(uuid.uuid4())
@@ -481,9 +483,7 @@ async def api_convert_batch(
                 },
             )
             output_path = _output_path_for(workspace, source_path, source, target)
-            background_tasks.add_task(
-                _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True
-            )
+            submissions.append((task_id, workspace, source_path, output_path, source, target))
             tasks.append(
                 {
                     "name": source_path.name,
@@ -510,6 +510,24 @@ async def api_convert_batch(
         for task in tasks:
             tasks_store.delete(str(task["task_id"]))
         raise
+    for task_id, workspace, source_path, output_path, source, target in submissions:
+        try:
+            task_queue.submit(
+                _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, True
+            )
+        except RuntimeError as error:
+            workspace.cleanup()
+            _register_task(
+                task_id,
+                {
+                    "status": "error",
+                    "error": f"Очередь конвертации временно недоступна: {error}",
+                    "report": None,
+                    "source_format": source.value,
+                    "target_format": target.value,
+                    "mode": conversion_mode.value,
+                },
+            )
     return {"success": True, "job_id": job_id, "tasks": tasks}
 
 
@@ -519,7 +537,7 @@ async def api_convert_jobs():
     result = []
     for job in jobs:
         files = job.get("files", [])
-        counts = {"running": 0, "done": 0, "error": 0, "expired": 0}
+        counts = {"running": 0, "done": 0, "error": 0, "expired": 0, "interrupted": 0}
         for item in files:
             task = tasks_store.get(item["task_id"])
             status = task["status"] if task else "expired"
@@ -572,7 +590,7 @@ async def api_convert_job_delete(job_id: str):
 
 
 @app.post("/api/convert/jobs/{job_id}/rerun")
-async def api_convert_job_rerun(job_id: str, background_tasks: BackgroundTasks):
+async def api_convert_job_rerun(job_id: str):
     job = tasks_store.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -582,6 +600,7 @@ async def api_convert_job_rerun(job_id: str, background_tasks: BackgroundTasks):
         conversion_mode = ConversionMode.BALANCED
     executor = ConversionExecutor()
     workspaces: list[ArtifactWorkspace] = []
+    submissions: list[tuple[str, ArtifactWorkspace, Path, Path, DocFormat, DocFormat]] = []
     launched: list[str] = []
     try:
         for item in job.get("files", []):
@@ -608,14 +627,11 @@ async def api_convert_job_rerun(job_id: str, background_tasks: BackgroundTasks):
                     "mode": conversion_mode.value,
                 },
             )
-            background_tasks.add_task(
-                _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, False
-            )
-            launched.append(task_id)
+            submissions.append((task_id, workspace, source_path, output_path, source, target))
     except Exception as error:
         for workspace in workspaces:
             workspace.cleanup()
-        for task_id in launched:
+        for task_id, _workspace, _source_path, _output_path, _source, _target in submissions:
             _register_task(
                 task_id,
                 {
@@ -625,4 +641,23 @@ async def api_convert_job_rerun(job_id: str, background_tasks: BackgroundTasks):
                 },
             )
         raise
+    for task_id, workspace, source_path, output_path, source, target in submissions:
+        try:
+            task_queue.submit(
+                _run_convert, task_id, source_path, output_path, source, target, conversion_mode, workspace, False
+            )
+            launched.append(task_id)
+        except RuntimeError as error:
+            workspace.cleanup()
+            _register_task(
+                task_id,
+                {
+                    "status": "error",
+                    "error": f"Не удалось перезапустить задачу: {error}",
+                    "report": None,
+                    "source_format": source.value,
+                    "target_format": target.value,
+                    "mode": conversion_mode.value,
+                },
+            )
     return {"success": True, "job_id": job_id, "launched": launched}

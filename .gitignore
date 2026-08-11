@@ -44,6 +44,7 @@ build/
 # Generated artifacts
 matching_report.json
 test_config.json
+tests/corpus/visual/charts/chart-corpus.pdf
 
 # Tool cache
 .textalchemy/

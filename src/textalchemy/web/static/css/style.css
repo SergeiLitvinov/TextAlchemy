@@ -185,7 +185,9 @@ select, input[type="text"], input[type="number"] {
 .status-bar.info { background: #dbeafe; color: #1e40af; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.grid-2 > * { min-width: 0; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+.grid-3 > * { min-width: 0; }
 .text-center { text-align: center; }
 .stats-bar { display: flex; gap: 1.5rem; padding: 1rem 1.5rem; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); margin-bottom: 1.5rem; font-size: 0.875rem; }
 .stats-bar span { color: var(--text-muted); }
@@ -196,7 +198,7 @@ table th { font-weight: 600; color: var(--text-muted); font-size: 0.75rem; text-
 label { display: block; font-size: 0.875rem; font-weight: 500; margin-bottom: 0.25rem; color: var(--text); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 select, input[type="text"], input[type="number"] { margin-bottom: 0.75rem; }
-.form-actions { display: flex; gap: 0.5rem; align-items: center; margin-top: 1rem; }
+.form-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
 
 .form-grid {
     display: grid;
@@ -265,6 +267,9 @@ select, input[type="text"], input[type="number"] { margin-bottom: 0.75rem; }
 }
 
 .card-head h2 { margin-bottom: 0; }
+input[type="file"] { max-width: 100%; }
+#importForm { flex-wrap: wrap; }
+
 
 .row-actions { white-space: nowrap; }
 .row-actions button {
@@ -531,11 +536,13 @@ select, input[type="text"], input[type="number"] { margin-bottom: 0.75rem; }
 @media (max-width: 768px) {
     .header nav { flex-wrap: wrap; }
     .result-summary { grid-template-columns: 1fr; }
+    .grid-3 { grid-template-columns: 1fr; }
     .issue-list li { grid-template-columns: 1fr; gap: 0.2rem; }
 }
 
 /* ── Конструктор pipeline ─────────────────────────── */
 .grid-2col { display: grid; grid-template-columns: 320px 1fr; gap: 1.5rem; align-items: start; }
+.grid-2col > * { min-width: 0; }
 
 .segmented {
     display: inline-flex;
@@ -590,6 +597,8 @@ select, input[type="text"], input[type="number"] { margin-bottom: 0.75rem; }
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
+    min-width: 0;
+    flex-wrap: wrap;
     padding: 0.5rem 0.7rem;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -602,8 +611,8 @@ select, input[type="text"], input[type="number"] { margin-bottom: 0.75rem; }
 }
 
 .op-chip:hover { border-color: var(--primary); color: var(--primary); }
-.op-chip code { font-size: 0.82rem; }
-.op-types { color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; }
+.op-chip code { font-size: 0.82rem; min-width: 0; overflow-wrap: anywhere; }
+.op-types { color: var(--text-muted); font-size: 0.72rem; white-space: normal; }
 
 .step-card {
     border: 1px solid var(--border);

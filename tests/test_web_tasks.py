@@ -1,4 +1,4 @@
-"""Тесты web.tasks — on-disk хранилище задач с TTL."""
+"""Тесты web.tasks и web.queue — on-disk хранилище и in-process очередь."""
 from __future__ import annotations
 
 import time
@@ -6,6 +6,7 @@ import zipfile
 
 import pytest
 
+from textalchemy.web.queue import INTERRUPTED_MESSAGE, INTERRUPTED_STATUS, TaskQueue, recover_interrupted_tasks
 from textalchemy.web.tasks import TaskStore
 
 
@@ -135,3 +136,114 @@ def test_meta_is_json_persisted(tmp_path):
     result = reopened.result_path("task-1", task["artifact"])
     assert result is not None
     assert result.read_bytes() == b"bytes"
+
+
+def test_list_tasks_returns_fresh_first_with_task_id(tmp_path):
+    store = TaskStore(tmp_path)
+    store.set("first", {"status": "running", "mode": "balanced"})
+    time.sleep(0.01)
+    store.set("second", {"status": "done"})
+
+    tasks = store.list_tasks()
+    assert [task["task_id"] for task in tasks] == ["second", "first"]
+    assert tasks[0]["status"] == "done"
+    assert tasks[1]["mode"] == "balanced"
+
+
+def test_list_tasks_skips_stale_and_excludes_jobs(tmp_path, monkeypatch):
+    store = TaskStore(tmp_path, ttl_seconds=10)
+    store.set("stale", {"status": "done"})
+    real_time = time.time
+    monkeypatch.setattr(time, "time", lambda: real_time() + 60)
+    assert store.list_tasks() == []  # протухшие удалены ленивой чисткой
+
+    store.set("fresh", {"status": "done"})
+    store.set_job("job-1", {"target_format": "docx"})
+    assert [task["task_id"] for task in store.list_tasks()] == ["fresh"]
+
+
+def test_list_tasks_empty_and_limited(tmp_path):
+    store = TaskStore(tmp_path)
+    assert store.list_tasks() == []
+    for index in range(3):
+        store.set(f"task-{index}", {"status": "done"})
+    assert len(store.list_tasks(limit=2)) == 2
+
+
+def test_recover_interrupted_marks_only_running(tmp_path):
+    store = TaskStore(tmp_path)
+    store.set("running-1", {"status": "running", "mode": "balanced"})
+    store.set("running-2", {"status": "running", "target_format": "html"})
+    store.set("done-1", {"status": "done", "artifact": "out.docx"})
+    store.set("error-1", {"status": "error", "error": "boom"})
+
+    assert recover_interrupted_tasks(store) == 2
+
+    running = store.get("running-1")
+    assert running["status"] == INTERRUPTED_STATUS
+    assert running["error"] == INTERRUPTED_MESSAGE
+    assert running["mode"] == "balanced"
+    assert store.get("running-2")["status"] == INTERRUPTED_STATUS
+    assert store.get("done-1")["status"] == "done"
+    assert store.get("error-1")["status"] == "error"
+    assert store.get("done-1")["artifact"] == "out.docx"
+
+
+def test_recover_interrupted_is_idempotent(tmp_path):
+    store = TaskStore(tmp_path)
+    store.set("running-1", {"status": "running"})
+    assert recover_interrupted_tasks(store) == 1
+    assert store.get("running-1")["status"] == INTERRUPTED_STATUS
+
+
+def test_recover_interrupted_is_not_limited_to_history_page(tmp_path):
+    store = TaskStore(tmp_path)
+    for index in range(105):
+        store.set(f"running-{index}", {"status": "running"})
+
+    assert recover_interrupted_tasks(store) == 105
+    assert all(task["status"] == INTERRUPTED_STATUS for task in store.list_tasks(limit=None))
+    assert recover_interrupted_tasks(store) == 0
+    assert store.get("running-1")["status"] == INTERRUPTED_STATUS
+
+
+def test_task_queue_runs_tasks_and_waits_for_idle():
+    queue = TaskQueue(max_workers=1)
+    try:
+        results = []
+
+        def record(value):
+            results.append(value)
+
+        queue.submit(record, 1)
+        queue.submit(record, 2)
+        assert queue.pending() >= 1
+        assert queue.wait_idle(timeout=5) is True
+        assert results == [1, 2]
+        assert queue.pending() == 0
+    finally:
+        queue.shutdown(wait=True)
+
+
+def test_task_queue_survives_failing_task():
+    queue = TaskQueue(max_workers=1)
+    try:
+        def boom():
+            raise RuntimeError("worker must survive")
+
+        queue.submit(boom)
+        queue.submit(lambda: None)
+        assert queue.wait_idle(timeout=5) is True
+    finally:
+        queue.shutdown(wait=True)
+
+
+def test_task_queue_submit_after_shutdown_does_not_leak_pending_count():
+    queue = TaskQueue(max_workers=1)
+    queue.shutdown(wait=True)
+
+    with pytest.raises(RuntimeError):
+        queue.submit(lambda: None)
+
+    assert queue.pending() == 0
+    assert queue.wait_idle(timeout=0) is True

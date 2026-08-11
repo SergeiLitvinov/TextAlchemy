@@ -63,11 +63,17 @@ _MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 
 _SHAPE_TAGS = frozenset({"sp", "cxnSp", "pic", "graphicFrame", "grpSp"})
 
-# Сведение 3D-типов диаграмм к базовым 2D-типам.
+# Сведение 3D-типов диаграмм к базовым типам внутренней модели.
+# Конус/цилиндр/пирамида кодируются через ``c:bar3DChart/c:shape``, а не
+# отдельными chart-тегами.
 _CHART_3D_MAP = {
     "bar3DChart": "barChart",
+    "line3DChart": "lineChart",
+    "area3DChart": "areaChart",
     "pie3DChart": "pieChart",
     "doughnut3DChart": "doughnutChart",
+    "surfaceChart": "surfaceChart",
+    "surface3DChart": "surfaceChart",
 }
 
 # Стандартные цвета темы PowerPoint (ECMA-376, p:clrMap → theme palette).
@@ -1033,6 +1039,32 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
         return {}
     theme_colors = _load_theme_colors(slide_part)
     data: dict[str, Any] = {}
+    view3d = chart.find(_c("view3D"))
+    if view3d is not None:
+        view: dict[str, Any] = {}
+        for tag, key, cast in (
+            ("rotX", "rot_x", _chart_float),
+            ("rotY", "rot_y", _chart_float),
+            ("perspective", "perspective", _chart_float),
+            ("depthPercent", "depth_percent", _chart_float),
+            ("rAngAx", "right_angle_axes", _chart_bool),
+        ):
+            element = view3d.find(_c(tag))
+            if element is not None and element.get("val") is not None:
+                view[key] = cast(element.get("val"))
+        if view:
+            data["view3d"] = view
+    for tag, key in (("sideWall", "side_wall"), ("backWall", "back_wall")):
+        wall = chart.find(_c(tag))
+        if wall is not None:
+            wall_info = _chart_wall_floor(wall, theme_colors)
+            if wall_info:
+                data[key] = wall_info
+    floor = chart.find(_c("floor"))
+    if floor is not None:
+        floor_info = _chart_wall_floor(floor, theme_colors)
+        if floor_info:
+            data["floor"] = floor_info
     title = _chart_element_title(chart)
     if title:
         data["title"] = title
@@ -1078,16 +1110,20 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
         data["chart_type"] = _chart_base_type(primary_tag)
         if primary_tag != data["chart_type"]:
             data["chart_3d"] = True
+            data["chart_3d_type"] = primary_tag
         data_labels = _read_data_labels(chart_node)
         if data_labels:
             data["data_labels"] = data_labels
         if chart_node is not None:
             bar_direction = chart_node.find(_c("barDir"))
             grouping = chart_node.find(_c("grouping"))
+            shape = chart_node.find(_c("shape"))
             if bar_direction is not None and bar_direction.get("val"):
                 data["bar_direction"] = bar_direction.get("val")
             if grouping is not None and grouping.get("val"):
                 data["grouping"] = grouping.get("val")
+            if shape is not None and shape.get("val"):
+                data["chart_3d_shape"] = shape.get("val")
             for tag, key in (("gapWidth", "gap_width"), ("overlap", "overlap"), ("varyColors", "vary_colors")):
                 element = chart_node.find(_c(tag))
                 if element is not None and element.get("val") is not None:
@@ -1163,6 +1199,7 @@ def _build_axes(axis_elements: list[tuple[str, Any, str | None]], primary_value_
     """Построить словарь осей, выделив первичную и вторичную оси значений."""
     axes: dict[str, Any] = {}
     category_axis: dict[str, Any] | None = None
+    series_axis: dict[str, Any] | None = None
     value_axes: dict[str, Any] = {}
     for tag, element, ax_id in axis_elements:
         info = _chart_axis_info(element)
@@ -1172,12 +1209,17 @@ def _build_axes(axis_elements: list[tuple[str, Any, str | None]], primary_value_
         if tag in {"catAx", "dateAx"}:
             if category_axis is None:
                 category_axis = info
+        elif tag == "serAx":
+            if series_axis is None:
+                series_axis = info
         elif tag == "valAx":
             key = ax_id or f"{id(element)}"
             if key not in value_axes:
                 value_axes[key] = info
     if category_axis is not None:
         axes["category"] = category_axis
+    if series_axis is not None:
+        axes["series"] = series_axis
     if not value_axes:
         return axes
     primary_key = primary_value_id
@@ -1440,6 +1482,34 @@ def _chart_series_color(series, theme_colors: dict[str, str] | None = None) -> s
             return None
         return "#" + base
     return _resolve_color_node(solid)
+
+
+def _chart_wall_floor(element, theme_colors: dict[str, str] | None = None) -> dict[str, Any]:
+    """Прочитать оформление стенки/пола 3D-диаграммы: толщину и заливку."""
+    info: dict[str, Any] = {}
+    thickness = element.find(_c("thickness"))
+    if thickness is not None and thickness.get("val") is not None:
+        info["thickness"] = _chart_float(thickness.get("val"))
+    shape_properties = element.find(_c("spPr"))
+    solid = shape_properties.find(_a("solidFill")) if shape_properties is not None else None
+    if solid is None:
+        solid = element.find(_a("solidFill"))
+    if solid is not None:
+        srgb = solid.find(_a("srgbClr"))
+        if srgb is not None:
+            info["fill"] = "#" + (srgb.get("val") or "").upper()
+        else:
+            scheme = solid.find(_a("schemeClr"))
+            if scheme is not None:
+                palette = theme_colors or _THEME_COLORS
+                base = palette.get(scheme.get("val") or "")
+                if base:
+                    info["fill"] = "#" + base
+            else:
+                resolved = _resolve_color_node(solid)
+                if isinstance(resolved, str):
+                    info["fill"] = resolved
+    return info
 
 
 def _pt_values(node) -> list[str]:

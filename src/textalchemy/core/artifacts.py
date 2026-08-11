@@ -69,6 +69,7 @@ class ArtifactWorkspace:
         """Stream an async upload into the workspace without partial artifacts."""
 
         target = self.artifact_path(name or getattr(upload, "filename", "") or "upload", fallback="upload")
+        previous_size = target.stat().st_size if target.exists() else 0
         partial = self.path / f".{target.name}.{uuid.uuid4().hex}.partial"
         written = 0
         try:
@@ -80,7 +81,7 @@ class ArtifactWorkspace:
             os.replace(partial, target)
         finally:
             partial.unlink(missing_ok=True)
-        self.used_bytes += written
+        self.used_bytes += written - previous_size
         return target
 
     def validate_artifact(self, artifact: str | Path) -> Path:
@@ -90,12 +91,13 @@ class ArtifactWorkspace:
         resolved = Path(artifact).resolve()
         if resolved != self.path and self.path not in resolved.parents:
             raise ValueError("artifact is outside the workspace")
-        size = (
-            sum(path.stat().st_size for path in resolved.rglob("*") if path.is_file())
-            if resolved.is_dir()
-            else resolved.stat().st_size
-        )
-        self._check_quota(size)
+        # Some conversion libraries write directly to an ``artifact_path``.
+        # Recount the whole workspace so those files participate in the quota
+        # and deleted intermediate files stop consuming it.
+        size = sum(path.stat().st_size for path in self.path.rglob("*") if path.is_file())
+        if size > self.max_bytes:
+            raise ArtifactLimitError(f"artifact quota exceeded ({self.max_bytes} bytes)")
+        self.used_bytes = size
         return resolved
 
     def cleanup(self) -> None:
@@ -135,4 +137,9 @@ def safe_artifact_filename(name: str, *, fallback: str) -> str:
     return candidate
 
 
-__all__ = ["ArtifactLimitError", "ArtifactWorkspace", "DEFAULT_ARTIFACT_QUOTA", "safe_artifact_filename"]
+__all__ = [
+    "ArtifactLimitError",
+    "ArtifactWorkspace",
+    "DEFAULT_ARTIFACT_QUOTA",
+    "safe_artifact_filename",
+]

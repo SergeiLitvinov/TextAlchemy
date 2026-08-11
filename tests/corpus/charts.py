@@ -218,6 +218,54 @@ def chart_corpus() -> list[tuple[str, dict[str, Any]]]:
                 "axes": {"value": {"num_format": "0%"}},
             },
         ),
+        (
+            "bar-3d",
+            {
+                "chart_type": "barChart",
+                "chart_3d": True,
+                "chart_3d_type": "bar3DChart",
+                "grouping": "clustered",
+                "title": "3D bars",
+                "categories": ["Alpha", "Beta", "Gamma"],
+                "view3d": {"rot_x": 15.0, "rot_y": 20.0, "right_angle_axes": True, "perspective": 30.0, "depth_percent": 130.0},
+                "series": bar_series,
+            },
+        ),
+        (
+            "bar-3d-stacked",
+            {
+                "chart_type": "barChart",
+                "chart_3d": True,
+                "chart_3d_type": "bar3DChart",
+                "grouping": "stacked",
+                "title": "3D stacked bars",
+                "categories": ["Alpha", "Beta", "Gamma"],
+                "view3d": {"depth_percent": 150.0},
+                "series": bar_series,
+            },
+        ),
+        (
+            "pie-3d",
+            {
+                "chart_type": "pieChart",
+                "chart_3d": True,
+                "chart_3d_type": "pie3DChart",
+                "title": "3D pie share",
+                "categories": ["Alpha", "Beta", "Gamma"],
+                "series": [{"name": "Share", "values": [34, 41, 25], "color": "#4472C4"}],
+            },
+        ),
+        (
+            "doughnut-3d",
+            {
+                "chart_type": "doughnutChart",
+                "chart_3d": True,
+                "chart_3d_type": "doughnut3DChart",
+                "title": "3D doughnut share",
+                "categories": ["Alpha", "Beta", "Gamma"],
+                "series": [{"name": "Share", "values": [34, 41, 25], "color": "#ED7D31"}],
+            },
+        ),
     ]
 
 

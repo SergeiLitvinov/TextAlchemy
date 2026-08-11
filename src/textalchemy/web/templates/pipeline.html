@@ -231,10 +231,10 @@
                     </div>
                 </div>
                 <div class="step-body">
-                    <div class="param-field"><label>Выход (переменная)</label>
-                        <input type="text" data-field="output" data-index="${index}" value="${esc(step.output)}" placeholder="doc"></div>
-                    <div class="param-field"><label>Вход (из контекста)</label>
-                        <select data-field="input" data-index="${index}">${inputOptions}</select></div>
+                    <div class="param-field"><label for="output-${index}">Выход (переменная)</label>
+                        <input type="text" id="output-${index}" data-field="output" data-index="${index}" value="${esc(step.output)}" placeholder="doc"></div>
+                    <div class="param-field"><label for="input-${index}">Вход (из контекста)</label>
+                        <select id="input-${index}" data-field="input" data-index="${index}">${inputOptions}</select></div>
                     <div class="step-params">${paramsHtml}</div>
                 </div>
             </div>`;

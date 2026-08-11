@@ -127,6 +127,23 @@ class TaskStore:
             directory.mkdir(parents=True, exist_ok=True)
             return directory
 
+    def list_tasks(self, limit: int | None = 100) -> list[dict[str, Any]]:
+        """Список задач (без протухших), свежие первыми; каждая содержит ``task_id``."""
+        with self._lock:
+            self._prune_locked()
+            if not self.root.is_dir():
+                return []
+            tasks: list[dict[str, Any]] = []
+            for meta_path in sorted(self.root.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+                task_id = meta_path.stem
+                payload = self._read_meta_locked(task_id)
+                if payload is None:
+                    continue
+                tasks.append({"task_id": task_id, **payload})
+                if limit is not None and len(tasks) >= limit:
+                    break
+            return tasks
+
     def delete(self, task_id: str) -> None:
         with self._lock:
             if not _valid_identifier(task_id):
