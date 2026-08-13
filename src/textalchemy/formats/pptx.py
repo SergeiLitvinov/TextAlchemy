@@ -28,6 +28,7 @@ try:
 except ImportError:  # pragma: no cover - python-pptx тянет lxml транзитивно
     etree = None  # type: ignore[assignment]
 
+from textalchemy.core.color import ColorValue
 from textalchemy.core.document_model import (
     Box,
     ConversionMode,
@@ -38,6 +39,8 @@ from textalchemy.core.document_model import (
     Length,
     PageSettings,
     Paragraph,
+    Provenance,
+    ProvenanceEvent,
     Resource,
     ResourceKind,
     Section,
@@ -51,8 +54,8 @@ from textalchemy.core.document_model import (
 )
 from textalchemy.core.io import check_archive_safety
 from textalchemy.core.types import Block, BlockType, DocFormat, Table, Text
-
-EMU_PER_PT = 12700.0
+from textalchemy.core.units import canonical_coordinate_contract, emu_to_points, ooxml_angle_to_degrees
+from textalchemy.ooxml.color import resolve_drawingml_color
 
 _A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _P_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
@@ -141,7 +144,7 @@ def _local_name(element) -> str:
 
 
 def _emu_to_pt(value: Optional[float]) -> float:
-    return (value or 0.0) / EMU_PER_PT
+    return emu_to_points(value or 0.0)
 
 
 @dataclass(frozen=True)
@@ -188,8 +191,21 @@ class _ImporterState:
     slide_index: int = 0
     layout_element: Optional[Any] = None
     master_element: Optional[Any] = None
+    theme_colors: dict[str, str] | None = None
 
-    def add_image_resource(self, media_type: str, data: bytes, filename: str | None) -> str:
+    def origin(self, *, object_id: str | None = None, package_part: str | None = None) -> Provenance:
+        return Provenance(
+            source_format=DocFormat.PPTX.value,
+            source_path=str(self.model.metadata.get("source_path") or "") or None,
+            page=self.slide_index,
+            object_id=object_id,
+            package_part=package_part or f"/ppt/slides/slide{self.slide_index}.xml",
+            events=[ProvenanceEvent("import.pptx", "parsed OOXML slide element")],
+        )
+
+    def add_image_resource(
+        self, media_type: str, data: bytes, filename: str | None, *, object_id: str | None = None
+    ) -> str:
         resource_id = f"slide{self.slide_index}_img{len(self.model.resources) + 1}"
         self.model.add_resource(
             Resource(
@@ -198,6 +214,7 @@ class _ImporterState:
                 media_type=media_type,
                 data=data,
                 filename=filename,
+                provenance=self.origin(object_id=object_id, package_part=filename),
             )
         )
         return resource_id
@@ -420,15 +437,21 @@ def read_pptx_model(
         state.slide_index = slide_index
         state.layout_element = _layout_sp_tree(slide)
         state.master_element = _master_sp_tree(slide)
+        state.theme_colors = _load_theme_colors(slide.part)
         blocks: list[Any] = []
         style_context = _slide_style_context(slide)
         sp_tree = _slide_sp_tree(slide)
         if sp_tree is not None:
             _collect_sp_tree(sp_tree, slide.part, state, blocks, _Transform(), style_context)
-        section = Section(blocks=blocks, page=page)
-        background = _background_fill(slide)
+        section = Section(blocks=blocks, page=page, provenance=state.origin(object_id=f"slide-{slide_index}"))
+        background_color = _background_color(slide, state.theme_colors)
+        background = background_color.to_hex() if background_color is not None else None
         if background is not None:
             section.properties["background_fill"] = background
+            section.properties["background_color"] = background_color.to_dict()
+        background_gradient = _background_gradient(slide, state.theme_colors)
+        if background_gradient:
+            section.properties["background_gradient_colors"] = background_gradient
         notes = _slide_notes(slide)
         if notes:
             section.properties["notes"] = notes
@@ -640,7 +663,7 @@ def _shape_xfrm(element) -> Optional[tuple[float, float, float, float, float, bo
         float(off.get("y", 0)),
         float(ext.get("cx", 0)),
         float(ext.get("cy", 0)),
-        float(xfrm.get("rot", 0)) / 60000.0,
+        ooxml_angle_to_degrees(float(xfrm.get("rot", 0))),
         _xml_bool(xfrm.get("flipH")),
         _xml_bool(xfrm.get("flipV")),
     )
@@ -673,7 +696,7 @@ def _group_child_transform(group_element, parent: _Transform) -> _Transform:
     ccy = float(ch_ext.get("cy", gcy))
     sx = gcx / ccx if ccx else 1.0
     sy = gcy / ccy if ccy else 1.0
-    rotation = float(xfrm.get("rot", 0)) / 60000.0
+    rotation = ooxml_angle_to_degrees(float(xfrm.get("rot", 0)))
     flip_h = _xml_bool(xfrm.get("flipH"))
     flip_v = _xml_bool(xfrm.get("flipV"))
     mapping = _translate(gx, gy).then(_scale(sx, sy)).then(_translate(-cox, -coy))
@@ -695,7 +718,7 @@ def _group_child_transform(group_element, parent: _Transform) -> _Transform:
 def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[Any], box: Box, style_context=None) -> None:
     tx_body = element.find(_p("txBody"))
     paragraphs = tx_body.findall(_a("p")) if tx_body is not None else []
-    shape_meta = _shape_metadata(element, box)
+    shape_meta = _shape_metadata(element, box, state.theme_colors)
     ph = _placeholder_info(element)
     category = _placeholder_category(ph[0]) if ph else None
     content: list[Any] = []
@@ -710,7 +733,7 @@ def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[
                 meta["default_font_size_pt"] = defaults.style.font_size.pt
         paras_meta.append(meta)
         inherited = defaults.style if defaults is not None else None
-        _append_paragraph_runs(p_el, content, slide_part, inherited)
+        _append_paragraph_runs(p_el, content, slide_part, inherited, state.theme_colors)
         if index < len(paragraphs) - 1:
             content.append(TextRun(text="\n"))
     alignment = paras_meta[0].get("alignment") if paras_meta else None
@@ -722,7 +745,15 @@ def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[
         properties["pptx"] = {"shape": shape_meta, "paragraphs": paras_meta}
     else:
         properties["pptx"] = {"paragraphs": paras_meta}
-    blocks.append(Paragraph(content=content, box=box, alignment=alignment, properties=properties))
+    blocks.append(
+        Paragraph(
+            content=content,
+            box=box,
+            alignment=alignment,
+            properties=properties,
+            provenance=state.origin(object_id=_element_object_id(element)),
+        )
+    )
 
 
 def _shape_paragraph_from_element(element, box: Box, slide_part) -> Paragraph:
@@ -737,11 +768,18 @@ def _shape_paragraph_from_element(element, box: Box, slide_part) -> Paragraph:
     return Paragraph(content=content, box=box, properties={"pptx": {"shape": _shape_metadata(element, box)}})
 
 
-def _append_paragraph_runs(p_el, content: list[Any], slide_part, inherited: Optional[TextStyle] = None) -> None:
+def _element_object_id(element) -> str | None:
+    c_nv_pr = element.find(f".//{_p('cNvPr')}")
+    return c_nv_pr.get("id") if c_nv_pr is not None else None
+
+
+def _append_paragraph_runs(
+    p_el, content: list[Any], slide_part, inherited: Optional[TextStyle] = None, theme_colors: dict[str, str] | None = None
+) -> None:
     for child in p_el:
         tag = _local_name(child)
         if tag == "r":
-            run = _parse_run(child, slide_part, inherited)
+            run = _parse_run(child, slide_part, inherited, theme_colors)
             if run is not None and (run.text or run.link):
                 content.append(run)
         elif tag == "br":
@@ -759,10 +797,12 @@ def _append_paragraph_runs(p_el, content: list[Any], slide_part, inherited: Opti
                 content.append(TextRun(text=child.text))
 
 
-def _parse_run(r_el, slide_part, inherited: Optional[TextStyle] = None) -> Optional[TextRun]:
+def _parse_run(
+    r_el, slide_part, inherited: Optional[TextStyle] = None, theme_colors: dict[str, str] | None = None
+) -> Optional[TextRun]:
     text = "".join(t.text or "" for t in r_el.findall(_a("t")))
     r_pr = r_el.find(_a("rPr"))
-    style = _run_style(r_pr) if r_pr is not None else (inherited or TextStyle())
+    style = _run_style(r_pr, theme_colors) if r_pr is not None else (inherited or TextStyle())
     link = None
     if r_pr is not None:
         link_el = r_pr.find(_a("hlinkClick"))
@@ -782,7 +822,7 @@ def _resolve_hyperlink(slide_part, r_id: str) -> Optional[str]:
     return None
 
 
-def _run_style(r_pr) -> TextStyle:
+def _run_style(r_pr, theme_colors: dict[str, str] | None = None) -> TextStyle:
     style = TextStyle()
     if r_pr is None:
         return style
@@ -804,9 +844,10 @@ def _run_style(r_pr) -> TextStyle:
             style.superscript = True
         elif base_val < 0:
             style.subscript = True
-    color = _color_from_rpr(r_pr)
+    color, color_properties = _color_from_rpr(r_pr, theme_colors)
     if color is not None:
         style.color = color
+        style.properties.update(color_properties)
     lang = r_pr.get("lang")
     if lang:
         style.language = lang
@@ -820,30 +861,20 @@ def _attr_bool(r_pr, tag: str) -> Optional[bool]:
     return value not in ("0", "false")
 
 
-def _color_from_rpr(r_pr) -> Optional[str]:
+def _color_from_rpr(r_pr, theme_colors: dict[str, str] | None = None) -> tuple[ColorValue | None, dict[str, Any]]:
     solid = r_pr.find(_a("solidFill"))
-    return _resolve_color_node(solid) if solid is not None else None
+    return _resolve_color_value(solid, theme_colors) if solid is not None else (None, {})
+
+
+def _resolve_color_value(node, theme_colors: dict[str, str] | None = None) -> tuple[ColorValue | None, dict[str, Any]]:
+    """Resolve DrawingML color plus tint/shade/luminance/alpha metadata."""
+    return resolve_drawingml_color(node, theme_colors or _THEME_COLORS)
 
 
 def _resolve_color_node(node) -> Optional[str]:
     """Разрешить a:srgbClr / a:schemeClr / a:sysClr в #RRGGBB."""
-    if node is None:
-        return None
-    srgb = node.find(_a("srgbClr"))
-    if srgb is not None:
-        return "#" + (srgb.get("val") or "").upper()
-    scheme = node.find(_a("schemeClr"))
-    if scheme is not None:
-        base = _THEME_COLORS.get(scheme.get("val") or "")
-        if base is None:
-            return None
-        return "#" + base
-    sys_clr = node.find(_a("sysClr"))
-    if sys_clr is not None:
-        last = sys_clr.get("lastClr")
-        if last:
-            return "#" + last.upper()
-    return None
+    color, _ = _resolve_color_value(node)
+    return color.to_hex() if color is not None else None
 
 
 def _parse_omml(m_el) -> Optional[Formula]:
@@ -890,7 +921,7 @@ def _paragraph_metadata(p_el) -> dict[str, Any]:
     return meta
 
 
-def _shape_metadata(element, box: Box) -> Optional[dict[str, Any]]:
+def _shape_metadata(element, box: Box, theme_colors: dict[str, str] | None = None) -> Optional[dict[str, Any]]:
     """Метаданные автофигуры/коннектора для faithful-рендера."""
     tag = _local_name(element)
     if tag not in ("sp", "cxnSp"):
@@ -901,10 +932,17 @@ def _shape_metadata(element, box: Box) -> Optional[dict[str, Any]]:
         prst = sp_pr.find(_a("prstGeom"))
         if prst is not None:
             meta["prst"] = prst.get("prst")
-        fill = _shape_fill(sp_pr)
+        fill, fill_color = _shape_fill(sp_pr, theme_colors)
         if fill is not None:
             meta["fill"] = fill
-        line = _shape_line(sp_pr)
+        if fill_color is not None:
+            meta["fill_color"] = fill_color.to_dict()
+        gradient = sp_pr.find(_a("gradFill"))
+        if gradient is not None:
+            stops = _gradient_colors(gradient, theme_colors)
+            if stops:
+                meta["gradient_colors"] = stops
+        line = _shape_line(sp_pr, theme_colors)
         if line is not None:
             meta["line"] = line
     meta["box"] = {
@@ -917,37 +955,50 @@ def _shape_metadata(element, box: Box) -> Optional[dict[str, Any]]:
     return meta
 
 
-def _shape_fill(sp_pr) -> Optional[str]:
+def _shape_fill(sp_pr, theme_colors: dict[str, str] | None = None) -> tuple[str | None, ColorValue | None]:
     fill = sp_pr.find(_a("solidFill"))
     if fill is not None:
-        return _resolve_color_node(fill)
+        color, _ = _resolve_color_value(fill, theme_colors)
+        return (color.to_hex() if color else None), color
     if sp_pr.find(_a("noFill")) is not None:
-        return "none"
+        return "none", None
     grad = sp_pr.find(_a("gradFill"))
     if grad is not None:
-        stops = grad.findall(_a("gs"))
+        stops = grad.findall(f".//{_a('gs')}")
         if stops:
-            color = _resolve_color_node(stops[-1])
+            color, _ = _resolve_color_value(stops[-1], theme_colors)
             if color is not None:
-                return color
+                return color.to_hex(), color
     if sp_pr.find(_a("blipFill")) is not None:
-        return "blip"
-    return None
+        return "blip", None
+    return None, None
 
 
-def _shape_line(sp_pr) -> Optional[dict[str, Any]]:
+def _gradient_colors(gradient, theme_colors: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for stop in gradient.findall(f".//{_a('gs')}"):
+        color, metadata = _resolve_color_value(stop, theme_colors)
+        if color is None:
+            continue
+        position = float(stop.get("pos", 0)) / 100000.0
+        result.append({"position": position, "color": color.to_dict(), "source": metadata})
+    return result
+
+
+def _shape_line(sp_pr, theme_colors: dict[str, str] | None = None) -> Optional[dict[str, Any]]:
     line = sp_pr.find(_a("ln"))
     if line is None:
         return None
     meta: dict[str, Any] = {}
     width = line.get("w")
     if width is not None:
-        meta["width"] = float(width) / 12700.0
+        meta["width"] = emu_to_points(float(width))
     fill = line.find(_a("solidFill"))
     if fill is not None:
-        color = _resolve_color_node(fill)
+        color, _ = _resolve_color_value(fill, theme_colors)
         if color is not None:
-            meta["color"] = color
+            meta["color"] = color.to_hex()
+            meta["stroke_color"] = color.to_dict()
     return meta
 
 
@@ -972,8 +1023,16 @@ def _handle_picture(element, slide_part, state: _ImporterState, blocks: list[Any
         media_type=part.content_type or "image/png",
         data=part.blob,
         filename=_part_filename(part),
+        object_id=r_id,
     )
-    blocks.append(Image(resource_id=resource_id, alt_text=alt_text, box=box))
+    blocks.append(
+        Image(
+            resource_id=resource_id,
+            alt_text=alt_text,
+            box=box,
+            provenance=state.origin(object_id=_element_object_id(element)),
+        )
+    )
 
 
 def _part_filename(part) -> str | None:
@@ -1153,14 +1212,15 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
                 item["chart_type"] = _chart_base_type(node_tag)
                 if secondary:
                     item["axis"] = "secondary_value"
-                color = _chart_series_color(ser, theme_colors)
-                if color is None:
+                color_value = _chart_series_color_value(ser, theme_colors)
+                if color_value is None:
                     # Без явного цвета PowerPoint берёт акцентные цвета темы по порядку.
                     accent = theme_colors.get(f"accent{series_index % 6 + 1}")
                     if accent:
-                        color = "#" + accent
-                if color is not None:
-                    item["color"] = color
+                        color_value = ColorValue.from_hex("#" + accent)
+                if color_value is not None:
+                    item["color"] = color_value.to_hex()
+                    item["color_value"] = color_value.to_dict()
                 series_data_labels = _read_data_labels(ser)
                 if series_data_labels:
                     item["data_labels"] = series_data_labels
@@ -1409,9 +1469,10 @@ def _read_trendline(series, theme_colors: dict[str, str] | None = None) -> dict[
         element = trend.find(_c(tag))
         if element is not None:
             info[key] = _chart_bool(element.get("val"))
-    color = _chart_series_color(trend, theme_colors)
+    color = _chart_series_color_value(trend, theme_colors)
     if color:
-        info["color"] = color
+        info["color"] = color.to_hex()
+        info["color_value"] = color.to_dict()
     return info
 
 
@@ -1435,9 +1496,10 @@ def _read_error_bars(series, theme_colors: dict[str, str] | None = None) -> dict
     num_fmt = error.find(_c("numFmt"))
     if num_fmt is not None and num_fmt.get("formatCode"):
         info["num_format"] = num_fmt.get("formatCode")
-    color = _chart_series_color(error, theme_colors)
+    color = _chart_series_color_value(error, theme_colors)
     if color:
-        info["color"] = color
+        info["color"] = color.to_hex()
+        info["color_value"] = color.to_dict()
     return info
 
 
@@ -1453,9 +1515,10 @@ def _read_data_points(series, theme_colors: dict[str, str] | None = None) -> dic
         except ValueError:
             continue
         entry: dict[str, Any] = {}
-        color = _chart_series_color(point, theme_colors)
+        color = _chart_series_color_value(point, theme_colors)
         if color:
-            entry["color"] = color
+            entry["color"] = color.to_hex()
+            entry["color_value"] = color.to_dict()
         explosion = point.find(_c("explosion"))
         if explosion is not None and explosion.get("val"):
             entry["explosion"] = _chart_float(explosion.get("val"))
@@ -1465,23 +1528,18 @@ def _read_data_points(series, theme_colors: dict[str, str] | None = None) -> dic
 
 
 def _chart_series_color(series, theme_colors: dict[str, str] | None = None) -> str | None:
+    color = _chart_series_color_value(series, theme_colors)
+    return color.to_hex() if color is not None else None
+
+
+def _chart_series_color_value(series, theme_colors: dict[str, str] | None = None) -> ColorValue | None:
     shape_properties = series.find(_c("spPr"))
     if shape_properties is None:
         return None
     solid = shape_properties.find(_a("solidFill"))
     if solid is None:
         return None
-    srgb = solid.find(_a("srgbClr"))
-    if srgb is not None:
-        return "#" + (srgb.get("val") or "").upper()
-    scheme = solid.find(_a("schemeClr"))
-    if scheme is not None:
-        palette = theme_colors or _THEME_COLORS
-        base = palette.get(scheme.get("val") or "")
-        if base is None:
-            return None
-        return "#" + base
-    return _resolve_color_node(solid)
+    return _resolve_color_value(solid, theme_colors)[0]
 
 
 def _chart_wall_floor(element, theme_colors: dict[str, str] | None = None) -> dict[str, Any]:
@@ -1495,20 +1553,10 @@ def _chart_wall_floor(element, theme_colors: dict[str, str] | None = None) -> di
     if solid is None:
         solid = element.find(_a("solidFill"))
     if solid is not None:
-        srgb = solid.find(_a("srgbClr"))
-        if srgb is not None:
-            info["fill"] = "#" + (srgb.get("val") or "").upper()
-        else:
-            scheme = solid.find(_a("schemeClr"))
-            if scheme is not None:
-                palette = theme_colors or _THEME_COLORS
-                base = palette.get(scheme.get("val") or "")
-                if base:
-                    info["fill"] = "#" + base
-            else:
-                resolved = _resolve_color_node(solid)
-                if isinstance(resolved, str):
-                    info["fill"] = resolved
+        color, _ = _resolve_color_value(solid, theme_colors)
+        if color is not None:
+            info["fill"] = color.to_hex()
+            info["fill_color"] = color.to_dict()
     return info
 
 
@@ -1555,7 +1603,7 @@ def _table_block(table_el, box: Box) -> RichTable:
     properties: dict[str, Any] = {}
     grid = table_el.find(_a("tblGrid"))
     if grid is not None:
-        widths = [float(gc.get("w", 0)) / EMU_PER_PT for gc in grid.findall(_a("gridCol"))]
+        widths = [emu_to_points(float(gc.get("w", 0))) for gc in grid.findall(_a("gridCol"))]
         properties["column_widths_pt"] = widths
     return RichTable(rows=rows, box=box, properties=properties)
 
@@ -1568,7 +1616,7 @@ def _cell_text(tc) -> str:
     return "\n".join(part for part in parts if part)
 
 
-def _background_fill(slide) -> Optional[str]:
+def _background_color(slide, theme_colors: dict[str, str] | None = None) -> ColorValue | None:
     c_sld = slide._element.find(_p("cSld"))
     bg = c_sld.find(_p("bg")) if c_sld is not None else None
     if bg is None:
@@ -1578,21 +1626,37 @@ def _background_fill(slide) -> Optional[str]:
         index = int(bg_ref.get("idx", 0) or 0)
         name = _BGREF_INDEX.get(index)
         if name is not None:
-            return "#" + _THEME_COLORS[name]
-        resolved = _resolve_color_node(bg_ref)
+            palette = theme_colors or _THEME_COLORS
+            if name in palette:
+                return ColorValue.from_hex("#" + palette[name])
+        resolved, _ = _resolve_color_value(bg_ref, theme_colors)
         if resolved:
             return resolved
     bg_pr = bg.find(_p("bgPr"))
     if bg_pr is not None:
         solid = bg_pr.find(_a("solidFill"))
         if solid is not None:
-            return _resolve_color_node(solid)
+            return _resolve_color_value(solid, theme_colors)[0]
         grad = bg_pr.find(_a("gradFill"))
         if grad is not None:
-            stops = grad.findall(_a("gs"))
+            stops = grad.findall(f".//{_a('gs')}")
             if stops:
-                return _resolve_color_node(stops[0])
+                return _resolve_color_value(stops[0], theme_colors)[0]
     return None
+
+
+def _background_gradient(slide, theme_colors: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    c_sld = slide._element.find(_p("cSld"))
+    bg = c_sld.find(_p("bg")) if c_sld is not None else None
+    bg_pr = bg.find(_p("bgPr")) if bg is not None else None
+    gradient = bg_pr.find(_a("gradFill")) if bg_pr is not None else None
+    return _gradient_colors(gradient, theme_colors) if gradient is not None else []
+
+
+def _background_fill(slide) -> Optional[str]:
+    """Compatibility wrapper returning the resolved legacy hex token."""
+    color = _background_color(slide)
+    return color.to_hex() if color is not None else None
 
 
 def _slide_notes(slide) -> str:
@@ -1616,8 +1680,10 @@ def _presentation_metadata(presentation, source: Path) -> dict[str, Any]:
         "created": props.created.isoformat() if props.created else None,
         "modified": props.modified.isoformat() if props.modified else None,
         "source_name": source.name,
+        "source_path": str(source),
         "slide_width_pt": _emu_to_pt(presentation.slide_width),
         "slide_height_pt": _emu_to_pt(presentation.slide_height),
+        "coordinate_system": canonical_coordinate_contract(),
     }
 
 

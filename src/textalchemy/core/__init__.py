@@ -1,12 +1,15 @@
 """Базовые типы и утилиты ядра."""
 
 from textalchemy.core.artifacts import ArtifactLimitError, ArtifactWorkspace
+from textalchemy.core.color import ColorLike, ColorSpace, ColorValue, color_to_css
 from textalchemy.core.conversion_graph import (
     CapabilityRegistry,
     ConversionPlan,
     ConverterCapabilities,
     DocumentFeature,
     FeatureSupport,
+    PreservationDimension,
+    PreservationProfile,
 )
 from textalchemy.core.diagnostics import ConversionIssue, ConversionReport, IssueSeverity
 from textalchemy.core.doc_types import DOC_TYPE_KEYWORDS, DOC_TYPES
@@ -36,6 +39,8 @@ from textalchemy.core.document_model import (
     PageSettings,
     Paragraph,
     ParagraphProperties,
+    Provenance,
+    ProvenanceEvent,
     Resource,
     ResourceKind,
     Section,
@@ -48,6 +53,8 @@ from textalchemy.core.document_model import (
     TextRun,
     TextStyle,
     TextStyleProperties,
+    VisualSurrogate,
+    attach_visual_surrogate,
 )
 from textalchemy.core.exceptions import (
     ConfigError,
@@ -78,10 +85,47 @@ from textalchemy.core.types import (
     Table,
     Text,
 )
+from textalchemy.core.units import (
+    CoordinateOrigin,
+    Point2D,
+    Rect2D,
+    canonical_coordinate_contract,
+    css_px_to_points,
+    degrees_to_ooxml_angle,
+    emu_to_inches,
+    emu_to_points,
+    inches_to_emu,
+    ooxml_angle_to_degrees,
+    points_to_css_px,
+    points_to_emu,
+    round_half_away,
+    transform_point_origin,
+    transform_rect_origin,
+)
 
 __all__ = [
     "ArtifactLimitError",
     "ArtifactWorkspace",
+    "ColorSpace",
+    "ColorValue",
+    "ColorLike",
+    "color_to_css",
+    "CoordinateOrigin",
+    "Point2D",
+    "Rect2D",
+    "canonical_coordinate_contract",
+    "css_px_to_points",
+    "degrees_to_ooxml_angle",
+    "emu_to_inches",
+    "emu_to_points",
+    "inches_to_emu",
+    "ooxml_angle_to_degrees",
+    "points_to_css_px",
+    "points_to_emu",
+    "round_half_away",
+    "transform_point_origin",
+    "transform_rect_origin",
+    "attach_visual_surrogate",
     "DocFormat",
     "BlockType",
     "Document",
@@ -116,6 +160,8 @@ __all__ = [
     "PackagePart",
     "PackageRelationship",
     "Paragraph",
+    "Provenance",
+    "ProvenanceEvent",
     "ParagraphProperties",
     "Resource",
     "ResourceKind",
@@ -129,6 +175,7 @@ __all__ = [
     "TextRun",
     "TextStyle",
     "TextStyleProperties",
+    "VisualSurrogate",
     "VECTOR_IMAGE_MEDIA_TYPES",
     "document_from_dict",
     "document_from_json",
@@ -146,6 +193,8 @@ __all__ = [
     "ConverterCapabilities",
     "DocumentFeature",
     "FeatureSupport",
+    "PreservationDimension",
+    "PreservationProfile",
     "DocumentInspection",
     "DocumentComparison",
     "compare_inspections",

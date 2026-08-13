@@ -1,501 +1,87 @@
 {% extends "base.html" %}
 {% set active = 'pipeline' %}
-{% block title %}TextAlchemy — Pipeline{% endblock %}
+{% block title %}TextAlchemy — сценарии обработки{% endblock %}
 {% block content %}
-    <div class="card">
-        <div class="card-head" style="flex-wrap:wrap;gap:.5rem;">
-            <h2>🔧 Конструктор pipeline</h2>
-            <div class="segmented" role="tablist" aria-label="Режим редактирования">
-                <button type="button" id="modeVisualBtn" class="seg-btn active" role="tab" aria-selected="true">Визуальный конструктор</button>
-                <button type="button" id="modeExpertBtn" class="seg-btn" role="tab" aria-selected="false">Экспертный режим (YAML)</button>
-            </div>
-        </div>
-        <p class="hint">Соберите пайплайн из операций, соедините их входами/выходами и запустите. Исходный YAML доступен в экспертом режиме — оба режима синхронизированы.</p>
+<section class="page-heading pipeline-heading">
+    <div>
+        <p class="eyebrow">Автоматизация</p>
+        <h2>Соберите сценарий обработки</h2>
+        <p class="lead">Соедините готовые действия в последовательность. TextAlchemy проверит совместимость входов и выходов до запуска.</p>
     </div>
-
-    <div id="visualMode" class="grid-2col">
-        <div class="card">
-            <div class="card-head"><h2>Операции</h2></div>
-            <input type="search" id="opSearch" placeholder="Поиск операции…" aria-label="Поиск операции" class="full">
-            <div id="opsPalette" class="ops-palette">
-                <p class="hint">Загрузка списка операций…</p>
-            </div>
-        </div>
-
-        <div class="card">
-            <div class="card-head">
-                <h2>Шаги</h2>
-                <div class="btn-group">
-                    <button type="button" id="addStepBtn" class="btn">＋ Добавить шаг</button>
-                    <button type="button" id="validateBtn" class="btn">Проверить связи</button>
-                    <button type="button" id="runBtn" class="btn btn-primary">▶ Запустить пайплайн</button>
-                </div>
-            </div>
-            <div id="stepsList"></div>
-            <div class="form-grid" style="margin-top:1rem;">
-                <div>
-                    <label for="ctxText">Начальный контекст (JSON)</label>
-                    <textarea id="ctxText" rows="3" placeholder='{"path": "input.txt", "bib": []}'></textarea>
-                </div>
-                <div>
-                    <label for="finalOutput">Итоговый результат (output)</label>
-                    <select id="finalOutput" aria-label="Итоговый результат"></select>
-                    <label for="customOutput" style="margin-top:.5rem;">или свой вариант</label>
-                    <input type="text" id="customOutput" placeholder="имя переменной">
-                </div>
-            </div>
-            <div id="status" class="status-bar" style="display:none;"></div>
-            <div id="pipeline-result" style="display:none;margin-top:1rem;">
-                <h3>Результат</h3>
-                <pre id="result-output"></pre>
-            </div>
-        </div>
+    <div class="segmented" role="tablist" aria-label="Режим редактирования">
+        <button type="button" id="modeVisualBtn" class="seg-btn active" role="tab" aria-selected="true">Конструктор</button>
+        <button type="button" id="modeExpertBtn" class="seg-btn" role="tab" aria-selected="false">Текстовый режим</button>
     </div>
+</section>
 
-    <div id="expertMode" style="display:none;" class="card">
+<div id="visualMode" class="pipeline-layout">
+    <aside class="card operations-panel" aria-labelledby="operations-title">
         <div class="card-head">
-            <h2>Экспертный режим — YAML/JSON</h2>
+            <div><p class="eyebrow">Действия</p><h3 id="operations-title">Добавить шаг</h3></div>
+            <span class="count-badge" id="opsCount">…</span>
+        </div>
+        <label class="visually-hidden" for="opSearch">Найти действие</label>
+        <input type="search" id="opSearch" placeholder="Название или назначение…" class="full">
+        <p class="field-help">Нажмите на действие, чтобы добавить его в конец сценария.</p>
+        <div id="opsPalette" class="ops-palette">
+            <p class="hint">Загружаем доступные действия…</p>
+        </div>
+    </aside>
+
+    <section class="pipeline-canvas" aria-labelledby="steps-title">
+        <div class="card pipeline-toolbar">
+            <div>
+                <p class="eyebrow">Ваш сценарий</p>
+                <h3 id="steps-title">Последовательность шагов</h3>
+            </div>
             <div class="btn-group">
-                <button type="button" id="toBuilderBtn" class="btn">⬇ Загрузить в конструктор</button>
-                <button type="button" id="expertRunBtn" class="btn btn-primary">▶ Запустить пайплайн</button>
+                <button type="button" id="addStepBtn" class="btn-secondary">+ Пустой шаг</button>
+                <button type="button" id="validateBtn" class="btn-secondary">Проверить</button>
+                <button type="button" id="runBtn" class="btn-primary">Запустить <span aria-hidden="true">→</span></button>
             </div>
         </div>
-        <textarea id="specText" rows="14" spellcheck="false" aria-label="Спецификация pipeline"></textarea>
-        <div id="statusExpert" class="status-bar" style="display:none;"></div>
+
+        <div id="stepsList" class="pipeline-steps" aria-live="polite"></div>
+
+        <details class="card pipeline-runtime">
+            <summary>Входные данные и результат</summary>
+            <div class="form-grid pipeline-runtime-grid">
+                <div>
+                    <label for="ctxText">Начальные данные</label>
+                    <textarea id="ctxText" rows="4" placeholder='{"path": "input.txt", "bib": []}'></textarea>
+                    <p class="field-help">Значения, доступные первому шагу сценария.</p>
+                </div>
+                <div>
+                    <label for="finalOutput">Что вернуть после выполнения</label>
+                    <select id="finalOutput" aria-label="Итоговый результат"></select>
+                    <label for="customOutput">Другое имя результата</label>
+                    <input type="text" id="customOutput" placeholder="например, document">
+                </div>
+            </div>
+        </details>
+
+        <div id="status" class="status-bar" hidden></div>
+        <section id="pipeline-result" class="card pipeline-output" hidden aria-labelledby="pipeline-result-title">
+            <div class="card-head"><h3 id="pipeline-result-title">Результат выполнения</h3></div>
+            <pre id="result-output"></pre>
+        </section>
+    </section>
+</div>
+
+<section id="expertMode" hidden class="card expert-workspace" aria-labelledby="expert-title">
+    <div class="card-head">
+        <div><p class="eyebrow">Для опытных пользователей</p><h3 id="expert-title">Текстовое описание сценария</h3></div>
+        <div class="btn-group">
+            <button type="button" id="toBuilderBtn" class="btn-secondary">Перенести в конструктор</button>
+            <button type="button" id="expertRunBtn" class="btn-primary">Запустить <span aria-hidden="true">→</span></button>
+        </div>
     </div>
+    <p class="section-copy">Поддерживаются форматы YAML и JSON. Изменения синхронизируются с визуальным конструктором при переносе.</p>
+    <textarea id="specText" rows="20" spellcheck="false" aria-label="Спецификация сценария"></textarea>
+    <div id="statusExpert" class="status-bar" hidden></div>
+</section>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const $ = (id) => document.getElementById(id);
-
-    function setStatus(el, msg, type) {
-        if (!el) return;
-        if (!msg) { el.style.display = 'none'; return; }
-        el.style.display = 'block';
-        el.className = 'status-bar ' + (type || 'info');
-        el.textContent = msg;
-    }
-
-    // ── Состояние ────────────────────────────────────
-    let ops = [];
-    const opMap = {};
-    let steps = [];                 // {op, output, input, params}
-    let ctxJson = '';
-    let finalOutput = '';
-    let activeMode = 'visual';      // 'visual' | 'expert'
-
-    async function loadOperations() {
-        try {
-            ops = await api('/api/operations');
-            ops.forEach((o) => { opMap[o.id] = o; });
-            renderPalette();
-            initDefaultSteps();
-        } catch (_) {
-            $('opsPalette').innerHTML = '<p class="hint">Не удалось загрузить операции.</p>';
-        }
-    }
-
-    function initDefaultSteps() {
-        if (steps.length) return;
-        steps = [
-            { op: 'ingest.file', output: 'doc', input: '', params: { path: 'input.txt' } },
-            { op: 'extract.text', output: 'text', input: 'doc', params: {} },
-            { op: 'render.latex', output: 'tex', input: 'text', params: { title: 'Demo' } },
-        ];
-        finalOutput = 'tex';
-        renderAll();
-    }
-
-    // ── Палитра операций ─────────────────────────────
-    function renderPalette() {
-        const search = ($('opSearch').value || '').toLowerCase().trim();
-        const grouped = {};
-        ops.forEach((o) => {
-            const tag = (o.tags && o.tags[0]) || 'other';
-            if (search && !(o.id + ' ' + o.description).toLowerCase().includes(search)) return;
-            (grouped[tag] = grouped[tag] || []).push(o);
-        });
-        const el = $('opsPalette');
-        let html = '';
-        Object.keys(grouped).sort().forEach((tag) => {
-            html += `<h4 class="ops-tag">${esc(tag)}</h4>`;
-            html += grouped[tag].map((o) => `
-                <button type="button" class="op-chip" data-op="${esc(o.id)}" title="${esc(o.description)}">
-                    <code>${esc(o.id)}</code>
-                    <span class="op-types">${esc(o.input_type || '—')} → ${esc(o.output_type || '?')}</span>
-                </button>`).join('');
-        });
-        el.innerHTML = html || '<p class="hint">Ничего не найдено.</p>';
-        el.querySelectorAll('.op-chip').forEach((btn) => {
-            btn.addEventListener('click', () => addStep(btn.dataset.op));
-        });
-    }
-
-    // ── Шаги ─────────────────────────────────────────
-    function knownNames() {
-        const names = new Set();
-        try { Object.keys(JSON.parse(ctxJson || '{}')).forEach((k) => names.add(k)); } catch (_) {}
-        steps.forEach((s) => { if (s.output) names.add(s.output); });
-        return [...names];
-    }
-
-    function addStep(opId, opts) {
-        const op = opMap[opId];
-        const step = {
-            op: opId,
-            output: opts && opts.output || '',
-            input: opts && opts.input || '',
-            params: {},
-        };
-        if (op) {
-            Object.keys(op.params).forEach((name) => {
-                const info = op.params[name];
-                if (name === op.input_param && step.input) return;
-                step.params[name] = info.default !== null ? info.default : '';
-            });
-        }
-        steps.push(step);
-        renderSteps();
-        renderOutputs();
-    }
-
-    function removeStep(index) {
-        steps.splice(index, 1);
-        renderSteps();
-        renderOutputs();
-    }
-
-    function moveStep(index, delta) {
-        const target = index + delta;
-        if (target < 0 || target >= steps.length) return;
-        const tmp = steps[index];
-        steps[index] = steps[target];
-        steps[target] = tmp;
-        renderSteps();
-    }
-
-    function paramControl(step, op, name) {
-        const info = op.params[name] || { default: null, required: false, annotation: '' };
-        const inputParam = op.input_param;
-        // Если привязан input — параметр входа задаётся селектором, не редактором.
-        if (name === inputParam && step.input) return '';
-        const ann = info.annotation || '';
-        const isBool = ann === 'bool' || typeof info.default === 'boolean';
-        const isNum = /^int(eger)?$/.test(ann) || (typeof info.default === 'number' && Number.isInteger(info.default));
-        const isFloat = /^float|^number/.test(ann);
-        const id = `p-${steps.indexOf(step)}-${name}`;
-        let control;
-        if (isBool) {
-            const checked = step.params[name] === true || step.params[name] === 'true';
-            control = `<label class="param-bool"><input type="checkbox" id="${id}" data-step="${steps.indexOf(step)}" data-name="${esc(name)}" ${checked ? 'checked' : ''}> ${esc(info.default === true ? 'вкл' : 'выкл')}</label>`;
-        } else if (isNum || isFloat) {
-            control = `<input type="number" step="any" id="${id}" data-step="${steps.indexOf(step)}" data-name="${esc(name)}" value="${esc(step.params[name] ?? '')}">`;
-        } else {
-            const jsonHint = (info.default !== null && /^[\[{]/.test(String(info.default))) || /list|dict|\[\]/.test(ann);
-            control = `<input type="text" id="${id}" data-step="${steps.indexOf(step)}" data-name="${esc(name)}" value="${esc(step.params[name] ?? '')}" ${jsonHint ? 'placeholder="JSON, например [1,2]"' : ''}>`;
-        }
-        const required = info.required ? ' <span class="req">*</span>' : '';
-        return `<div class="param-field"><label for="${id}">${esc(name)}${required}</label>${control}</div>`;
-    }
-
-    function renderSteps() {
-        const el = $('stepsList');
-        if (!steps.length) {
-            el.innerHTML = '<p class="hint">Добавьте шаг: выберите операцию справа или нажмите «Добавить шаг».</p>';
-            return;
-        }
-        const names = knownNames();
-        el.innerHTML = steps.map((step, index) => {
-            const op = opMap[step.op];
-            const opOptions = ops.map((o) =>
-                `<option value="${esc(o.id)}" ${o.id === step.op ? 'selected' : ''}>${esc(o.id)}</option>`).join('');
-            const inputOptions = ['<option value="">— нет —</option>']
-                .concat(names.filter((n) => n !== step.output).map((n) =>
-                    `<option value="${esc(n)}" ${n === step.input ? 'selected' : ''}>${esc(n)}</option>`)).join('');
-            let paramsHtml = '';
-            if (op) {
-                const inputBound = !!step.input;
-                const paramNames = Object.keys(op.params).filter((n) => !(inputBound && n === op.input_param));
-                paramsHtml = paramNames.map((n) => paramControl(step, op, n)).join('');
-                if (!paramNames.length) paramsHtml = '<span class="hint">Параметры не требуются.</span>';
-            }
-            return `
-            <div class="step-card" data-index="${index}">
-                <div class="step-head">
-                    <select class="op-select" data-field="op" data-index="${index}" aria-label="Операция">${opOptions}</select>
-                    <div class="btn-group step-actions">
-                        <button type="button" class="btn btn-sm" data-move="-1" title="Выше" aria-label="Выше">↑</button>
-                        <button type="button" class="btn btn-sm" data-move="1" title="Ниже" aria-label="Ниже">↓</button>
-                        <button type="button" class="btn btn-sm btn-danger" data-remove title="Удалить" aria-label="Удалить">✕</button>
-                    </div>
-                </div>
-                <div class="step-body">
-                    <div class="param-field"><label for="output-${index}">Выход (переменная)</label>
-                        <input type="text" id="output-${index}" data-field="output" data-index="${index}" value="${esc(step.output)}" placeholder="doc"></div>
-                    <div class="param-field"><label for="input-${index}">Вход (из контекста)</label>
-                        <select id="input-${index}" data-field="input" data-index="${index}">${inputOptions}</select></div>
-                    <div class="step-params">${paramsHtml}</div>
-                </div>
-            </div>`;
-        }).join('');
-    }
-
-    // ── События шагов ────────────────────────────────
-    $('stepsList').addEventListener('input', (e) => {
-        const field = e.target.dataset.field;
-        const index = e.target.dataset.index;
-        if (!field || index === undefined) return;
-        const step = steps[index];
-        if (!step) return;
-        if (field === 'output') {
-            step.output = e.target.value.trim();
-            renderOutputs();
-        } else if (field === 'input') {
-            const wasBound = !!step.input;
-            step.input = e.target.value;
-            const op = opMap[step.op];
-            if (op && wasBound && !step.input) {
-                // Сняли привязку входа — вернём input_param в параметры.
-                step.params[op.input_param] = step.params[op.input_param] ?? '';
-                renderSteps();
-            } else if (op && step.input) {
-                delete step.params[op.input_param];
-            }
-        }
-    });
-
-    $('stepsList').addEventListener('click', (e) => {
-        const card = e.target.closest('.step-card');
-        if (!card) return;
-        const index = Number(card.dataset.index);
-        if (e.target.closest('[data-remove]')) { removeStep(index); return; }
-        const mv = e.target.closest('[data-move]');
-        if (mv) { moveStep(index, Number(mv.dataset.move)); return; }
-    });
-
-    // Параметры: изменение значений (изменение select op обрабатывается отдельно)
-    $('stepsList').addEventListener('change', (e) => {
-        const card = e.target.closest('.step-card');
-        if (!card) return;
-        const index = Number(card.dataset.index);
-        const step = steps[index];
-        if (!step) return;
-        if (e.target.classList.contains('op-select')) {
-            const prevOp = step.op;
-            const newOp = e.target.value;
-            if (newOp === prevOp) return;
-            const prev = opMap[prevOp];
-            const next = opMap[newOp];
-            step.op = newOp;
-            const newParams = {};
-            // Сохраняем значения одноимённых параметров.
-            Object.keys(next ? next.params : {}).forEach((name) => {
-                const info = next.params[name];
-                if (name === next.input_param && step.input) return;
-                newParams[name] = step.params[name] !== undefined ? step.params[name] : (info.default !== null ? info.default : '');
-            });
-            step.params = newParams;
-            renderSteps();
-            renderOutputs();
-            return;
-        }
-        // checkbox
-        if (e.target.type === 'checkbox') {
-            const name = e.target.dataset.name;
-            step.params[name] = e.target.checked;
-            return;
-        }
-        const name = e.target.dataset.name;
-        if (name !== undefined && step.params) {
-            step.params[name] = e.target.value;
-        }
-    });
-
-    // ── Выход и контекст ─────────────────────────────
-    function renderOutputs() {
-        const sel = $('finalOutput');
-        const names = knownNames();
-        const current = finalOutput || steps[steps.length - 1]?.output || '';
-        sel.innerHTML = ['<option value="">— последний шаг —</option>']
-            .concat(names.map((n) => `<option value="${esc(n)}" ${n === current ? 'selected' : ''}>${esc(n)}</option>`)).join('');
-        if (finalOutput) sel.value = finalOutput;
-    }
-
-    $('finalOutput').addEventListener('change', (e) => {
-        finalOutput = e.target.value;
-        $('customOutput').value = '';
-    });
-    $('customOutput').addEventListener('input', (e) => {
-        finalOutput = e.target.value.trim();
-        $('finalOutput').value = '';
-    });
-    $('ctxText').addEventListener('input', (e) => { ctxJson = e.target.value; renderOutputs(); });
-    $('opSearch').addEventListener('input', renderPalette);
-    $('addStepBtn').addEventListener('click', () => {
-        if (ops.length) addStep(ops[0].id);
-        else { toast('Список операций пуст', 'error'); }
-    });
-
-    // ── Сборка спецификации ──────────────────────────
-    function buildSpec() {
-        const spec = {};
-        if (ctxJson.trim()) {
-            try {
-                Object.assign(spec, JSON.parse(ctxJson));
-            } catch (err) {
-                throw new Error('Некорректный JSON контекста: ' + err.message);
-            }
-        }
-        spec.steps = steps.map((s) => {
-            const obj = {};
-            if (s.op) obj.op = s.op;
-            if (s.output) obj.output = s.output;
-            if (s.input) obj.input = s.input;
-            const params = {};
-            Object.keys(s.params).forEach((k) => {
-                const v = s.params[k];
-                if (v === '' || v === undefined || v === null) return;
-                if (typeof v === 'string') {
-                    const trimmed = v.trim();
-                    if (/^-?\d+$/.test(trimmed)) { params[k] = Number(trimmed); return; }
-                    if (/^-?\d*\.\d+$/.test(trimmed)) { params[k] = parseFloat(trimmed); return; }
-                    if (trimmed === 'true') { params[k] = true; return; }
-                    if (trimmed === 'false') { params[k] = false; return; }
-                    if (/^[\[{]/.test(trimmed) && /[\]}]$/.test(trimmed)) {
-                        try { params[k] = JSON.parse(trimmed); return; } catch (_) {}
-                    }
-                    params[k] = v;
-                    return;
-                }
-                params[k] = v;
-            });
-            if (Object.keys(params).length) obj.params = params;
-            return obj;
-        });
-        if (finalOutput) spec.output = finalOutput;
-        return spec;
-    }
-
-    function specToJson() {
-        let spec;
-        try { spec = buildSpec(); }
-        catch (err) { throw err; }
-        return JSON.stringify(spec);
-    }
-
-    async function syncToExpert() {
-        const json = specToJson();
-        const res = await api('/api/pipeline/yaml', { method: 'POST', body: new URLSearchParams({ spec: json }) });
-        $('specText').value = res.yaml || json;
-    }
-
-    async function syncToVisual() {
-        const text = $('specText').value.trim();
-        if (!text) { toast('Спецификация пуста', 'warning'); return; }
-        const res = await api('/api/pipeline/parse', { method: 'POST', body: new URLSearchParams({ spec: text }) });
-        const spec = res.spec;
-        steps = spec.steps.map((s) => ({ op: s.op, output: s.output, input: s.input, params: {} }));
-        // Расставляем defaults по выбранным операциям.
-        steps.forEach((s) => {
-            const op = opMap[s.op];
-            if (!op) return;
-            const bound = !!s.input;
-            Object.keys(op.params).forEach((name) => {
-                if (name === op.input_param && bound) return;
-                if (s.params[name] !== undefined && s.params[name] !== null) {
-                    s.params[name] = s.params[name];
-                } else {
-                    const info = op.params[name];
-                    s.params[name] = info.default !== null ? info.default : '';
-                }
-            });
-        });
-        ctxJson = spec.ctx && Object.keys(spec.ctx).length ? JSON.stringify(spec.ctx, null, 2) : '';
-        finalOutput = spec.output;
-        $('ctxText').value = ctxJson;
-        renderAll();
-    }
-
-    function renderAll() {
-        renderSteps();
-        renderOutputs();
-    }
-
-    // ── Переключение режимов ─────────────────────────
-    function setMode(mode) {
-        activeMode = mode;
-        $('modeVisualBtn').classList.toggle('active', mode === 'visual');
-        $('modeExpertBtn').classList.toggle('active', mode === 'expert');
-        $('modeVisualBtn').setAttribute('aria-selected', mode === 'visual');
-        $('modeExpertBtn').setAttribute('aria-selected', mode === 'expert');
-        $('visualMode').style.display = mode === 'visual' ? '' : 'none';
-        $('expertMode').style.display = mode === 'expert' ? '' : 'none';
-        if (mode === 'expert') syncToExpert().catch(() => {});
-    }
-    $('modeVisualBtn').addEventListener('click', () => setMode('visual'));
-    $('modeExpertBtn').addEventListener('click', () => setMode('expert'));
-
-    // ── Запуск ───────────────────────────────────────
-    function showResult(res, statusEl) {
-        const panel = $('pipeline-result');
-        panel.style.display = 'block';
-        $('result-output').textContent = JSON.stringify(res, null, 2);
-        setStatus(statusEl, res.success ? 'Пайплайн завершён.' : 'Пайплайн завершился с ошибкой.', res.success ? 'success' : 'error');
-    }
-
-    async function runPipeline(specJson, btn) {
-        setLoading(btn, true);
-        setStatus($('status'), 'Запуск пайплайна…', 'info');
-        try {
-            const res = await api('/api/pipeline/run', { method: 'POST', body: new URLSearchParams({ spec: specJson }) });
-            showResult(res, $('status'));
-            toast('Пайплайн завершён', 'success');
-        } catch (err) {
-            setStatus($('status'), 'Ошибка запуска: ' + err.message, 'error');
-        } finally {
-            setLoading(btn, false);
-        }
-    }
-
-    $('runBtn').addEventListener('click', () => {
-        let json;
-        try { json = specToJson(); }
-        catch (err) { toast(err.message, 'error'); return; }
-        runPipeline(json, $('runBtn'));
-    });
-
-    // ── Проверка связей без запуска ─────────────────
-    $('validateBtn').addEventListener('click', async () => {
-        let json;
-        try { json = specToJson(); }
-        catch (err) { toast(err.message, 'error'); return; }
-        setLoading($('validateBtn'), true);
-        try {
-            const res = await api('/api/pipeline/validate', { method: 'POST', body: new URLSearchParams({ spec: json }) });
-            if (res.success) {
-                const warn = (res.warnings || []).length ? ' Предупреждения: ' + res.warnings.join('; ') : '';
-                setStatus($('status'), 'Связи в порядке.' + warn, 'success');
-                toast('Пайплайн валиден', 'success');
-            } else {
-                const lines = res.errors.map((e) => (e.step === null || e.step === undefined ? '' : `шаг ${e.step}: `) + e.message);
-                setStatus($('status'), 'Найдены ошибки: ' + lines.join('; '), 'error');
-            }
-        } catch (err) {
-            setStatus($('status'), 'Ошибка проверки: ' + err.message, 'error');
-        } finally {
-            setLoading($('validateBtn'), false);
-        }
-    });
-
-    $('expertRunBtn').addEventListener('click', () => {
-        const text = $('specText').value.trim();
-        if (!text) { toast('Спецификация пуста', 'warning'); return; }
-        runPipeline(text, $('expertRunBtn'));
-    });
-
-    $('toBuilderBtn').addEventListener('click', () => { syncToVisual(); setMode('visual'); });
-
-    loadOperations();
-</script>
+<script src="/static/js/pages/pipeline.js?v={{ asset_version }}" type="module"></script>
 {% endblock %}

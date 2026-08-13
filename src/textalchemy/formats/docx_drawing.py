@@ -14,8 +14,11 @@ from textalchemy.core.document_model import (
     ImageCrop,
     Resource,
     ResourceKind,
+    attach_visual_surrogate,
 )
-from textalchemy.ooxml.package import EMU_PER_POINT
+from textalchemy.core.units import emu_to_points, ooxml_angle_to_degrees
+from textalchemy.formats.svg_color import parse_svg_color, svg_color_catalog
+from textalchemy.ooxml.color import resolve_drawingml_color
 
 
 def read_run_images(run: Any, model: DocumentModel) -> list[Image]:
@@ -45,13 +48,13 @@ def read_run_images(run: Any, model: DocumentModel) -> list[Image]:
             box = Box(
                 x,
                 y,
-                float(extent[0].get("cx", 0)) / EMU_PER_POINT,
-                float(extent[0].get("cy", 0)) / EMU_PER_POINT,
+                emu_to_points(float(extent[0].get("cx", 0))),
+                emu_to_points(float(extent[0].get("cy", 0))),
             )
         doc_properties = drawing.xpath("./wp:docPr") if drawing is not None else []
         alt_text = ""
         properties = _drawing_properties(drawing)
-        properties.update(_drawing_effects(blip))
+        properties.update(_drawing_effects(blip, model))
         if fallback_part is not None and fallback_part is not image_part and hasattr(fallback_part, "blob"):
             properties["fallback_resource_id"] = _add_image_resource(fallback_part, model)
         crop = _drawing_crop(blip)
@@ -61,8 +64,55 @@ def read_run_images(run: Any, model: DocumentModel) -> list[Image]:
         if doc_properties:
             alt_text = doc_properties[0].get("descr") or doc_properties[0].get("title") or ""
             properties["name"] = doc_properties[0].get("name")
-        images.append(Image(resource_id=resource_id, alt_text=alt_text, box=box, properties=properties, crop=crop))
+        fallback_id = properties.get("fallback_resource_id")
+        image = Image(resource_id=resource_id, alt_text=alt_text, box=box, properties=properties, crop=crop)
+        if fallback_id:
+            attach_visual_surrogate(
+                image,
+                model.resources[fallback_id],
+                reason="Office stores a raster preview beside the editable SVG resource",
+            )
+        images.append(image)
     return images
+
+
+def read_run_vml_colors(run: Any) -> tuple[list[dict[str, Any]], list[str]]:
+    """Catalog explicit VML paints while retaining source XML for later rendering."""
+    from lxml import etree
+
+    colors: list[dict[str, Any]] = []
+    xml: list[str] = []
+    for shape in run._r.xpath(".//*[local-name()='shape' or local-name()='rect' or local-name()='oval']"):
+        xml.append(etree.tostring(shape, encoding="unicode"))
+        for attribute, role in (("fillcolor", "fill"), ("strokecolor", "stroke")):
+            raw = shape.get(attribute)
+            color = parse_svg_color(raw) if raw else None
+            if color is not None:
+                colors.append({"element": etree.QName(shape).localname, "role": role, "color": color.to_dict()})
+        for child in shape:
+            local_name = etree.QName(child).localname
+            if local_name not in {"fill", "stroke"}:
+                continue
+            raw = child.get("color")
+            opacity = _vml_opacity(child.get("opacity"))
+            color = parse_svg_color(raw, opacity=opacity) if raw else None
+            if color is not None:
+                colors.append({"element": local_name, "role": local_name, "color": color.to_dict()})
+    return colors, xml
+
+
+def _vml_opacity(value: str | None) -> float | None:
+    if value is None:
+        return None
+    token = value.strip()
+    try:
+        if token.endswith("%"):
+            return float(token[:-1]) / 100.0
+        if token.lower().endswith("f"):
+            return int(token[:-1]) / 65536.0
+        return float(token)
+    except ValueError:
+        return None
 
 
 def _preferred_svg_part(blip: Any, run: Any) -> Any | None:
@@ -83,6 +133,9 @@ def _add_image_resource(image_part: Any, model: DocumentModel) -> str:
     if resource_id not in model.resources:
         content_type = image_part.content_type
         kind = ResourceKind.VECTOR_IMAGE if content_type in VECTOR_IMAGE_MEDIA_TYPES else ResourceKind.RASTER_IMAGE
+        properties: dict[str, Any] = {"sha256": digest}
+        if content_type == "image/svg+xml":
+            properties["colors"] = svg_color_catalog(data)
         model.add_resource(
             Resource(
                 id=resource_id,
@@ -90,7 +143,7 @@ def _add_image_resource(image_part: Any, model: DocumentModel) -> str:
                 media_type=content_type,
                 data=data,
                 filename=Path(str(image_part.partname)).name,
-                properties={"sha256": digest},
+                properties=properties,
             )
         )
     return resource_id
@@ -102,7 +155,7 @@ def _drawing_position(drawing: Any) -> tuple[float, float]:
 
     def offset(axis: str) -> float:
         values = drawing.xpath(f"./wp:position{axis}/wp:posOffset")
-        return float(values[0].text or 0) / EMU_PER_POINT if values else 0.0
+        return emu_to_points(float(values[0].text or 0)) if values else 0.0
 
     return offset("H"), offset("V")
 
@@ -188,10 +241,10 @@ def _drawing_rotation(blip: Any) -> float:
     transform = _picture_transform(blip)
     if transform is None or transform.get("rot") is None:
         return 0.0
-    return int(transform.get("rot")) / 60000
+    return ooxml_angle_to_degrees(int(transform.get("rot")))
 
 
-def _drawing_effects(blip: Any) -> dict[str, Any]:
+def _drawing_effects(blip: Any, model: DocumentModel) -> dict[str, Any]:
     """Read normalized effects and retain original DrawingML for lossless output."""
 
     from lxml import etree
@@ -221,10 +274,26 @@ def _drawing_effects(blip: Any) -> dict[str, Any]:
     lines = shape_properties[0].xpath("./a:ln")
     if lines:
         properties["line_xml"] = etree.tostring(lines[0], encoding="unicode")
+        solid = next((child for child in lines[0] if etree.QName(child).localname == "solidFill"), None)
+        if solid is not None:
+            from textalchemy.formats.docx_style import document_theme_colors
+
+            color, metadata = resolve_drawingml_color(solid, document_theme_colors(model))
+            if color is not None:
+                properties["stroke_color"] = color.to_dict()
+                properties["stroke_color_source"] = metadata
+    fill = next((child for child in shape_properties[0] if etree.QName(child).localname == "solidFill"), None)
+    if fill is not None:
+        from textalchemy.formats.docx_style import document_theme_colors
+
+        color, metadata = resolve_drawingml_color(fill, document_theme_colors(model))
+        if color is not None:
+            properties["fill_color"] = color.to_dict()
+            properties["fill_color_source"] = metadata
     shape_effects = shape_properties[0].xpath("./a:effectLst | ./a:effectDag")
     if shape_effects:
         properties["shape_effects_xml"] = etree.tostring(shape_effects[0], encoding="unicode")
     return properties
 
 
-__all__ = ["read_run_images"]
+__all__ = ["read_run_images", "read_run_vml_colors"]

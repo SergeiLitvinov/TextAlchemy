@@ -154,7 +154,107 @@ def test_e2e_dashboard_loads_without_console_errors(e2e_server, page):
     page.goto(f"{e2e_server}/")
     page.wait_for_load_state("networkidle")
     assert page.locator("h1").first.text_content() == "TextAlchemy"
-    assert page.locator("nav a").count() == 8
+    assert page.locator("nav a").count() == 10
+    assert page.e2e_errors == []
+
+
+def test_e2e_global_task_center_explains_storage(e2e_server, page):
+    page.goto(f"{e2e_server}/")
+    page.wait_for_load_state("networkidle")
+
+    page.get_by_role("button", name="Задачи").click()
+
+    center = page.get_by_role("complementary", name="Задачи и результаты")
+    assert center.get_attribute("inert") is None
+    assert "Файлы не отправляются" in center.text_content()
+    assert "автоматически очищаются через 1 час" in center.text_content()
+    page.keyboard.press("Escape")
+    assert page.locator("#taskCenter").get_attribute("inert") is not None
+
+
+def test_e2e_mobile_navigation_opens_and_closes(e2e_server, page):
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.goto(f"{e2e_server}/")
+    page.wait_for_load_state("networkidle")
+
+    toggle = page.get_by_role("button", name="Открыть меню")
+    toggle.click()
+    assert page.locator("body").evaluate("element => element.classList.contains('nav-open')") is True
+    assert toggle.get_attribute("aria-expanded") == "true"
+
+    page.keyboard.press("Escape")
+    assert page.locator("body").evaluate("element => element.classList.contains('nav-open')") is False
+    assert toggle.get_attribute("aria-expanded") == "false"
+
+
+def test_e2e_generate_document_from_template(e2e_server, page):
+    page.goto(f"{e2e_server}/generate")
+    page.wait_for_selector("#field-title", timeout=30000)
+
+    page.fill("#field-title", "Проверка шаблона")
+    page.fill("#field-author", "TextAlchemy")
+    page.fill("#field-body", "Документ создан через пользовательский сценарий.")
+
+    with page.expect_download(timeout=60000) as download_info:
+        page.click("#genBtn")
+    data = download_info.value.path().read_bytes()
+    assert data[:4] == b"PK\x03\x04"
+    assert page.locator("#status").text_content() == "Документ сгенерирован и загружен."
+
+
+def test_e2e_recognize_pdf_text_layer(e2e_server, page, tmp_path):
+    pdf = _make_pdf(tmp_path / "recognize.pdf", "Recognized E2E text")
+    page.goto(f"{e2e_server}/recognize")
+
+    page.get_by_role("radio", name="Обычный PDF В документе уже можно выделить текст").click()
+    page.set_input_files("#fileInput", str(pdf))
+    page.wait_for_function("document.getElementById('result').value.includes('Recognized E2E text')", timeout=30000)
+
+    assert page.locator("#scenario").input_value() == "fast"
+    assert page.locator("#copyBtn").is_enabled()
+    assert "Обработка завершена" in page.locator("#status").text_content()
+
+
+def test_e2e_extract_text_from_pdf(e2e_server, page, tmp_path):
+    pdf = _make_pdf(tmp_path / "extract.pdf", "Extracted E2E content")
+    page.goto(f"{e2e_server}/extract")
+    page.set_input_files("#fileInput", str(pdf))
+    page.wait_for_function("document.getElementById('result').value.includes('Extracted E2E content')", timeout=30000)
+
+    assert page.locator("#copyBtn").is_enabled()
+    assert "Извлечено" in page.locator("#status").text_content()
+
+
+def test_e2e_library_navigation_and_editor(e2e_server, page):
+    page.goto(f"{e2e_server}/bibliography")
+    tabs = page.get_by_role("navigation", name="Разделы библиотеки")
+    assert tabs.get_by_role("link").count() == 4
+
+    page.get_by_role("button", name="Добавить источник").click()
+    assert page.locator("#bibEditor").get_attribute("open") is not None
+    assert page.locator("#authors").evaluate("element => element === document.activeElement") is True
+
+    tabs.get_by_role("link", name="Связать файлы").click()
+    page.wait_for_url(f"{e2e_server}/matching")
+    library_tabs = page.get_by_role("navigation", name="Разделы библиотеки")
+    assert library_tabs.get_by_role("link", name="Связать файлы").get_attribute("aria-current") == "page"
+    assert page.locator("#dryRun").is_checked()
+
+
+def test_e2e_pipeline_visual_expert_roundtrip(e2e_server, page):
+    page.goto(f"{e2e_server}/pipeline")
+    page.wait_for_selector("#stepsList .step-card", timeout=30000)
+
+    page.click("#validateBtn")
+    page.wait_for_function("document.getElementById('status').textContent.includes('Связи в порядке')")
+
+    page.click("#modeExpertBtn")
+    page.wait_for_function("document.getElementById('specText').value.includes('render.latex')")
+    assert "title: Demo" in page.locator("#specText").input_value()
+
+    page.click("#toBuilderBtn")
+    page.wait_for_function("!document.getElementById('visualMode').hidden")
+    assert page.locator("#p-2-title").input_value() == "Demo"
     assert page.e2e_errors == []
 
 
@@ -172,6 +272,8 @@ def test_e2e_convert_single_pdf_to_docx(e2e_server, page, tmp_path, task_store):
 
     options = page.locator("#target option").all_text_contents()
     assert any("Word (DOCX)" in option for option in options)
+    route_help = page.locator("#route-help").text_content()
+    assert "сходство" in route_help and "редактируемость" in route_help
 
     page.click("#convertBtn")
     page.wait_for_selector("#resultCard:not([hidden])", timeout=120000)

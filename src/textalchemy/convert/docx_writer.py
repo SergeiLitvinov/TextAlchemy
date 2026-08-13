@@ -5,11 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from textalchemy.convert.color_preflight import preflight_colors
 from textalchemy.convert.docx_drawing_writer import write_image
 from textalchemy.convert.docx_section_writer import configure_section, section_start_type
 from textalchemy.convert.docx_style_writer import write_styles
 from textalchemy.convert.docx_table_writer import write_table
 from textalchemy.convert.docx_text_writer import add_paragraph, write_formula, write_paragraph_content
+from textalchemy.convert.font_preflight import prepare_fonts
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_model import (
     Block,
@@ -20,6 +22,7 @@ from textalchemy.core.document_model import (
     Section,
     Table,
 )
+from textalchemy.fonts.docx_embedding import embed_docx_fonts, verify_docx_font_embedding
 from textalchemy.ooxml.package import restore_package_graph
 
 
@@ -31,8 +34,11 @@ def write_docx_model(document: DocumentModel, output_path: str | Path) -> Conver
 
     output = Path(output_path)
     report = ConversionReport(output)
+    document = prepare_fonts(document, report)
+    preflight_colors(document, report, target="docx")
     target = Document()
     _write_metadata(target, document.metadata)
+    _restore_document_protection(target, document.metadata, report)
     write_styles(target, document.styles, report)
     target.settings.odd_and_even_pages_header_footer = any(
         bool(section.properties.odd_and_even_pages_header_footer)
@@ -51,6 +57,7 @@ def write_docx_model(document: DocumentModel, output_path: str | Path) -> Conver
         configure_section(target_section, source_section, document, report, section_index, counters, _write_blocks)
         _write_blocks(target, source_section.blocks, document, report, f"sections[{section_index}]", counters)
 
+    embed_docx_fonts(target, document, report)
     _restore_package_graph(target, document, report)
     try:
         from textalchemy.core.artifacts import ArtifactWorkspace
@@ -64,6 +71,7 @@ def write_docx_model(document: DocumentModel, output_path: str | Path) -> Conver
     except Exception as error:  # noqa: BLE001 - diagnostic boundary must return a report
         report.add(IssueSeverity.ERROR, "docx-write", str(error))
         return report
+    verify_docx_font_embedding(output, report)
     report.metrics.update(counters)
     report.metrics["sections"] = len(sections)
     report.metrics["resources"] = len(document.resources)
@@ -88,6 +96,26 @@ def _restore_package_graph(target: Any, document: DocumentModel, report: Convers
         report.add(IssueSeverity.LOSS, "package-graph", f"OOXML package graph could not be restored: {error}")
 
 
+def _restore_document_protection(target: Any, metadata: dict[str, Any], report: ConversionReport) -> None:
+    raw_xml = metadata.get("docx_features", {}).get("document_protection_xml")
+    if not raw_xml:
+        return
+    from docx.oxml import parse_xml
+
+    try:
+        protection = parse_xml(str(raw_xml))
+        settings = target.settings._element
+        for existing in settings.xpath("./w:documentProtection"):
+            settings.remove(existing)
+        settings.append(protection)
+    except Exception as error:  # noqa: BLE001 - foreign OOXML is a diagnostic boundary
+        report.add(
+            IssueSeverity.LOSS,
+            "document-protection",
+            f"document protection could not be restored: {error}",
+        )
+
+
 def _write_blocks(
     container: Any,
     blocks: list[Block],
@@ -99,6 +127,10 @@ def _write_blocks(
     for index, block in enumerate(blocks):
         block_location = f"{location}.blocks[{index}]"
         if isinstance(block, Paragraph):
+            if block.properties.get("docx_raw_block_xml"):
+                _write_raw_block(container, str(block.properties["docx_raw_block_xml"]), report, block_location)
+                counters["paragraphs"] += 1
+                continue
             paragraph = add_paragraph(container, block, document, report, block_location)
             write_paragraph_content(paragraph, block, document, report, block_location, counters)
             counters["paragraphs"] += 1
@@ -113,6 +145,22 @@ def _write_blocks(
             paragraph = container.add_paragraph()
             write_image(paragraph, block, document, report, block_location)
             counters["images"] += 1
+
+
+def _write_raw_block(container: Any, raw_xml: str, report: ConversionReport, location: str) -> None:
+    from docx.oxml import parse_xml
+
+    try:
+        element = parse_xml(raw_xml)
+        parent = container._body if hasattr(container, "_body") else container
+        root = parent._element
+        section_properties = root.sectPr if hasattr(root, "sectPr") else None
+        if section_properties is None:
+            root.append(element)
+        else:
+            section_properties.addprevious(element)
+    except Exception as error:  # noqa: BLE001 - foreign OOXML is a diagnostic boundary
+        report.add(IssueSeverity.LOSS, "docx-block-ooxml", f"raw block OOXML could not be restored: {error}", location)
 
 
 __all__ = ["write_docx_model"]

@@ -1,0 +1,6 @@
+<nav class="library-tabs" aria-label="Разделы библиотеки">
+    <a href="/bibliography" {% if active == 'bibliography' %}class="active" aria-current="page"{% endif %}>Источники</a>
+    <a href="/matching" {% if active == 'matching' %}class="active" aria-current="page"{% endif %}>Связать файлы</a>
+    <a href="/reports" {% if active == 'reports' %}class="active" aria-current="page"{% endif %}>Состояние коллекции</a>
+    <a href="/export" {% if active == 'export' %}class="active" aria-current="page"{% endif %}>Экспорт</a>
+</nav>

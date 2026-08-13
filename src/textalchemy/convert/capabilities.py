@@ -7,6 +7,8 @@ from textalchemy.core.conversion_graph import (
     ConverterCapabilities,
     DocumentFeature,
     FeatureSupport,
+    PreservationDimension,
+    PreservationProfile,
 )
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.types import DocFormat
@@ -17,6 +19,16 @@ ALL_MODES = frozenset(ConversionMode)
 
 def _features(**values: FeatureSupport) -> dict[DocumentFeature, FeatureSupport]:
     return {DocumentFeature(name): value for name, value in values.items()}
+
+
+def _profile(
+    *, content: float, semantics: float, geometry: float, style: float, relationships: float, editability: float
+) -> PreservationProfile:
+    values = locals()
+    return PreservationProfile(
+        {dimension: values[dimension.value] for dimension in PreservationDimension},
+        basis="engine-contract-v1",
+    )
 
 
 def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
@@ -41,6 +53,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             ),
             requirements=("python-docx", "lxml"),
             description="Rich DOCX importer",
+            preservation=_profile(content=1.0, semantics=0.98, geometry=0.97, style=0.98, relationships=0.97, editability=1.0),
         ),
         ConverterCapabilities(
             "model.docx",
@@ -62,6 +75,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             ),
             requirements=("python-docx", "lxml"),
             description="Rich DOCX exporter",
+            preservation=_profile(content=1.0, semantics=0.98, geometry=0.96, style=0.98, relationships=0.96, editability=1.0),
         ),
         ConverterCapabilities(
             "model.html",
@@ -82,6 +96,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
                 fields=S.PARTIAL,
             ),
             description="Self-contained HTML exporter",
+            preservation=_profile(content=0.99, semantics=0.90, geometry=0.91, style=0.94, relationships=0.88, editability=0.86),
         ),
         ConverterCapabilities(
             "model.pdf",
@@ -103,6 +118,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             ),
             requirements=("reportlab",),
             description="Portable PDF exporter",
+            preservation=_profile(content=0.99, semantics=0.65, geometry=0.94, style=0.94, relationships=0.70, editability=0.20),
         ),
         ConverterCapabilities(
             "pdf.docx.pdf2docx",
@@ -124,6 +140,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             ),
             requirements=("pdf2docx",),
             description="Editable PDF to DOCX reconstruction",
+            preservation=_profile(content=0.92, semantics=0.72, geometry=0.74, style=0.72, relationships=0.48, editability=0.82),
         ),
         ConverterCapabilities(
             "pdf.docx.pymupdf",
@@ -146,6 +163,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             base_cost=2.0,
             requirements=("pymupdf", "python-docx"),
             description="Text extraction with raster page fallback",
+            preservation=_profile(content=0.92, semantics=0.60, geometry=0.91, style=0.88, relationships=0.35, editability=0.44),
         ),
         ConverterCapabilities(
             "pptx.model",
@@ -167,6 +185,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             ),
             requirements=("python-pptx", "lxml"),
             description="Rich PPTX importer",
+            preservation=_profile(content=0.99, semantics=0.94, geometry=0.98, style=0.95, relationships=0.88, editability=0.96),
         ),
         ConverterCapabilities(
             "pptx.html",
@@ -189,6 +208,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             base_cost=3.0,
             requirements=("python-pptx", "lxml"),
             description="Self-contained PPTX slide viewer (legacy direct renderer)",
+            preservation=_profile(content=0.98, semantics=0.72, geometry=0.98, style=0.96, relationships=0.66, editability=0.42),
         ),
         ConverterCapabilities(
             "docx.latex",
@@ -210,6 +230,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             ),
             requirements=("python-docx",),
             description="Semantic DOCX to LaTeX converter",
+            preservation=_profile(content=0.94, semantics=0.86, geometry=0.30, style=0.62, relationships=0.58, editability=0.90),
         ),
     )
 

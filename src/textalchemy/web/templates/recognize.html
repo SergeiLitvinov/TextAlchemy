@@ -1,110 +1,78 @@
 {% extends "base.html" %}
 {% set active = 'recognize' %}
-{% block title %}TextAlchemy — Распознать{% endblock %}
+{% block title %}TextAlchemy — распознать скан{% endblock %}
 {% block content %}
-    <div class="card">
-        <h2>👁️ Визуальное распознавание</h2>
-        <p>OCR из изображений и сканированных PDF.</p>
-        <div class="form-grid">
-            <div>
-                <label for="lang">Языки (через +)</label>
-                <input type="text" id="lang" value="rus+eng">
-            </div>
-            <div>
-                <label for="mode">Режим текста</label>
-                <select id="mode">
-                    <option value="printed">Печатный текст</option>
-                    <option value="handwriting">Рукописный</option>
-                </select>
-            </div>
-            <div>
-                <label for="scenario">Сценарий (PDF)</label>
-                <select id="scenario">
-                    <option value="structure">Сохранить структуру (Text layer + OCR)</option>
-                    <option value="fast">Быстро (только текстовый слой)</option>
-                    <option value="scan">Скан (только OCR)</option>
-                </select>
-            </div>
-            <div style="display:flex;align-items:flex-end">
-                <label style="display:flex;align-items:center;gap:.35rem;font-weight:400">
-                    <input type="checkbox" id="gpu"> Использовать GPU
-                </label>
-            </div>
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Распознавание текста</p>
+        <h2>Превратите скан в редактируемый текст</h2>
+        <p class="lead">Загрузите изображение или PDF. TextAlchemy извлечёт существующий текст и подключит OCR только там, где он нужен.</p>
+    </div>
+    <div class="privacy-pill"><span aria-hidden="true">●</span> Изображения не покидают компьютер</div>
+</section>
+
+<div class="ocr-layout">
+    <section class="card ocr-setup" aria-labelledby="ocr-source-title">
+        <div class="card-head"><div><p class="eyebrow">Источник</p><h3 id="ocr-source-title">Что находится в файле?</h3></div></div>
+        <div class="scenario-picker" role="radiogroup" aria-label="Тип исходного документа">
+            <button type="button" class="scenario-option" role="radio" aria-checked="false" data-scenario="fast">
+                <span aria-hidden="true">A</span><div><strong>Обычный PDF</strong><small>В документе уже можно выделить текст</small></div>
+            </button>
+            <button type="button" class="scenario-option active" role="radio" aria-checked="true" data-scenario="structure">
+                <span aria-hidden="true">◫</span><div><strong>PDF со сканами</strong><small>Сохраним текстовый слой и распознаем изображения</small></div><em>Рекомендуется</em>
+            </button>
+            <button type="button" class="scenario-option" role="radio" aria-checked="false" data-scenario="scan">
+                <span aria-hidden="true">◎</span><div><strong>Фото или чистый скан</strong><small>Распознаем всё содержимое с помощью OCR</small></div>
+            </button>
         </div>
-        <div class="file-drop" id="dropZone" style="margin-top:1rem;" role="button" tabindex="0" aria-controls="fileInput" aria-label="Выбрать изображение">
-            <div style="font-size:3rem;margin-bottom:0.5rem;">🖼️</div>
-            <strong>Перетащите изображение сюда</strong>
-            <div class="hint">или нажмите для выбора файла (PNG, JPG, PDF)</div>
+        <select id="scenario" class="visually-hidden" aria-label="Сценарий распознавания">
+            <option value="fast">Обычный PDF</option>
+            <option value="structure" selected>PDF со сканами</option>
+            <option value="scan">Фото или чистый скан</option>
+        </select>
+
+        <div class="file-drop ocr-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Выбрать изображение или PDF">
+            <div class="drop-icon" aria-hidden="true">↥</div>
+            <strong>Перетащите файл или выберите на компьютере</strong>
+            <div class="hint">PNG, JPG или PDF</div>
             <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.pdf">
         </div>
-        <div id="status" class="status-bar" style="display:none;"></div>
-    </div>
 
-    <div class="card">
+        <details class="advanced-settings">
+            <summary>Дополнительные настройки</summary>
+            <div class="form-grid advanced-grid">
+                <div>
+                    <label for="lang">Языки документа</label>
+                    <select id="lang">
+                        <option value="rus+eng">Русский и английский</option>
+                        <option value="rus">Русский</option>
+                        <option value="eng">Английский</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="mode">Тип текста</label>
+                    <select id="mode">
+                        <option value="printed">Печатный</option>
+                        <option value="handwriting">Рукописный</option>
+                    </select>
+                </div>
+                <label class="check-option"><input type="checkbox" id="gpu"> <span><strong>Ускорение на видеокарте</strong><small>Использовать, если OCR-библиотека поддерживает GPU</small></span></label>
+            </div>
+        </details>
+        <div id="status" class="status-bar" hidden></div>
+    </section>
+
+    <section class="card ocr-result" aria-labelledby="ocr-result-title">
         <div class="card-head">
-            <h2>Результат распознавания</h2>
-            <button type="button" id="copyBtn">📋 Копировать</button>
+            <div><p class="eyebrow">Результат</p><h3 id="ocr-result-title">Распознанный текст</h3></div>
+            <button type="button" class="btn-secondary" id="copyBtn" disabled>Копировать</button>
         </div>
-        <textarea id="result" readonly aria-label="Распознанный текст" placeholder="Распознанный текст появится здесь..."></textarea>
-    </div>
+        <div class="ocr-empty" id="resultEmpty"><span aria-hidden="true">≡</span><strong>Текст появится здесь</strong><small>После обработки его можно будет проверить, исправить и скопировать.</small></div>
+        <textarea id="result" hidden aria-label="Распознанный текст" placeholder="Распознанный текст появится здесь..."></textarea>
+    </section>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const $ = (id) => document.getElementById(id);
-    const dropZone = $('dropZone');
-    const fileInput = $('fileInput');
-    const resultArea = $('result');
-
-    function setStatus(msg, type) {
-        const el = $('status');
-        if (!msg) { el.style.display = 'none'; return; }
-        el.style.display = 'block';
-        el.className = 'status-bar ' + (type || 'info');
-        el.textContent = msg;
-    }
-
-    dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
-    });
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-    });
-    fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
-
-    async function handleFile(file) {
-        setStatus('Распознавание…', 'info');
-        const form = new FormData();
-        form.append('file', file);
-        form.append('lang', $('lang').value);
-        form.append('gpu', $('gpu').checked ? 'true' : 'false');
-        form.append('mode', $('mode').value);
-        form.append('scenario', $('scenario').value);
-        try {
-            const data = await api('/api/recognize', { method: 'POST', formData: form });
-            resultArea.value = data.text || '(текст не распознан)';
-            const confidence = data.confidence ? ` (confidence: ${(data.confidence * 100).toFixed(1)}%)` : '';
-            const backend = data.backend ? ` Backend: ${data.backend}` : ' (stub)';
-            setStatus(`Готово!${confidence}${backend}`, 'success');
-            toast('Распознавание завершено', 'success');
-        } catch (_) { setStatus('', null); }
-    }
-
-    $('copyBtn').addEventListener('click', async () => {
-        if (!resultArea.value) { toast('Нечего копировать', 'warning'); return; }
-        try {
-            await navigator.clipboard.writeText(resultArea.value);
-            toast('Скопировано в буфер обмена', 'success');
-        } catch (_) {
-            resultArea.select();
-            document.execCommand('copy');
-            toast('Скопировано', 'success');
-        }
-    });
-</script>
+<script src="/static/js/pages/recognize.js?v={{ asset_version }}" defer></script>
 {% endblock %}

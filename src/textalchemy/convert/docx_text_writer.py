@@ -58,7 +58,9 @@ def write_paragraph_content(
     for index, item in enumerate(source.content):
         item_location = f"{location}.content[{index}]"
         if isinstance(item, TextRun):
-            if item.properties.get("bookmark_start") is not None:
+            if item.properties.get("docx_raw_inline_xml"):
+                _write_raw_inline(paragraph, str(item.properties["docx_raw_inline_xml"]), report, item_location)
+            elif item.properties.get("bookmark_start") is not None:
                 _write_bookmark_start(paragraph, item.properties["bookmark_start"])
             elif item.properties.get("bookmark_end_id") is not None:
                 _write_bookmark_end(paragraph, item.properties["bookmark_end_id"])
@@ -167,6 +169,15 @@ def _write_raw_field(paragraph: Any, raw_elements: list[str]) -> None:
 
     for raw_xml in raw_elements:
         paragraph._p.append(parse_xml(raw_xml))
+
+
+def _write_raw_inline(paragraph: Any, raw_xml: str, report: ConversionReport, location: str) -> None:
+    from docx.oxml import parse_xml
+
+    try:
+        paragraph._p.append(parse_xml(raw_xml))
+    except Exception as error:  # noqa: BLE001 - foreign OOXML is a diagnostic boundary
+        report.add(IssueSeverity.LOSS, "docx-inline-ooxml", f"raw inline OOXML could not be restored: {error}", location)
 
 
 __all__ = ["add_paragraph", "write_formula", "write_paragraph_content"]

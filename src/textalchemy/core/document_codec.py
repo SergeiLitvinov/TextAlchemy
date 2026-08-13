@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from textalchemy.core.color import ColorLike, ColorValue
 from textalchemy.core.document_model import (
     Block,
     Box,
@@ -22,6 +23,8 @@ from textalchemy.core.document_model import (
     PackageRelationship,
     PageSettings,
     Paragraph,
+    Provenance,
+    ProvenanceEvent,
     Resource,
     ResourceKind,
     Section,
@@ -30,6 +33,7 @@ from textalchemy.core.document_model import (
     TableRow,
     TextRun,
     TextStyle,
+    VisualSurrogate,
 )
 from textalchemy.core.properties import PROPERTY_SCHEMA_VERSION, VersionedProperties
 
@@ -284,8 +288,8 @@ def _style_to_dict(value: TextStyle) -> dict[str, Any]:
         "underline": value.underline,
         "superscript": value.superscript,
         "subscript": value.subscript,
-        "color": value.color,
-        "background": value.background,
+        "color": _color_to_value(value.color),
+        "background": _color_to_value(value.background),
         "language": value.language,
         "properties": _properties_to_dict(value.properties),
     }
@@ -300,8 +304,8 @@ def _style_from_dict(value: dict[str, Any]) -> TextStyle:
         underline=value.get("underline"),
         superscript=value.get("superscript"),
         subscript=value.get("subscript"),
-        color=value.get("color"),
-        background=value.get("background"),
+        color=_color_from_value(value.get("color")),
+        background=_color_from_value(value.get("background")),
         language=value.get("language"),
         properties=dict(value.get("properties", {})),
     )
@@ -316,6 +320,7 @@ def _resource_to_dict(value: Resource) -> dict[str, Any]:
         "source": value.source,
         "filename": value.filename,
         "properties": value.properties,
+        "provenance": _provenance_to_dict(value.provenance),
     }
 
 
@@ -333,6 +338,75 @@ def _resource_from_dict(value: dict[str, Any]) -> Resource:
         source=value.get("source"),
         filename=value.get("filename"),
         properties=dict(value.get("properties", {})),
+        provenance=_provenance_from_dict(value.get("provenance")),
+    )
+
+
+def _color_to_value(value: ColorLike | None) -> str | dict[str, object] | None:
+    return value.to_dict() if isinstance(value, ColorValue) else value
+
+
+def _color_from_value(value: Any) -> ColorLike | None:
+    if isinstance(value, dict) and "space" in value and "components" in value:
+        return ColorValue.from_dict(value)
+    return value if isinstance(value, str) else None
+
+
+def _provenance_to_dict(value: Provenance | None) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return {
+        "source_format": value.source_format,
+        "source_path": value.source_path,
+        "page": value.page,
+        "object_id": value.object_id,
+        "package_part": value.package_part,
+        "events": [
+            {"operation": event.operation, "detail": event.detail, "fallback_reason": event.fallback_reason}
+            for event in value.events
+        ],
+    }
+
+
+def _provenance_from_dict(value: dict[str, Any] | None) -> Provenance | None:
+    if not value:
+        return None
+    return Provenance(
+        source_format=value["source_format"],
+        source_path=value.get("source_path"),
+        page=value.get("page"),
+        object_id=value.get("object_id"),
+        package_part=value.get("package_part"),
+        events=[
+            ProvenanceEvent(
+                operation=event["operation"],
+                detail=event.get("detail", ""),
+                fallback_reason=event.get("fallback_reason"),
+            )
+            for event in value.get("events", [])
+        ],
+    )
+
+
+def _surrogate_to_dict(value: VisualSurrogate | None) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return {
+        "resource_id": value.resource_id,
+        "reason": value.reason,
+        "media_type": value.media_type,
+        "fidelity": value.fidelity,
+    }
+
+
+def _surrogate_from_dict(value: dict[str, Any] | None) -> VisualSurrogate | None:
+    if not value:
+        return None
+    return VisualSurrogate(
+        resource_id=value["resource_id"],
+        reason=value["reason"],
+        media_type=value.get("media_type"),
+        fidelity=value.get("fidelity"),
     )
 
 
@@ -344,6 +418,8 @@ def _inline_to_dict(value: TextRun | Formula | Image) -> dict[str, Any]:
             "style": _style_to_dict(value.style),
             "link": value.link,
             "properties": _properties_to_dict(value.properties),
+            "provenance": _provenance_to_dict(value.provenance),
+            "visual_surrogate": _surrogate_to_dict(value.visual_surrogate),
         }
     return _block_to_dict(value)
 
@@ -355,6 +431,8 @@ def _inline_from_dict(value: dict[str, Any]) -> TextRun | Formula | Image:
             style=_style_from_dict(value.get("style", {})),
             link=value.get("link"),
             properties=dict(value.get("properties", {})),
+            provenance=_provenance_from_dict(value.get("provenance")),
+            visual_surrogate=_surrogate_from_dict(value.get("visual_surrogate")),
         )
     block = _block_from_dict(value)
     if not isinstance(block, (Formula, Image)):
@@ -371,6 +449,8 @@ def _block_to_dict(value: Block) -> dict[str, Any]:
             "alignment": value.alignment,
             "box": _box_to_dict(value.box),
             "properties": _properties_to_dict(value.properties),
+            "provenance": _provenance_to_dict(value.provenance),
+            "visual_surrogate": _surrogate_to_dict(value.visual_surrogate),
         }
     if isinstance(value, Table):
         return {
@@ -393,6 +473,8 @@ def _block_to_dict(value: Block) -> dict[str, Any]:
             "style_id": value.style_id,
             "box": _box_to_dict(value.box),
             "properties": _properties_to_dict(value.properties),
+            "provenance": _provenance_to_dict(value.provenance),
+            "visual_surrogate": _surrogate_to_dict(value.visual_surrogate),
         }
     if isinstance(value, Formula):
         return {
@@ -403,6 +485,8 @@ def _block_to_dict(value: Block) -> dict[str, Any]:
             "fallback_text": value.fallback_text,
             "box": _box_to_dict(value.box),
             "properties": value.properties,
+            "provenance": _provenance_to_dict(value.provenance),
+            "visual_surrogate": _surrogate_to_dict(value.visual_surrogate),
         }
     if isinstance(value, Image):
         return {
@@ -412,6 +496,8 @@ def _block_to_dict(value: Block) -> dict[str, Any]:
             "box": _box_to_dict(value.box),
             "properties": _properties_to_dict(value.properties),
             "crop": _crop_to_dict(value.crop),
+            "provenance": _provenance_to_dict(value.provenance),
+            "visual_surrogate": _surrogate_to_dict(value.visual_surrogate),
         }
     raise TypeError(f"unsupported block: {type(value).__name__}")
 
@@ -425,6 +511,8 @@ def _block_from_dict(value: dict[str, Any]) -> Block:
             alignment=value.get("alignment"),
             box=_box_from_dict(value.get("box")),
             properties=dict(value.get("properties", {})),
+            provenance=_provenance_from_dict(value.get("provenance")),
+            visual_surrogate=_surrogate_from_dict(value.get("visual_surrogate")),
         )
     if element_type == "table":
         rows = []
@@ -444,6 +532,8 @@ def _block_from_dict(value: dict[str, Any]) -> Block:
             style_id=value.get("style_id"),
             box=_box_from_dict(value.get("box")),
             properties=dict(value.get("properties", {})),
+            provenance=_provenance_from_dict(value.get("provenance")),
+            visual_surrogate=_surrogate_from_dict(value.get("visual_surrogate")),
         )
     if element_type == "formula":
         return Formula(
@@ -453,6 +543,8 @@ def _block_from_dict(value: dict[str, Any]) -> Block:
             fallback_text=value.get("fallback_text", ""),
             box=_box_from_dict(value.get("box")),
             properties=dict(value.get("properties", {})),
+            provenance=_provenance_from_dict(value.get("provenance")),
+            visual_surrogate=_surrogate_from_dict(value.get("visual_surrogate")),
         )
     if element_type == "image":
         return Image(
@@ -461,6 +553,8 @@ def _block_from_dict(value: dict[str, Any]) -> Block:
             box=_box_from_dict(value.get("box")),
             properties=dict(value.get("properties", {})),
             crop=_crop_from_dict(value.get("crop")),
+            provenance=_provenance_from_dict(value.get("provenance")),
+            visual_surrogate=_surrogate_from_dict(value.get("visual_surrogate")),
         )
     raise ValueError(f"unsupported element type: {element_type!r}")
 
@@ -499,6 +593,7 @@ def _section_to_dict(value: Section) -> dict[str, Any]:
         "even_page_headers": [_block_to_dict(block) for block in value.even_page_headers],
         "even_page_footers": [_block_to_dict(block) for block in value.even_page_footers],
         "properties": _properties_to_dict(value.properties),
+        "provenance": _provenance_to_dict(value.provenance),
     }
 
 
@@ -513,6 +608,7 @@ def _section_from_dict(value: dict[str, Any]) -> Section:
         even_page_headers=[_block_from_dict(block) for block in value.get("even_page_headers", [])],
         even_page_footers=[_block_from_dict(block) for block in value.get("even_page_footers", [])],
         properties=dict(value.get("properties", {})),
+        provenance=_provenance_from_dict(value.get("provenance")),
     )
 
 

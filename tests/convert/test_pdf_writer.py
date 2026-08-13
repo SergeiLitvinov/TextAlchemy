@@ -1,5 +1,6 @@
 """Тесты DocumentModel → PDF."""
 
+import pytest
 from PIL import Image as PillowImage
 
 from textalchemy.convert.pdf_writer import write_pdf_model
@@ -21,6 +22,7 @@ from textalchemy.core.document_model import (
     TextRun,
     TextStyle,
 )
+from textalchemy.fonts import FontResolver
 
 
 def _png_bytes(tmp_path):
@@ -126,3 +128,26 @@ def test_write_pdf_model_reports_formula_flattening(tmp_path):
     assert report.success is True
     assert report.lossless is False
     assert any(issue.severity is IssueSeverity.LOSS and issue.feature == "formula" for issue in report.issues)
+
+
+def test_write_pdf_model_embeds_and_verifies_resolved_font(tmp_path):
+    faces = [
+        face
+        for face in FontResolver.system().faces
+        if face.embeddable and all(ord(character) in face.glyphs for character in "abc")
+    ]
+    if not faces:
+        pytest.skip("no embeddable system font with basic Latin glyphs")
+    face = faces[0]
+    output = tmp_path / "embedded-font.pdf"
+    document = DocumentModel(
+        sections=[
+            Section(blocks=[Paragraph(content=[TextRun("abc", TextStyle(font_family=face.family, font_size=Length(12)))])])
+        ]
+    )
+
+    report = write_pdf_model(document, output)
+
+    assert report.success is True
+    assert report.metrics["font_embedding"]["embedded_faces"] >= 1
+    assert report.metrics["font_embedding"]["verified_faces"] >= 1

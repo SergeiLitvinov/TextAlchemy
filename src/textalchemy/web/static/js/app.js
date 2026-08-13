@@ -13,42 +13,57 @@
   const THEME_KEY = "textalchemy-theme";
 
   // ── Тема ───────────────────────────────────────────────
-  function applyTheme(dark) {
-    const root = document.documentElement;
-    const vars = dark
-      ? {
-          "--bg": "#0f172a",
-          "--surface": "#1e293b",
-          "--text": "#f1f5f9",
-          "--text-muted": "#94a3b8",
-          "--border": "#334155",
-        }
-      : {
-          "--bg": "#f5f5f5",
-          "--surface": "#ffffff",
-          "--text": "#1e293b",
-          "--text-muted": "#64748b",
-          "--border": "#e2e8f0",
-        };
-    for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
+  function applyTheme(theme) {
+    const normalized = theme === "dark" ? "dark" : "light";
+    document.documentElement.dataset.theme = normalized;
+    document.documentElement.style.colorScheme = normalized;
+    const toggle = document.querySelector(".theme-toggle");
+    if (toggle) {
+      const nextLabel = normalized === "dark" ? "Включить светлую тему" : "Включить тёмную тему";
+      toggle.setAttribute("aria-label", nextLabel);
+      toggle.setAttribute("title", nextLabel);
+      const icon = toggle.querySelector("use");
+      if (icon) icon.setAttribute("href", normalized === "dark" ? "#icon-sun" : "#icon-moon");
+    }
   }
 
   function toggleTheme() {
-    const isDark =
-      getComputedStyle(document.documentElement)
-        .getPropertyValue("--bg")
-        .trim() === "#0f172a";
-    const next = !isDark;
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     applyTheme(next);
-    localStorage.setItem(THEME_KEY, next ? "dark" : "light");
+    localStorage.setItem(THEME_KEY, next);
   }
 
   function initTheme() {
     const saved = localStorage.getItem(THEME_KEY);
-    applyTheme(saved === "dark");
+    const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    applyTheme(saved || preferred);
   }
 
   window.toggleTheme = toggleTheme;
+
+  function initNavigation() {
+    const openButton = document.querySelector("[data-nav-open]");
+    const closeTarget = document.querySelector("[data-nav-close]");
+    if (!openButton) return;
+
+    function setOpen(open) {
+      document.body.classList.toggle("nav-open", open);
+      openButton.setAttribute("aria-expanded", String(open));
+      if (closeTarget) closeTarget.hidden = !open;
+    }
+
+    openButton.addEventListener("click", () => setOpen(!document.body.classList.contains("nav-open")));
+    if (closeTarget) closeTarget.addEventListener("click", () => setOpen(false));
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") setOpen(false);
+    });
+    const desktopMedia = window.matchMedia("(min-width: 1051px)");
+    if (desktopMedia.addEventListener) {
+      desktopMedia.addEventListener("change", (event) => {
+        if (event.matches) setOpen(false);
+      });
+    }
+  }
 
   // ── Тосты ──────────────────────────────────────────────
   function ensureToastContainer() {
@@ -56,8 +71,7 @@
     if (!c) {
       c = document.createElement("div");
       c.id = "toast-container";
-      c.style.cssText =
-        "position:fixed;top:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;max-width:360px";
+      c.className = "toast-container";
       document.body.appendChild(c);
     }
     return c;
@@ -65,19 +79,9 @@
 
   function toast(message, type) {
     type = type || "info";
-    const colors = {
-      success: "#16a34a",
-      error: "#dc2626",
-      info: "#2563eb",
-      warning: "#d97706",
-    };
     const el = document.createElement("div");
+    el.className = `toast toast-${type}`;
     el.textContent = message;
-    el.style.cssText =
-      "padding:.75rem 1rem;border-radius:8px;color:#fff;font-size:.9rem;" +
-      "box-shadow:0 4px 12px rgba(0,0,0,.25);opacity:0;transform:translateY(-8px);" +
-      "transition:opacity .2s,transform .2s;background:" +
-      (colors[type] || colors.info);
     ensureToastContainer().appendChild(el);
     requestAnimationFrame(() => {
       el.style.opacity = "1";
@@ -85,7 +89,7 @@
     });
     setTimeout(() => {
       el.style.opacity = "0";
-      el.style.transform = "translateY(-8px)";
+      el.style.transform = "translateY(8px)";
       setTimeout(() => el.remove(), 250);
     }, 3500);
   }
@@ -167,5 +171,8 @@
   window.api = api;
 
   // ── Инициализация при загрузке ─────────────────────────
-  document.addEventListener("DOMContentLoaded", initTheme);
+  document.addEventListener("DOMContentLoaded", () => {
+    initTheme();
+    initNavigation();
+  });
 })();

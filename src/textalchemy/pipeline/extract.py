@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from textalchemy.core.color import ColorValue
 from textalchemy.core.document_model import (
     Block as RichBlock,
 )
@@ -20,6 +21,8 @@ from textalchemy.core.document_model import (
     Length,
     PageSettings,
     Paragraph,
+    Provenance,
+    ProvenanceEvent,
     Resource,
     ResourceKind,
     Section,
@@ -36,6 +39,7 @@ from textalchemy.core.document_model import (
 )
 from textalchemy.core.registry import operation
 from textalchemy.core.types import BlockType, DocFormat, Document, Text
+from textalchemy.core.units import canonical_coordinate_contract
 
 
 @operation(
@@ -177,6 +181,15 @@ def extract_pdf_model(
         footers: list[RichBlock] = []
         source_blocks = {block.number: block for block in page.text_blocks}
 
+        def origin(object_id: str, *, detail: str, fallback_reason: str | None = None) -> Provenance:
+            return Provenance(
+                source_format=DocFormat.PDF.value,
+                source_path=path,
+                page=page.number,
+                object_id=object_id,
+                events=[ProvenanceEvent(f"extract.pdf.{scenario}", detail, fallback_reason)],
+            )
+
         for semantic_block in (block for block in semantic.blocks if block.page == page.number):
             box = _pdf_box(semantic_block.meta.get("bbox"))
             properties = {
@@ -189,7 +202,18 @@ def extract_pdf_model(
                     TableRow(cells=[TableCell(blocks=[Paragraph(content=[TextRun(text=str(value))])]) for value in row])
                     for row in semantic_block.meta.get("rows", [])
                 ]
-                blocks.append(RichTable(rows=rows, box=box, properties={"pdf": properties}))
+                blocks.append(
+                    RichTable(
+                        rows=rows,
+                        box=box,
+                        properties={"pdf": properties},
+                        provenance=origin(
+                            f"semantic-{semantic_block.meta.get('source_block', 'table')}",
+                            detail="reconstructed semantic table",
+                            fallback_reason="table inferred from PDF geometry",
+                        ),
+                    )
+                )
                 continue
 
             source_number = semantic_block.meta.get("source_block")
@@ -203,9 +227,24 @@ def extract_pdf_model(
                     fallback_text=semantic_block.text,
                     box=box,
                     properties=properties,
+                    provenance=origin(
+                        f"semantic-{source_number or 'equation'}",
+                        detail="classified equation block",
+                        fallback_reason="equation retained as LaTeX text without source math structure",
+                    ),
                 )
             else:
-                rich_block = Paragraph(content=runs, box=box, properties=properties)
+                merge_source = semantic_block.meta.get("source") or semantic_block.meta.get("origin") or "text-layer"
+                rich_block = Paragraph(
+                    content=runs,
+                    box=box,
+                    properties=properties,
+                    provenance=origin(
+                        f"semantic-{source_number or len(blocks)}",
+                        detail=f"merged semantic block from {merge_source}",
+                        fallback_reason="OCR supplied missing text" if "ocr" in str(merge_source).lower() else None,
+                    ),
+                )
             role = semantic_block.meta.get("semantic_role")
             if role == "header":
                 headers.append(rich_block)
@@ -223,12 +262,19 @@ def extract_pdf_model(
                     media_type=img.media_type,
                     data=img.data,
                     filename=img.extension,
+                    provenance=origin(f"image-xref-{img.xref}", detail="extracted embedded raster image"),
                 )
             elif resource_id not in resources:
                 continue
             bbox = img.bbox
             box = Box(x=bbox[0], y=bbox[1], width=bbox[2] - bbox[0], height=bbox[3] - bbox[1]) if len(bbox) == 4 else None
-            blocks.append(Paragraph(content=[RichImage(resource_id=resource_id, box=box)]))
+            image_origin = origin(f"image-xref-{img.xref}", detail="placed extracted raster image")
+            blocks.append(
+                Paragraph(
+                    content=[RichImage(resource_id=resource_id, box=box, provenance=image_origin)],
+                    provenance=image_origin,
+                )
+            )
 
         for vec in page.vector_drawings:
             resource_id = f"p{page.number}_vec{vec.number}"
@@ -238,12 +284,25 @@ def extract_pdf_model(
                     kind=ResourceKind.VECTOR_IMAGE,
                     media_type="application/pdf+vector",
                     data=b"",
-                    properties={"items": list(vec.items), "fill": vec.fill, "stroke": vec.stroke},
+                    properties={
+                        "items": list(vec.items),
+                        "fill": vec.fill.to_dict() if vec.fill else None,
+                        "stroke": vec.stroke.to_dict() if vec.stroke else None,
+                        "fill_opacity": vec.fill_opacity,
+                        "stroke_opacity": vec.stroke_opacity,
+                    },
+                    provenance=origin(f"vector-{vec.number}", detail="extracted PDF drawing operators"),
                 )
             bbox = vec.bbox
             box = Box(x=bbox[0], y=bbox[1], width=bbox[2] - bbox[0], height=bbox[3] - bbox[1]) if len(bbox) == 4 else None
             alt = f"Vector drawing {vec.number} on page {vec.page}"
-            blocks.append(Paragraph(content=[RichImage(resource_id=resource_id, box=box, alt_text=alt)]))
+            vector_origin = origin(f"vector-{vec.number}", detail="represented PDF drawing as editable vector resource")
+            blocks.append(
+                Paragraph(
+                    content=[RichImage(resource_id=resource_id, box=box, alt_text=alt, provenance=vector_origin)],
+                    provenance=vector_origin,
+                )
+            )
 
         sections.append(
             Section(
@@ -254,10 +313,16 @@ def extract_pdf_model(
                     width=Length(page.width),
                     height=Length(page.height),
                 ),
+                provenance=origin(f"page-{page.number}", detail="created document section from PDF page"),
             )
         )
 
-    metadata: dict[str, Any] = {"engine": engine, "pages": len(sections), "warnings": all_warnings}
+    metadata: dict[str, Any] = {
+        "engine": engine,
+        "pages": len(sections),
+        "warnings": all_warnings,
+        "coordinate_system": canonical_coordinate_contract(),
+    }
     metadata.update(geometry.metadata)
 
     return DocumentModel(
@@ -284,6 +349,7 @@ def _pdf_text_runs(source_block: Any, fallback_text: str, meta: dict[str, Any]) 
                 runs.append(TextRun(text="\n"))
             for span in line.spans:
                 flags = int(span.flags)
+                color = ColorValue.from_pdf_srgb(span.color)
                 runs.append(
                     TextRun(
                         text=span.text,
@@ -293,6 +359,7 @@ def _pdf_text_runs(source_block: Any, fallback_text: str, meta: dict[str, Any]) 
                             bold=bool(flags & 16),
                             italic=bool(flags & 2),
                             superscript=bool(flags & 1),
+                            color=color,
                         ),
                     )
                 )
@@ -301,12 +368,14 @@ def _pdf_text_runs(source_block: Any, fallback_text: str, meta: dict[str, Any]) 
     font_spans = meta.get("font_spans") or []
     first = font_spans[0] if font_spans else {}
     flags = int(first.get("flags", 0))
+    color = ColorValue.from_pdf_srgb(int(first.get("color", 0)))
     style = TextStyle(
         font_family=first.get("font") or None,
         font_size=Length(float(first["size"])) if first.get("size") else None,
         bold=bool(flags & 16),
         italic=bool(flags & 2),
         superscript=bool(flags & 1),
+        color=color,
     )
     return [TextRun(text=fallback_text, style=style)]
 

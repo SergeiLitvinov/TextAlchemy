@@ -11,6 +11,7 @@ from typing import Callable
 from textalchemy.convert.backends import ExporterBackend, ImporterBackend, PathConverterBackend
 from textalchemy.convert.capabilities import create_capability_registry
 from textalchemy.convert.protocols import ConversionBackend, ConversionValue
+from textalchemy.convert.stages import StageContext
 from textalchemy.core.conversion_graph import (
     DEFAULT_FEATURES,
     CapabilityRegistry,
@@ -25,6 +26,7 @@ from textalchemy.core.types import DocFormat
 StepHandler = Callable[[ConversionValue, Path], tuple[ConversionValue, ConversionReport | None]]
 BackendEntry = ConversionBackend | StepHandler
 RequirementChecker = Callable[[str], bool]
+CancellationCheck = Callable[[], bool]
 
 _MODULE_REQUIREMENTS = {
     "python-docx": "docx",
@@ -76,8 +78,9 @@ class ConversionExecutor:
             available=self._step_available,
         )
 
-    def execute(self, request: ConversionRequest) -> ConversionReport:
+    def execute(self, request: ConversionRequest, *, cancelled: CancellationCheck | None = None) -> ConversionReport:
         report = ConversionReport(request.output_path)
+        is_cancelled = cancelled or (lambda: False)
         if not request.input_path.is_file():
             report.add(IssueSeverity.ERROR, "input", f"input file not found: {request.input_path}")
             return report
@@ -115,6 +118,8 @@ class ConversionExecutor:
         report.metrics["executed_steps"] = []
         report.metrics["step_metrics"] = {}
         try:
+            if is_cancelled():
+                return _cancelled_report(report)
             value = _load_initial(request)
             if not plan.steps and request.target is not DocFormat.MODEL:
                 request.output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -124,15 +129,24 @@ class ConversionExecutor:
                     atomic_copy(request.input_path, request.output_path)
                 return report
             for step in plan.steps:
+                if is_cancelled():
+                    return _cancelled_report(report)
                 backend = self.backends[step.id]
-                execute = backend.execute if isinstance(backend, ConversionBackend) else backend
-                value, step_report = execute(value, request.output_path)
+                if isinstance(backend, ConversionBackend) and hasattr(backend, "execute_stage"):
+                    stage_result = backend.execute_stage(value, StageContext(request.output_path, is_cancelled))
+                    value, step_report = stage_result.value, stage_result.report
+                else:
+                    execute = backend.execute if isinstance(backend, ConversionBackend) else backend
+                    value, step_report = execute(value, request.output_path)
                 report.metrics["executed_steps"].append(step.id)
                 if step_report is not None:
                     report.issues.extend(step_report.issues)
                     report.metrics["step_metrics"][step.id] = step_report.metrics
                     if not step_report.success:
                         return report
+                if is_cancelled():
+                    request.output_path.unlink(missing_ok=True)
+                    return _cancelled_report(report)
             if request.target is DocFormat.MODEL:
                 if not isinstance(value, DocumentModel):
                     raise TypeError(f"route returned {type(value).__name__}, expected DocumentModel")
@@ -159,6 +173,12 @@ def requirement_available(requirement: str) -> bool:
         return any(candidate and Path(candidate).is_file() for candidate in candidates)
     module = _MODULE_REQUIREMENTS.get(requirement, requirement.replace("-", "_"))
     return importlib.util.find_spec(module) is not None
+
+
+def _cancelled_report(report: ConversionReport) -> ConversionReport:
+    report.metrics["cancelled"] = True
+    report.add(IssueSeverity.ERROR, "cancelled", "conversion cancelled")
+    return report
 
 
 def infer_format(path: str | Path) -> DocFormat:

@@ -1,62 +1,40 @@
 {% extends "base.html" %}
 {% set active = 'export' %}
-{% block title %}TextAlchemy — Экспорт{% endblock %}
+{% block title %}TextAlchemy — экспорт библиотеки{% endblock %}
 {% block content %}
-    <div class="card">
-        <h2>💾 Экспорт библиографии</h2>
-        <p>Выгрузите всю библиотеку в удобном формате.</p>
-        <div class="grid-3">
-            <div class="card text-center">
-                <h3>JSON</h3>
-                <p>Структурированный формат для обмена данными</p>
-                <a href="/api/export/json" class="btn" data-fmt="JSON">Скачать JSON</a>
-            </div>
-            <div class="card text-center">
-                <h3>Markdown</h3>
-                <p>Человекочитаемый формат разметки</p>
-                <a href="/api/export/markdown" class="btn" data-fmt="Markdown">Скачать Markdown</a>
-            </div>
-            <div class="card text-center">
-                <h3>ГОСТ</h3>
-                <p>Оформление по ГОСТ Р 7.0.100-2018</p>
-                <a href="/api/export/gost" class="btn" data-fmt="ГОСТ">Скачать ГОСТ</a>
-            </div>
-            <div class="card text-center">
-                <h3>BibTeX</h3>
-                <p>Для LaTeX / Zotero / JabRef</p>
-                <a href="/api/export/bibtex" class="btn" data-fmt="BibTeX">Скачать BibTeX</a>
-            </div>
-            <div class="card text-center">
-                <h3>CSV</h3>
-                <p>Таблица для Excel</p>
-                <a href="/api/export/csv" class="btn" data-fmt="CSV">Скачать CSV</a>
-            </div>
-            <div class="card text-center">
-                <h3>RIS</h3>
-                <p>Для EndNote / Mendeley</p>
-                <a href="/api/export/ris" class="btn" data-fmt="RIS">Скачать RIS</a>
-            </div>
-        </div>
-        <div id="status" class="status-bar" style="display:none;"></div>
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Библиотека</p>
+        <h2>Экспортируйте источники</h2>
+        <p class="lead">Выберите формат для публикации, переноса в менеджер библиографии или дальнейшей обработки.</p>
     </div>
+</section>
+{% include "partials/library_nav.html" %}
+
+<section class="export-section" aria-labelledby="publication-export-title">
+    <div class="section-heading compact"><div><p class="eyebrow">Для документов</p><h3 id="publication-export-title">Публикация и оформление</h3></div></div>
+    <div class="export-grid">
+        <a href="/api/export/gost" class="export-card featured" data-fmt="ГОСТ">
+            <span class="export-format">ГОСТ</span><div><strong>Готовый список литературы</strong><small>Оформление по ГОСТ Р 7.0.100-2018 для вставки в работу</small></div><span aria-hidden="true">↓</span>
+        </a>
+        <a href="/api/export/markdown" class="export-card" data-fmt="Markdown">
+            <span class="export-format">MD</span><div><strong>Markdown</strong><small>Читаемый текст для заметок, документации и публикаций</small></div><span aria-hidden="true">↓</span>
+        </a>
+    </div>
+</section>
+
+<section class="export-section" aria-labelledby="manager-export-title">
+    <div class="section-heading compact"><div><p class="eyebrow">Для других программ</p><h3 id="manager-export-title">Менеджеры библиографии и данные</h3></div></div>
+    <div class="export-grid compact-grid">
+        <a href="/api/export/bibtex" class="export-card" data-fmt="BibTeX"><span class="export-format">BIB</span><div><strong>BibTeX</strong><small>LaTeX, Zotero и JabRef</small></div><span aria-hidden="true">↓</span></a>
+        <a href="/api/export/ris" class="export-card" data-fmt="RIS"><span class="export-format">RIS</span><div><strong>RIS</strong><small>EndNote, Mendeley и Zotero</small></div><span aria-hidden="true">↓</span></a>
+        <a href="/api/export/csv" class="export-card" data-fmt="CSV"><span class="export-format">CSV</span><div><strong>Таблица CSV</strong><small>Excel и табличный анализ</small></div><span aria-hidden="true">↓</span></a>
+        <a href="/api/export/json" class="export-card" data-fmt="JSON"><span class="export-format">JSON</span><div><strong>Полные данные</strong><small>Резервная копия и интеграции</small></div><span aria-hidden="true">↓</span></a>
+    </div>
+</section>
+<div id="status" class="status-bar" hidden></div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const $ = (id) => document.getElementById(id);
-    function setStatus(msg, type) {
-        const el = $('status');
-        if (!msg) { el.style.display = 'none'; return; }
-        el.style.display = 'block';
-        el.className = 'status-bar ' + (type || 'info');
-        el.textContent = msg;
-    }
-    document.querySelectorAll('a[data-fmt]').forEach((a) => {
-        a.addEventListener('click', () => {
-            toast(`Экспорт ${a.dataset.fmt} начат`, 'info');
-            setStatus(`Файл ${a.dataset.fmt} скачивается…`, 'info');
-            setTimeout(() => setStatus('', null), 2000);
-        });
-    });
-</script>
+<script src="/static/js/pages/export.js?v={{ asset_version }}" defer></script>
 {% endblock %}

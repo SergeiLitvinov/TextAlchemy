@@ -12,6 +12,7 @@ from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.util import Emu, Inches, Pt
 
+from textalchemy.core.color import ColorValue
 from textalchemy.core.document_model import Formula, Image, Paragraph, ResourceKind, Table
 from textalchemy.formats import pptx as pptx_mod
 from textalchemy.formats.pptx import read_pptx, read_pptx_model
@@ -172,7 +173,8 @@ class TestReadPptxModel:
 
         assert runs[0].style.bold is True
         assert runs[0].style.font_size.pt == 20
-        assert runs[0].style.color == "#AA0000"
+        assert isinstance(runs[0].style.color, ColorValue)
+        assert runs[0].style.color.to_hex() == "#AA0000"
         assert runs[1].style.italic is True
         assert runs[1].link == "https://example.com"
 
@@ -186,6 +188,23 @@ class TestReadPptxModel:
         )
         assert shape_block.box.x == pytest.approx(72.0)
         assert shape_block.properties["pptx"]["shape"]["fill"] == "#5B9BD5"
+        assert ColorValue.from_dict(shape_block.properties["pptx"]["shape"]["fill_color"]).to_hex() == "#5B9BD5"
+
+    def test_shape_gradient_keeps_canonical_stops_and_alpha(self):
+        element = etree.fromstring(
+            f'<p:sp xmlns:p="{pptx_mod._P_NS}" xmlns:a="{pptx_mod._A_NS}"><p:spPr>'
+            '<a:prstGeom prst="rect"/><a:gradFill><a:gsLst>'
+            '<a:gs pos="0"><a:srgbClr val="000000"/></a:gs>'
+            '<a:gs pos="100000"><a:schemeClr val="accent1"><a:alpha val="50000"/></a:schemeClr></a:gs>'
+            "</a:gsLst></a:gradFill></p:spPr></p:sp>"
+        )
+
+        metadata = pptx_mod._shape_metadata(element, pptx_mod.Box(0, 0, 10, 10), {"accent1": "204060"})
+
+        assert metadata is not None
+        stops = metadata["gradient_colors"]
+        assert stops[0]["position"] == 0.0
+        assert ColorValue.from_dict(stops[1]["color"]).to_hex(include_alpha=True) == "#20406080"
 
     def test_group_child_resolves_absolute_geometry(self, tmp_path):
         path = tmp_path / "rich.pptx"
@@ -307,6 +326,33 @@ class TestReadPptxModel:
         color = pptx_mod._chart_series_color(element, {"accent2": "C0504D"})
         assert color == "#C0504D"
         assert color != "#" + pptx_mod._THEME_COLORS["accent2"]
+
+    def test_chart_color_keeps_alpha_and_theme_modifiers_in_canonical_value(self):
+        element = etree.fromstring(
+            f'<c:ser xmlns:c="{pptx_mod._C_NS}" xmlns:a="{pptx_mod._A_NS}">'
+            '<c:spPr><a:solidFill><a:schemeClr val="accent2">'
+            '<a:shade val="50000"/><a:alpha val="40000"/>'
+            "</a:schemeClr></a:solidFill></c:spPr></c:ser>"
+        )
+
+        color = pptx_mod._chart_series_color_value(element, {"accent2": "C0504D"})
+
+        assert color is not None
+        assert color.to_hex(include_alpha=True) == "#60282666"
+
+    def test_drawingml_theme_color_preserves_and_applies_modifiers(self):
+        solid = etree.fromstring(
+            f'<a:solidFill xmlns:a="{pptx_mod._A_NS}">'
+            '<a:schemeClr val="accent1"><a:tint val="50000"/><a:alpha val="40000"/></a:schemeClr>'
+            "</a:solidFill>"
+        )
+
+        color, properties = pptx_mod._resolve_color_value(solid, {"accent1": "204060"})
+
+        assert color is not None
+        assert color.to_hex(include_alpha=True) == "#90A0B066"
+        assert properties["color_theme"] == "accent1"
+        assert properties["color_modifiers"] == {"tint": 0.5, "alpha": 0.4}
 
     def test_read_chart_data_axes_and_theme_accents(self, monkeypatch):
         chart_xml = (
@@ -695,7 +741,8 @@ class TestReadPptxModel:
 
         data = pptx_mod._read_chart_data(object(), "rId1")
         points = data["series"][0]["data_points"]
-        assert points == {0: {"color": "#70AD47"}}
+        assert points[0]["color"] == "#70AD47"
+        assert ColorValue.from_dict(points[0]["color_value"]).to_hex() == "#70AD47"
 
     def test_extracts_image_resource(self, tmp_path):
         path = tmp_path / "rich.pptx"
@@ -782,7 +829,8 @@ class TestReadPptxModel:
         assert body.box.y == pytest.approx(126.0)
         assert title_run.style.font_size.pt == pytest.approx(44.0)
         assert body_run.style.font_size.pt == pytest.approx(32.0)
-        assert title_run.style.color == "#000000"
+        assert isinstance(title_run.style.color, ColorValue)
+        assert title_run.style.color.to_hex() == "#000000"
         assert title.alignment == "center"
 
 

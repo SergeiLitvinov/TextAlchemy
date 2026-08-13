@@ -7,6 +7,8 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from textalchemy.core.units import CSS_PIXELS_PER_INCH, EMU_PER_INCH, emu_to_inches
+
 # ----------------------------------------------------------------------------
 # Namespaces
 # ----------------------------------------------------------------------------
@@ -37,14 +39,13 @@ def qn(t: str) -> str:
 # ----------------------------------------------------------------------------
 # Geometry helpers
 # ----------------------------------------------------------------------------
-EMU_PER_INCH = 914400
-EMU_PER_PX = 914400 / 96  # CSS px at 96 dpi
+EMU_PER_PX = EMU_PER_INCH / CSS_PIXELS_PER_INCH
 
 
 def emu_to_in(emu) -> float:
     if emu is None:
         return 0.0
-    return int(emu) / EMU_PER_INCH
+    return emu_to_inches(int(emu))
 
 
 def fmt(v: float) -> str:

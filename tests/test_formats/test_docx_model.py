@@ -8,6 +8,7 @@ from docx.oxml import OxmlElement
 from docx.shared import Inches, Pt
 from PIL import Image as PillowImage
 
+from textalchemy.core.color import ColorValue
 from textalchemy.core.document_model import Formula, Image, Paragraph, ResourceKind, Table
 from textalchemy.formats.docx import read_docx_model
 
@@ -31,6 +32,11 @@ def test_read_docx_model_preserves_order_styles_tables_and_metadata(tmp_path):
 
     model = read_docx_model(path)
 
+    assert model.sections[0].provenance is not None
+    assert model.sections[0].provenance.source_path == str(path)
+    assert model.sections[0].provenance.package_part == "/word/document.xml"
+    assert model.sections[0].blocks[0].provenance is not None
+
     assert model.metadata["title"] == "Structured document"
     assert model.source_format == "docx"
     assert [type(block) for block in model.sections[0].blocks] == [Paragraph, Table, Paragraph]
@@ -41,6 +47,28 @@ def test_read_docx_model_preserves_order_styles_tables_and_metadata(tmp_path):
     assert imported.content[0].style.italic is True
     assert imported.content[0].style.font_family == "Arial"
     assert imported.content[0].style.font_size.pt == 14
+
+
+def test_read_docx_model_resolves_theme_color_tint_on_direct_run(tmp_path):
+    from docx.oxml.ns import qn
+
+    path = tmp_path / "theme-color.docx"
+    source = Document()
+    run = source.add_paragraph().add_run("Theme color")
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "FF0000")
+    color.set(qn("w:themeColor"), "accent1")
+    color.set(qn("w:themeTint"), "80")
+    run._r.get_or_add_rPr().append(color)
+    source.save(path)
+
+    model = read_docx_model(path)
+    imported = model.sections[0].blocks[0].content[0]
+
+    assert isinstance(imported.style.color, ColorValue)
+    assert imported.style.color.to_hex() == "#A7C0DE"
+    assert imported.style.properties["color_theme"] == "accent1"
+    assert imported.style.properties["color_modifiers"]["tint"] == 128 / 255
 
 
 def test_read_docx_model_extracts_image_formula_header_and_page_geometry(tmp_path):
@@ -78,6 +106,209 @@ def test_read_docx_model_extracts_image_formula_header_and_page_geometry(tmp_pat
     assert model.sections[0].headers[0].plain_text == "Header text"
     assert model.sections[0].page.width.pt == 648
     assert model.validate() == []
+
+
+def test_read_docx_model_normalizes_drawingml_picture_outline_color(tmp_path):
+    path = tmp_path / "picture-outline.docx"
+    image_path = tmp_path / "outline.png"
+    PillowImage.new("RGB", (8, 6), "red").save(image_path)
+    source = Document()
+    picture = source.add_paragraph().add_run().add_picture(str(image_path), width=Inches(1))
+    shape_properties = picture._inline.xpath(".//pic:spPr")[0]
+    line = OxmlElement("a:ln")
+    solid = OxmlElement("a:solidFill")
+    scheme = OxmlElement("a:schemeClr")
+    scheme.set("val", "accent2")
+    alpha = OxmlElement("a:alpha")
+    alpha.set("val", "50000")
+    scheme.append(alpha)
+    solid.append(scheme)
+    line.append(solid)
+    shape_properties.append(line)
+    source.save(path)
+
+    model = read_docx_model(path)
+    imported = next(item for item in model.sections[0].blocks[0].content if isinstance(item, Image))
+    color = ColorValue.from_dict(imported.properties["stroke_color"])
+
+    assert color.alpha == 0.5
+    assert imported.properties["stroke_color_source"]["color_theme"] == "accent2"
+
+
+def test_read_docx_model_catalogs_vml_fill_and_stroke_colors(tmp_path):
+    from lxml import etree
+
+    path = tmp_path / "vml-colors.docx"
+    source = Document()
+    run = source.add_paragraph().add_run()
+    pict = OxmlElement("w:pict")
+    vml_namespace = "urn:schemas-microsoft-com:vml"
+    shape = etree.Element(f"{{{vml_namespace}}}shape", nsmap={"v": vml_namespace})
+    shape.set("fillcolor", "#336699")
+    shape.set("strokecolor", "#FF0000")
+    fill = etree.Element(f"{{{vml_namespace}}}fill")
+    fill.set("color", "#00FF00")
+    fill.set("opacity", "50%")
+    shape.append(fill)
+    pict.append(shape)
+    run._r.append(pict)
+    source.save(path)
+
+    model = read_docx_model(path)
+    imported = model.sections[0].blocks[0].content[0]
+    colors = imported.properties["vml_colors"]
+
+    assert ColorValue.from_dict(colors[0]["color"]).to_hex() == "#336699"
+    assert ColorValue.from_dict(colors[1]["color"]).to_hex() == "#FF0000"
+    assert ColorValue.from_dict(colors[2]["color"]).to_hex(include_alpha=True) == "#00FF0080"
+    assert imported.properties["vml_xml"]
+
+
+def test_read_docx_model_preserves_inline_revisions_and_content_control(tmp_path):
+    from docx.oxml.ns import qn
+
+    path = tmp_path / "revisions-sdt.docx"
+    source = Document()
+    paragraph = source.add_paragraph("Before ")
+    insertion = OxmlElement("w:ins")
+    insertion.set(qn("w:id"), "7")
+    insertion.set(qn("w:author"), "Editor")
+    inserted_run = OxmlElement("w:r")
+    inserted_text = OxmlElement("w:t")
+    inserted_text.text = "inserted"
+    inserted_run.append(inserted_text)
+    insertion.append(inserted_run)
+    paragraph._p.append(insertion)
+    deletion = OxmlElement("w:del")
+    deletion.set(qn("w:id"), "8")
+    deleted_run = OxmlElement("w:r")
+    deleted_text = OxmlElement("w:delText")
+    deleted_text.text = "deleted"
+    deleted_run.append(deleted_text)
+    deletion.append(deleted_run)
+    paragraph._p.append(deletion)
+    control = OxmlElement("w:sdt")
+    control_properties = OxmlElement("w:sdtPr")
+    tag = OxmlElement("w:tag")
+    tag.set(qn("w:val"), "student-name")
+    control_properties.append(tag)
+    content = OxmlElement("w:sdtContent")
+    control_run = OxmlElement("w:r")
+    control_text = OxmlElement("w:t")
+    control_text.text = "Alice"
+    control_run.append(control_text)
+    content.append(control_run)
+    control.extend((control_properties, content))
+    paragraph._p.append(control)
+    source.save(path)
+
+    model = read_docx_model(path)
+    runs = model.sections[0].blocks[0].content
+
+    assert [run.text for run in runs] == ["Before ", "inserted", "deleted", "Alice"]
+    assert runs[1].properties["revision"] == {"type": "ins", "id": "7", "author": "Editor", "date": None}
+    assert runs[2].properties["revision"]["type"] == "del"
+    assert runs[3].properties["content_control"]["tag"] == "student-name"
+    features = model.metadata["docx_features"]["features"]
+    assert features["tracked_insertions"]["count"] == 1
+    assert features["tracked_deletions"]["count"] == 1
+    assert features["content_controls"]["count"] == 1
+
+
+def test_read_docx_model_preserves_comment_markers_and_text_box_ooxml(tmp_path):
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import qn
+
+    path = tmp_path / "comments-textbox.docx"
+    source = Document()
+    paragraph = source.add_paragraph()
+    range_start = OxmlElement("w:commentRangeStart")
+    range_start.set(qn("w:id"), "4")
+    paragraph._p.append(range_start)
+    paragraph.add_run("Reviewed")
+    range_end = OxmlElement("w:commentRangeEnd")
+    range_end.set(qn("w:id"), "4")
+    paragraph._p.append(range_end)
+    reference_run = OxmlElement("w:r")
+    reference = OxmlElement("w:commentReference")
+    reference.set(qn("w:id"), "4")
+    reference_run.append(reference)
+    paragraph._p.append(reference_run)
+    paragraph._p.append(
+        parse_xml(
+            '<w:r xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+            'xmlns:v="urn:schemas-microsoft-com:vml"><w:pict><v:shape><v:textbox>'
+            "<w:txbxContent><w:p><w:r><w:t>Box text</w:t></w:r></w:p></w:txbxContent>"
+            "</v:textbox></v:shape></w:pict></w:r>"
+        )
+    )
+    source.save(path)
+
+    model = read_docx_model(path)
+    runs = model.sections[0].blocks[0].content
+
+    assert [run.properties.get("docx_raw_inline_type") for run in runs] == [
+        "commentRangeStart",
+        None,
+        "commentRangeEnd",
+        "r",
+        "r",
+    ]
+    assert runs[3].properties["docx_advanced_types"] == ["comments"]
+    assert runs[4].text == "Box text"
+    assert runs[4].properties["docx_advanced_types"] == ["text_boxes"]
+    features = model.metadata["docx_features"]["features"]
+    assert features["comments"]["count"] == 3
+    assert features["text_boxes"]["preservation"] == "native-ooxml"
+
+
+def test_read_docx_model_records_document_protection_xml(tmp_path):
+    from docx.oxml.ns import qn
+
+    path = tmp_path / "protected.docx"
+    source = Document()
+    protection = OxmlElement("w:documentProtection")
+    protection.set(qn("w:edit"), "readOnly")
+    protection.set(qn("w:enforcement"), "1")
+    source.settings._element.append(protection)
+    source.save(path)
+
+    model = read_docx_model(path)
+
+    features = model.metadata["docx_features"]
+    assert features["features"]["protected_fields"]["count"] == 1
+    assert "documentProtection" in features["document_protection_xml"]
+
+
+def test_read_docx_model_preserves_block_content_control(tmp_path):
+    path = tmp_path / "block-sdt.docx"
+    source = Document()
+    source.add_paragraph("Before")
+    control = OxmlElement("w:sdt")
+    properties = OxmlElement("w:sdtPr")
+    tag = OxmlElement("w:tag")
+    from docx.oxml.ns import qn
+
+    tag.set(qn("w:val"), "lesson")
+    properties.append(tag)
+    content = OxmlElement("w:sdtContent")
+    paragraph = OxmlElement("w:p")
+    run = OxmlElement("w:r")
+    text = OxmlElement("w:t")
+    text.text = "Controlled block"
+    run.append(text)
+    paragraph.append(run)
+    content.append(paragraph)
+    control.extend((properties, content))
+    source._element.body.insert(-1, control)
+    source.save(path)
+
+    model = read_docx_model(path)
+
+    block = model.sections[0].blocks[1]
+    assert block.plain_text == "Controlled block"
+    assert block.properties["docx_raw_block_type"] == "sdt"
+    assert block.properties["content_control"]["tag"] == "lesson"
 
 
 def test_read_docx_model_preserves_horizontal_cell_merge(tmp_path):

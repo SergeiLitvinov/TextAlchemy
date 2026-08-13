@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from textalchemy.core.color import ColorValue
 from textalchemy.core.document_model import DocumentModel, Length, TextStyle
 from textalchemy.ooxml.package import OOXML_NAMESPACES, RELATIONSHIP_TYPE, package_part_for_relationship
 
 
-def read_document_styles(document: Any) -> dict[str, TextStyle]:
+def read_document_styles(document: Any, model: DocumentModel | None = None) -> dict[str, TextStyle]:
     from docx.enum.style import WD_STYLE_TYPE
 
     result: dict[str, TextStyle] = {}
@@ -25,7 +26,7 @@ def read_document_styles(document: Any) -> dict[str, TextStyle]:
         if style.type is WD_STYLE_TYPE.PARAGRAPH:
             properties.update(_style_paragraph_properties(style))
             properties.update(_numbering_properties(style.element.pPr))
-        result[style.style_id] = _resolved_font_style(style, properties=properties)
+        result[style.style_id] = _resolved_font_style(style, properties=properties, model=model)
     return result
 
 
@@ -48,10 +49,7 @@ def read_document_defaults(document: Any, model: DocumentModel) -> TextStyle | N
             font_family = _theme_typeface(model, font_theme)
     size = run_properties.find(qn("w:sz")) if run_properties is not None else None
     color = run_properties.find(qn("w:color")) if run_properties is not None else None
-    color_value = color.get(qn("w:val")) if color is not None else None
-    color_theme = color.get(qn("w:themeColor")) if color is not None else None
-    if (not color_value or color_value.lower() == "auto") and color_theme:
-        color_value = _theme_color(model, color_theme)
+    resolved_color, color_properties = _word_color(color, model)
     vertical = run_properties.find(qn("w:vertAlign")) if run_properties is not None else None
     vertical_value = vertical.get(qn("w:val")) if vertical is not None else None
     language = run_properties.find(qn("w:lang")) if run_properties is not None else None
@@ -63,13 +61,13 @@ def read_document_defaults(document: Any, model: DocumentModel) -> TextStyle | N
         underline=_xml_underline(run_properties),
         superscript=True if vertical_value == "superscript" else None,
         subscript=True if vertical_value == "subscript" else None,
-        color=f"#{color_value}" if color_value and color_value.lower() != "auto" else None,
+        color=resolved_color,
         language=language.get(qn("w:val")) if language is not None else None,
         properties={
             "style_name": "Document Defaults",
             "style_type": "document-default",
             "font_theme": font_theme,
-            "color_theme": color_theme,
+            **color_properties,
             "paragraph_defaults_xml": (
                 etree.tostring(paragraph_defaults[0], encoding="unicode") if paragraph_defaults else None
             ),
@@ -77,7 +75,7 @@ def read_document_defaults(document: Any, model: DocumentModel) -> TextStyle | N
     )
 
 
-def read_run_style(run: Any, paragraph: Any) -> TextStyle:
+def read_run_style(run: Any, paragraph: Any, model: DocumentModel | None = None) -> TextStyle:
     sources = [run.font]
     sources.extend(style.font for style in _style_chain(run.style))
     sources.extend(style.font for style in _style_chain(paragraph.style))
@@ -104,12 +102,13 @@ def read_run_style(run: Any, paragraph: Any) -> TextStyle:
         underline=_underline(_first_font_value(sources, "underline")),
         superscript=_first_font_value(sources, "superscript"),
         subscript=_first_font_value(sources, "subscript"),
-        color=_font_color(sources),
+        color=_font_color(sources, model),
         language=_resolved_run_language(run, paragraph),
         properties={
             "style_id": run.style.style_id if run.style is not None else None,
             "style_name": run.style.name if run.style is not None else None,
             "direct_fields": direct_fields,
+            **_font_color_properties(sources, model),
         },
     )
 
@@ -156,6 +155,12 @@ def _theme_color(model: DocumentModel, color_key: str) -> str | None:
     return (nodes[0].get("val") or nodes[0].get("lastClr")) if nodes else None
 
 
+def document_theme_colors(model: DocumentModel) -> dict[str, str]:
+    """Read the document DrawingML color scheme for shared OOXML adapters."""
+    keys = ("dk1", "lt1", "dk2", "lt2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink")
+    return {key: value for key in keys if (value := _theme_color(model, key)) is not None}
+
+
 def _xml_bool(parent: Any, local_name: str) -> bool | None:
     from docx.oxml.ns import qn
 
@@ -178,8 +183,9 @@ def _xml_underline(parent: Any) -> bool | None:
     return str(node.get(qn("w:val"), "single")).lower() not in {"0", "false", "off", "none"}
 
 
-def _resolved_font_style(style: Any, *, properties: dict[str, Any]) -> TextStyle:
+def _resolved_font_style(style: Any, *, properties: dict[str, Any], model: DocumentModel | None = None) -> TextStyle:
     sources = [item.font for item in _style_chain(style)]
+    properties.update(_font_color_properties(sources, model))
     return TextStyle(
         font_family=_first_font_value(sources, "name"),
         font_size=_font_size(_first_font_value(sources, "size")),
@@ -188,7 +194,7 @@ def _resolved_font_style(style: Any, *, properties: dict[str, Any]) -> TextStyle
         underline=_underline(_first_font_value(sources, "underline")),
         superscript=_first_font_value(sources, "superscript"),
         subscript=_first_font_value(sources, "subscript"),
-        color=_font_color(sources),
+        color=_font_color(sources, model),
         language=_style_language(style),
         properties=properties,
     )
@@ -221,11 +227,61 @@ def _underline(value: Any) -> bool | None:
     return bool(value) if value is not None else None
 
 
-def _font_color(sources: list[Any]) -> str | None:
+def _font_color(sources: list[Any], model: DocumentModel | None = None) -> ColorValue | None:
     for font in sources:
-        if font.color is not None and font.color.rgb is not None:
-            return f"#{font.color.rgb}"
+        color, _ = _font_color_value(font, model)
+        if color is not None:
+            return color
     return None
+
+
+def _font_color_properties(sources: list[Any], model: DocumentModel | None) -> dict[str, Any]:
+    for font in sources:
+        color, properties = _font_color_value(font, model)
+        if color is not None:
+            return properties
+    return {}
+
+
+def _font_color_value(font: Any, model: DocumentModel | None) -> tuple[ColorValue | None, dict[str, Any]]:
+    nodes = font._element.xpath(".//w:color") if getattr(font, "_element", None) is not None else []
+    if nodes:
+        return _word_color(nodes[0], model)
+    if font.color is not None and font.color.rgb is not None:
+        return ColorValue.from_hex(f"#{font.color.rgb}"), {"color_source": "rgb"}
+    return None, {}
+
+
+def _word_color(node: Any, model: DocumentModel | None) -> tuple[ColorValue | None, dict[str, Any]]:
+    from docx.oxml.ns import qn
+
+    if node is None:
+        return None, {}
+    raw = node.get(qn("w:val"))
+    theme = node.get(qn("w:themeColor"))
+    if theme and model is not None:
+        raw = _theme_color(model, theme) or raw
+    if not raw or raw.lower() == "auto":
+        return None, {}
+    try:
+        color = ColorValue.from_hex(f"#{raw}")
+    except ValueError:
+        return None, {}
+    modifiers: dict[str, float] = {}
+    tint = node.get(qn("w:themeTint"))
+    shade = node.get(qn("w:themeShade"))
+    if tint:
+        modifiers["tint"] = int(tint, 16) / 255.0
+        color = color.transformed(tint=modifiers["tint"])
+    if shade:
+        modifiers["shade"] = int(shade, 16) / 255.0
+        color = color.transformed(shade=modifiers["shade"])
+    properties: dict[str, Any] = {"color_source": "theme" if theme else "rgb"}
+    if theme:
+        properties["color_theme"] = theme
+    if modifiers:
+        properties["color_modifiers"] = modifiers
+    return color, properties
 
 
 def _direct_run_value(run: Any, name: str) -> Any:

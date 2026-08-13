@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, TypeAlias
 
+from textalchemy.core.color import ColorLike
 from textalchemy.core.properties import (
     ImageProperties,
     ParagraphProperties,
@@ -42,6 +43,55 @@ class FormulaFormat(str, Enum):
     LATEX = "latex"
     MATHML = "mathml"
     OMML = "omml"
+
+
+@dataclass
+class ProvenanceEvent:
+    """One traceable transformation applied to a model element or resource."""
+
+    operation: str
+    detail: str = ""
+    fallback_reason: str | None = None
+
+
+@dataclass
+class Provenance:
+    """Stable origin pointer plus an append-only transformation history."""
+
+    source_format: str
+    source_path: str | None = None
+    page: int | None = None
+    object_id: str | None = None
+    package_part: str | None = None
+    events: list[ProvenanceEvent] = field(default_factory=list)
+
+    def transformed(self, operation: str, *, detail: str = "", fallback_reason: str | None = None) -> Provenance:
+        return Provenance(
+            source_format=self.source_format,
+            source_path=self.source_path,
+            page=self.page,
+            object_id=self.object_id,
+            package_part=self.package_part,
+            events=[*self.events, ProvenanceEvent(operation, detail, fallback_reason)],
+        )
+
+
+@dataclass
+class VisualSurrogate:
+    """Visual companion retained beside a native editable representation."""
+
+    resource_id: str
+    reason: str
+    media_type: str | None = None
+    fidelity: float | None = None
+
+    def __post_init__(self) -> None:
+        if not self.resource_id:
+            raise ValueError("visual surrogate resource id must not be empty")
+        if not self.reason:
+            raise ValueError("visual surrogate reason must not be empty")
+        if self.fidelity is not None and not 0.0 <= self.fidelity <= 1.0:
+            raise ValueError("visual surrogate fidelity must be between 0 and 1")
 
 
 @dataclass
@@ -81,8 +131,8 @@ class TextStyle:
     underline: bool | None = None
     superscript: bool | None = None
     subscript: bool | None = None
-    color: str | None = None
-    background: str | None = None
+    color: ColorLike | None = None
+    background: ColorLike | None = None
     language: str | None = None
     properties: TextStyleProperties = field(default_factory=TextStyleProperties)
 
@@ -100,6 +150,7 @@ class Resource:
     source: str | None = None
     filename: str | None = None
     properties: dict[str, Any] = field(default_factory=dict)
+    provenance: Provenance | None = None
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -184,6 +235,8 @@ class TextRun:
     style: TextStyle = field(default_factory=TextStyle)
     link: str | None = None
     properties: dict[str, Any] = field(default_factory=dict)
+    provenance: Provenance | None = None
+    visual_surrogate: VisualSurrogate | None = None
 
 
 @dataclass
@@ -194,6 +247,8 @@ class Formula:
     fallback_text: str = ""
     box: Box | None = None
     properties: dict[str, Any] = field(default_factory=dict)
+    provenance: Provenance | None = None
+    visual_surrogate: VisualSurrogate | None = None
 
 
 @dataclass
@@ -203,6 +258,8 @@ class Image:
     box: Box | None = None
     properties: ImageProperties = field(default_factory=ImageProperties)
     crop: ImageCrop | None = None
+    provenance: Provenance | None = None
+    visual_surrogate: VisualSurrogate | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.properties, ImageProperties):
@@ -219,6 +276,8 @@ class Paragraph:
     alignment: str | None = None
     box: Box | None = None
     properties: ParagraphProperties = field(default_factory=ParagraphProperties)
+    provenance: Provenance | None = None
+    visual_surrogate: VisualSurrogate | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.properties, ParagraphProperties):
@@ -265,6 +324,8 @@ class Table:
     style_id: str | None = None
     box: Box | None = None
     properties: TableProperties = field(default_factory=TableProperties)
+    provenance: Provenance | None = None
+    visual_surrogate: VisualSurrogate | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.properties, TableProperties):
@@ -272,6 +333,29 @@ class Table:
 
 
 Block: TypeAlias = Paragraph | Table | Formula | Image
+
+
+def attach_visual_surrogate(
+    element: Paragraph | Table | Formula | Image,
+    resource: Resource,
+    *,
+    reason: str,
+    fidelity: float | None = None,
+    operation: str = "fallback.visual-surrogate",
+) -> None:
+    """Attach a visual companion and record why the native representation is insufficient."""
+    element.visual_surrogate = VisualSurrogate(
+        resource_id=resource.id,
+        reason=reason,
+        media_type=resource.media_type,
+        fidelity=fidelity,
+    )
+    if element.provenance is not None:
+        element.provenance = element.provenance.transformed(
+            operation,
+            detail=f"linked visual surrogate {resource.id}",
+            fallback_reason=reason,
+        )
 
 
 @dataclass
@@ -295,6 +379,7 @@ class Section:
     even_page_headers: list[Block] = field(default_factory=list)
     even_page_footers: list[Block] = field(default_factory=list)
     properties: SectionProperties = field(default_factory=SectionProperties)
+    provenance: Provenance | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.properties, SectionProperties):
@@ -331,11 +416,18 @@ class DocumentModel:
             if fallback_id is not None and fallback_id not in self.resources:
                 errors.append(f"{location}: unknown fallback resource {fallback_id!r}")
 
+        def check_surrogate(block: Block | Inline, location: str) -> None:
+            surrogate = getattr(block, "visual_surrogate", None)
+            if surrogate is not None and surrogate.resource_id not in self.resources:
+                errors.append(f"{location}: unknown visual surrogate resource {surrogate.resource_id!r}")
+
         def check_block(block: Block, location: str) -> None:
+            check_surrogate(block, location)
             if isinstance(block, Image):
                 check_image(block, location)
             elif isinstance(block, Paragraph):
                 for index, item in enumerate(block.content):
+                    check_surrogate(item, f"{location}.content[{index}]")
                     if isinstance(item, Image):
                         check_image(item, f"{location}.content[{index}]")
             elif isinstance(block, Table):
@@ -363,6 +455,7 @@ class DocumentModel:
 
 __all__ = [
     "Block",
+    "attach_visual_surrogate",
     "Box",
     "ConversionMode",
     "DocumentModel",
@@ -378,6 +471,8 @@ __all__ = [
     "PackagePart",
     "PackageRelationship",
     "Paragraph",
+    "Provenance",
+    "ProvenanceEvent",
     "ParagraphProperties",
     "Resource",
     "ResourceKind",
@@ -391,6 +486,7 @@ __all__ = [
     "TableRowProperties",
     "TextRun",
     "TextStyle",
+    "VisualSurrogate",
     "TextStyleProperties",
     "VECTOR_IMAGE_MEDIA_TYPES",
 ]

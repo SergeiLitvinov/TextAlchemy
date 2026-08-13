@@ -39,6 +39,7 @@ class DocumentInspection:
     package_parts: list[dict[str, Any]] = field(default_factory=list)
     fonts: dict[str, int] = field(default_factory=dict)
     formula_formats: dict[str, int] = field(default_factory=dict)
+    objects: list[dict[str, Any]] = field(default_factory=list)
     issues: list[ConversionIssue] = field(default_factory=list)
 
     @property
@@ -64,6 +65,7 @@ class DocumentInspection:
             "package_parts": self.package_parts,
             "fonts": self.fonts,
             "formula_formats": self.formula_formats,
+            "objects": self.objects,
             "issues": [
                 {
                     "severity": issue.severity.value,
@@ -88,6 +90,7 @@ class DocumentComparison:
     font_comparison: dict[str, Any]
     matching_resource_hashes: int
     matching_package_part_hashes: int
+    object_diff: dict[str, Any] = field(default_factory=dict)
     issues: list[ConversionIssue] = field(default_factory=list)
 
     @property
@@ -110,6 +113,7 @@ class DocumentComparison:
             "font_comparison": self.font_comparison,
             "matching_resource_hashes": self.matching_resource_hashes,
             "matching_package_part_hashes": self.matching_package_part_hashes,
+            "object_diff": self.object_diff,
             "issues": [
                 {
                     "severity": issue.severity.value,
@@ -159,6 +163,8 @@ def compare_inspections(source: DocumentInspection, target: DocumentInspection) 
     )
     font_comparison, font_issues = _compare_fonts(source.fonts, target.fonts)
     issues.extend(font_issues)
+    object_diff, object_issues = _compare_objects(source.objects, target.objects)
+    issues.extend(object_issues)
     return DocumentComparison(
         source=source,
         target=target,
@@ -170,8 +176,69 @@ def compare_inspections(source: DocumentInspection, target: DocumentInspection) 
         font_comparison=font_comparison,
         matching_resource_hashes=resource_comparison["exact_hash_matches"],
         matching_package_part_hashes=package_comparison["exact_hash_matches"],
+        object_diff=object_diff,
         issues=issues,
     )
+
+
+def _compare_objects(
+    source_objects: list[dict[str, Any]], target_objects: list[dict[str, Any]]
+) -> tuple[dict[str, Any], list[ConversionIssue]]:
+    """Match structural objects by provenance identity, then by stable model location."""
+
+    def identity(item: dict[str, Any]) -> str:
+        provenance = item.get("provenance") or {}
+        origin = provenance.get("identity")
+        return f"origin:{origin}" if origin else f"location:{item.get('location')}:{item.get('type')}"
+
+    source = {identity(item): item for item in source_objects}
+    target = {identity(item): item for item in target_objects}
+    retained: list[dict[str, Any]] = []
+    changed: list[dict[str, Any]] = []
+    for key in sorted(source.keys() & target.keys()):
+        before, after = source[key], target[key]
+        changes = [name for name in ("content_hash", "geometry", "style_id") if before.get(name) != after.get(name)]
+        entry = {"identity": key, "type": before.get("type"), "source": before, "target": after}
+        if changes:
+            entry["changes"] = changes
+            changed.append(entry)
+        else:
+            retained.append(entry)
+    lost = [source[key] for key in sorted(source.keys() - target.keys())]
+    added = [target[key] for key in sorted(target.keys() - source.keys())]
+    recommendations = []
+    if lost:
+        recommendations.append({
+            "code": "restore-lost-objects",
+            "message": "Restore lost objects or attach visual surrogates before export.",
+            "locations": [item.get("location") for item in lost],
+        })
+    geometry_changed = [item for item in changed if "geometry" in item["changes"]]
+    if geometry_changed:
+        recommendations.append({
+            "code": "review-object-geometry",
+            "message": "Review object positions and bounds against the source overlay.",
+            "locations": [item["source"].get("location") for item in geometry_changed],
+        })
+    issues = [
+        ConversionIssue(
+            IssueSeverity.LOSS,
+            "object-loss",
+            f"{len(lost)} structural object(s) lost",
+            str(item.get("location") or ""),
+        )
+        for item in lost
+    ]
+    return {
+        "source_count": len(source_objects),
+        "target_count": len(target_objects),
+        "retained": retained,
+        "changed": changed,
+        "lost": lost,
+        "added": added,
+        "retention_ratio": round(_ratio(len(retained) + len(changed), len(source_objects)), 4),
+        "recommendations": recommendations,
+    }, issues
 
 
 def _compare_page_geometry(
@@ -502,6 +569,44 @@ def inspect_document_model(
     formula_formats: Counter[str] = Counter()
     referenced_resources: set[str] = set()
 
+    def record_object(value: Any, location: str, object_type: str, page_index: int) -> None:
+        provenance = getattr(value, "provenance", None)
+        identity = None
+        provenance_data = None
+        if provenance is not None:
+            identity = "|".join(
+                str(item or "")
+                for item in (
+                    provenance.source_format,
+                    provenance.source_path,
+                    provenance.page,
+                    provenance.package_part,
+                    provenance.object_id,
+                )
+            )
+            provenance_data = {
+                "identity": identity,
+                "source_format": provenance.source_format,
+                "page": provenance.page,
+                "object_id": provenance.object_id,
+                "package_part": provenance.package_part,
+            }
+        box = getattr(value, "box", None)
+        geometry = None if box is None else {
+            "x": round(box.x, 3), "y": round(box.y, 3),
+            "width": round(box.width, 3), "height": round(box.height, 3), "rotation": round(box.rotation, 3),
+        }
+        content = _object_content(value)
+        report.objects.append({
+            "location": location,
+            "page": page_index,
+            "type": object_type,
+            "content_hash": hashlib.sha256(content.encode("utf-8")).hexdigest() if content else None,
+            "geometry": geometry,
+            "style_id": getattr(value, "style_id", None),
+            "provenance": provenance_data,
+        })
+
     for error in document.validate():
         report.add(IssueSeverity.ERROR, "model-validation", error)
     for section_index, section in enumerate(document.sections):
@@ -518,9 +623,11 @@ def inspect_document_model(
             blocks = getattr(section, collection_name)
             counters[f"{collection_name}_top_level"] += len(blocks)
             for block_index, block in enumerate(blocks):
+                block_location = f"sections[{section_index}].{collection_name}[{block_index}]"
+                record_object(block, block_location, type(block).__name__.lower(), section_index)
                 _inspect_block(
                     block,
-                    f"sections[{section_index}].{collection_name}[{block_index}]",
+                    block_location,
                     section.page,
                     report,
                     counters,
@@ -547,6 +654,21 @@ def inspect_document_model(
     report.fonts = dict(fonts.most_common())
     report.formula_formats = dict(sorted(formula_formats.items()))
     return report
+
+
+def _object_content(value: Any) -> str:
+    if isinstance(value, Paragraph):
+        return value.plain_text
+    if isinstance(value, Formula):
+        return value.value
+    if isinstance(value, Image):
+        return value.resource_id
+    if isinstance(value, Table):
+        return "\n".join(
+            "\t".join(" ".join(_object_content(block) for block in cell.blocks) for cell in row.cells)
+            for row in value.rows
+        )
+    return ""
 
 
 def inspect_path(path: str | Path) -> DocumentInspection:

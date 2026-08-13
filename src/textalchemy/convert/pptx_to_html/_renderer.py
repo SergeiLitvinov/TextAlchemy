@@ -17,6 +17,7 @@ from PIL import Image
 from pptx import Presentation
 
 from textalchemy.core.io import check_archive_safety
+from textalchemy.core.units import emu_to_points, ooxml_angle_to_degrees
 
 from ._omml import (  # noqa: F401
     M_NS as OMML_NS,
@@ -28,7 +29,6 @@ from ._omml import (
     has_math as omml_has_math,
 )
 from ._pptx_lib import (
-    EMU_PER_INCH,
     PRST_GEOMETRY,
     color_to_hex,
     emu_to_in,
@@ -113,7 +113,7 @@ def parse_xfrm(spPr_elem, parent_xfrm=None):
     off = xfrm.find(qn("a:off"))
     ext = xfrm.find(qn("a:ext"))
     rot = xfrm.get("rot", "0")
-    rot_deg = int(rot) / 60000.0  # 60000 = 1 degree
+    rot_deg = ooxml_angle_to_degrees(int(rot))
     left = int(off.get("x", 0)) if off is not None else 0
     top = int(off.get("y", 0)) if off is not None else 0
     cx = int(ext.get("cx", 0)) if ext is not None else 0
@@ -190,7 +190,7 @@ def get_fill(sp_elem):
                 stops.append({"pos": pos, "color": color, "alpha": alpha})
         if stops:
             return {"type": "gradient", "stops": stops,
-                    "angle": int(grad.find(qn("a:lin")).get("ang", 0)) / 60000.0
+                    "angle": ooxml_angle_to_degrees(int(grad.find(qn("a:lin")).get("ang", 0)))
                             if grad.find(qn("a:lin")) is not None else 0}
     return None
 
@@ -203,7 +203,7 @@ def get_line(sp_elem):
     if ln is None:
         return None
     width_emu = int(ln.get("w", 0))
-    width_pt = max(0.75, width_emu / 12700.0)  # 12700 EMU = 1 pt; floor at 0.75pt for visibility
+    width_pt = max(0.75, emu_to_points(width_emu))
     color = None
     if ln.find(qn("a:solidFill")) is not None:
         color = color_to_hex(ln.find(qn("a:solidFill")))
@@ -362,8 +362,8 @@ def render_custgeom(cust, width_in, height_in, fill_info, line_info):
             elif tag == "arcTo":
                 w_a = float(cmd.get("wArc", 0)) * scale
                 h_a = float(cmd.get("hArc", 0)) * scale
-                stAng = float(cmd.get("stAng", 0)) / 60000.0
-                swAng = float(cmd.get("swAng", 0)) / 60000.0
+                stAng = ooxml_angle_to_degrees(float(cmd.get("stAng", 0)))
+                swAng = ooxml_angle_to_degrees(float(cmd.get("swAng", 0)))
                 pt = cmd.find(qn("a:pt"))
                 ex = float(pt.get("x", 0)) * scale
                 ey = float(pt.get("y", 0)) * scale
@@ -442,10 +442,10 @@ def render_text_body(txBody_elem, placeholder_type=None) -> str:
             _wrap = "none"
         elif wt == "square":
             _wrap = "square"
-    lIns = int(bodyPr.get("lIns", 91440)) / 914400.0 if bodyPr is not None else 0.1
-    tIns = int(bodyPr.get("tIns", 45720)) / 914400.0 if bodyPr is not None else 0.05
-    rIns = int(bodyPr.get("rIns", 91440)) / 914400.0 if bodyPr is not None else 0.1
-    bIns = int(bodyPr.get("bIns", 45720)) / 914400.0 if bodyPr is not None else 0.05
+    lIns = emu_to_in(int(bodyPr.get("lIns", 91440))) if bodyPr is not None else 0.1
+    tIns = emu_to_in(int(bodyPr.get("tIns", 45720))) if bodyPr is not None else 0.05
+    rIns = emu_to_in(int(bodyPr.get("rIns", 91440))) if bodyPr is not None else 0.1
+    bIns = emu_to_in(int(bodyPr.get("bIns", 45720))) if bodyPr is not None else 0.05
 
     paragraphs = []
     for p in txBody_elem.findall(qn("a:p")):
@@ -475,8 +475,8 @@ def render_paragraph(p) -> str:
             align = "right"
         elif a == "just":
             align = "justify"
-        marL = int(pPr.get("marL", 0)) / 914400.0
-        indent = int(pPr.get("indent", 0)) / 914400.0
+        marL = emu_to_in(int(pPr.get("marL", 0)))
+        indent = emu_to_in(int(pPr.get("indent", 0)))
         if indent < 0:
             indent_first = -indent
         bu = pPr.find(qn("a:buChar"))
@@ -846,7 +846,7 @@ def render_grpSp(grp, media_index, slide_rels, slide=None) -> str:
     ext = xfrm.find(qn("a:ext"))
     chOff = xfrm.find(qn("a:chOff"))
     chExt = xfrm.find(qn("a:chExt"))
-    rot = float(xfrm.get("rot", 0)) / 60000.0
+    rot = ooxml_angle_to_degrees(float(xfrm.get("rot", 0)))
     gx = int(off.get("x", 0))
     gy = int(off.get("y", 0))
     gcx = int(ext.get("cx", 1))
@@ -956,9 +956,9 @@ def render_table(tbl, pos, w, h) -> str:
     col_widths = []
     grid = tbl.find(qn("a:tblGrid"))
     if grid is not None:
-        col_widths = [int(gc.get("w", 0)) / 914400.0 for gc in grid.findall(qn("a:gridCol"))]
+        col_widths = [emu_to_in(int(gc.get("w", 0))) for gc in grid.findall(qn("a:gridCol"))]
     for tr in rows:
-        height = int(tr.get("h", 0)) / 914400.0
+        height = emu_to_in(int(tr.get("h", 0)))
         cells_html = []
         for tc in tr.findall(qn("a:tc")):
             # cell properties
@@ -1081,8 +1081,8 @@ def convert_pptx(pptx_path: str | Path, out_dir: str | Path) -> None:
     sw = prs.slide_width
     sh = prs.slide_height
     assert sw is not None and sh is not None
-    sw_in = sw / EMU_PER_INCH
-    sh_in = sh / EMU_PER_INCH
+    sw_in = emu_to_in(sw)
+    sh_in = emu_to_in(sh)
     logger.info("Slide size: %.2f x %.2f in", sw_in, sh_in)
 
     slides_html = []

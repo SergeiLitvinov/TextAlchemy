@@ -8,6 +8,7 @@ from unittest import mock
 import fitz
 import pytest
 
+from textalchemy.core.color import ColorValue
 from textalchemy.core.document_model import (
     Box,
     DocumentModel,
@@ -75,6 +76,12 @@ class TestExtractPdfModel:
             run.text for block in blocks if isinstance(block, Paragraph) for run in block.content if isinstance(run, TextRun)
         )
         assert "Hello PDF world" in plain
+        paragraph = next(block for block in blocks if isinstance(block, Paragraph))
+        assert paragraph.provenance is not None
+        assert paragraph.provenance.source_format == "pdf"
+        assert paragraph.provenance.page == 1
+        assert paragraph.provenance.source_path == str(pdf)
+        assert paragraph.provenance.events[0].operation == "extract.pdf.fast"
 
     def test_sets_metadata(self, tmp_path):
         pdf = _make_pdf(tmp_path / "meta.pdf")
@@ -137,6 +144,26 @@ class TestExtractPdfModel:
         assert bold.style.italic is False
         assert italic.style.bold is False
         assert italic.style.italic is True
+
+    def test_normalizes_pdf_span_color_as_color_value(self, tmp_path):
+        path = tmp_path / "color.pdf"
+        pdf = fitz.open()
+        page = pdf.new_page(width=300, height=400)
+        page.insert_text((36, 48), "Blue", color=(0x12 / 255, 0x34 / 255, 0xAB / 255))
+        pdf.save(path)
+        pdf.close()
+
+        model = extract_pdf_model(doc=ingest_file(path=path))
+        run = next(
+            run
+            for block in model.sections[0].blocks
+            if isinstance(block, Paragraph)
+            for run in block.content
+            if isinstance(run, TextRun) and run.text == "Blue"
+        )
+
+        assert isinstance(run.style.color, ColorValue)
+        assert run.style.color.to_hex() == "#1234AB"
 
     def test_no_document_raises_type_error(self):
         with pytest.raises(TypeError):
@@ -282,6 +309,8 @@ class TestExtractPdfModelWithOcr:
         )
         assert ocr_paragraph.properties["source"] == "ocr"
         assert ocr_paragraph.properties["confidence"] == 0.85
+        assert ocr_paragraph.provenance is not None
+        assert ocr_paragraph.provenance.events[-1].fallback_reason == "OCR supplied missing text"
 
     def test_use_ocr_no_engine_falls_back_gracefully(self, tmp_path):
         pdf = _make_pdf(tmp_path / "ocr_fallback.pdf", "Fallback text")

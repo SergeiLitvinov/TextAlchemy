@@ -7,6 +7,7 @@ from textalchemy.core.document_model import (
     FormulaFormat,
     Image,
     Paragraph,
+    Provenance,
     Resource,
     ResourceKind,
     Section,
@@ -169,6 +170,31 @@ def test_compare_inspections_reports_retention_and_page_geometry_loss():
     assert comparison.geometry_summary["rms_margin_error_pt"] == 1.5
     assert any(issue.feature == "page-geometry" for issue in comparison.issues)
     assert any(issue.feature == "page-margins" for issue in comparison.issues)
+
+
+def test_compare_inspections_reports_object_level_changes_and_recommendations():
+    origin = Provenance(source_format="pptx", source_path="slides.pptx", page=1, object_id="shape-7")
+    lost_origin = Provenance(source_format="pptx", source_path="slides.pptx", page=1, object_id="shape-8")
+    source = DocumentModel(sections=[Section(blocks=[
+        Paragraph(content=[TextRun("Title")], box=Box(10, 20, 100, 30), provenance=origin),
+        Paragraph(content=[TextRun("Lost")], provenance=lost_origin),
+    ])])
+    target = DocumentModel(sections=[Section(blocks=[
+        Paragraph(content=[TextRun("Title changed")], box=Box(14, 20, 100, 30), provenance=origin),
+    ])])
+
+    comparison = compare_inspections(inspect_document_model(source), inspect_document_model(target))
+
+    object_diff = comparison.object_diff
+    assert object_diff["source_count"] == 2
+    assert object_diff["target_count"] == 1
+    assert object_diff["retention_ratio"] == 0.5
+    assert object_diff["changed"][0]["changes"] == ["content_hash", "geometry"]
+    assert object_diff["lost"][0]["provenance"]["object_id"] == "shape-8"
+    assert {item["code"] for item in object_diff["recommendations"]} == {
+        "restore-lost-objects", "review-object-geometry",
+    }
+    assert any(issue.feature == "object-loss" for issue in comparison.issues)
 
 
 def test_inspect_html_extracts_structure_resources_and_fonts(tmp_path):

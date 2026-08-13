@@ -6,6 +6,7 @@ from docx import Document
 from PIL import Image as PillowImage
 
 from textalchemy.convert.docx_writer import write_docx_model
+from textalchemy.core.color import ColorValue
 from textalchemy.core.diagnostics import IssueSeverity
 from textalchemy.core.document_model import (
     Box,
@@ -90,6 +91,120 @@ def test_write_docx_model_roundtrip_preserves_core_content(tmp_path):
     assert "https://example.com" in relationships
 
 
+def test_docx_roundtrip_keeps_semantic_objects_editable_after_model_mutation(tmp_path):
+    first = tmp_path / "editable-source.docx"
+    second = tmp_path / "editable-mutated.docx"
+    omml_namespace = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+    source = DocumentModel(
+        resources={"picture": Resource("picture", ResourceKind.RASTER_IMAGE, "image/png", data=_png_bytes(tmp_path))},
+        sections=[
+            Section(
+                blocks=[
+                    Paragraph(
+                        content=[TextRun("First item")],
+                        properties={"numbering_id": 1, "numbering_level": 0},
+                    ),
+                    Table(
+                        rows=[
+                            TableRow(
+                                cells=[TableCell(blocks=[Paragraph(content=[TextRun("Original cell")])])]
+                            )
+                        ]
+                    ),
+                    Formula(
+                        f'<m:oMath xmlns:m="{omml_namespace}"><m:r><m:t>x+1</m:t></m:r></m:oMath>',
+                        FormulaFormat.OMML,
+                        fallback_text="x+1",
+                    ),
+                    Paragraph(content=[TextRun("Original link", link="https://example.com/old")]),
+                    Paragraph(
+                        content=[
+                            Image(
+                                "picture",
+                                box=Box(0, 0, 72, 48),
+                                properties={
+                                    "placement": "anchor",
+                                    "horizontal_relative_from": "page",
+                                    "vertical_relative_from": "page",
+                                    "wrap": "square",
+                                },
+                            )
+                        ]
+                    ),
+                ]
+            )
+        ],
+    )
+    assert write_docx_model(source, first).lossless
+    editable = read_docx_model(first)
+    blocks = editable.sections[0].blocks
+
+    blocks[0].content[0].text = "Second item"
+    blocks[0].properties["numbering_level"] = 1
+    blocks[1].rows[0].cells[0].blocks[0].content[0].text = "Changed cell"
+    formula = blocks[2].content[0]
+    assert isinstance(formula, Formula)
+    formula.value = f'<m:oMath xmlns:m="{omml_namespace}"><m:r><m:t>y=2</m:t></m:r></m:oMath>'
+    formula.fallback_text = "y=2"
+    blocks[3].content[0].text = "Changed link"
+    blocks[3].content[0].link = "https://example.com/new"
+    blocks[4].content[0].box.x = 36
+
+    report = write_docx_model(editable, second)
+    restored = read_docx_model(second)
+    result = restored.sections[0].blocks
+
+    assert report.lossless
+    assert result[0].plain_text == "Second item"
+    assert result[0].properties["numbering_level"] == 1
+    assert result[1].rows[0].cells[0].blocks[0].plain_text == "Changed cell"
+    assert isinstance(result[2].content[0], Formula)
+    assert result[2].content[0].fallback_text == "y=2"
+    assert result[3].content[0].text == "Changed link"
+    assert result[3].content[0].link == "https://example.com/new"
+    assert result[4].content[0].box.x == 36
+
+
+def test_write_docx_model_preserves_theme_color_reference_and_tint(tmp_path):
+    output = tmp_path / "theme-color.docx"
+    color = ColorValue.from_hex("#A7C0DE")
+    document = DocumentModel(
+        sections=[
+            Section(
+                blocks=[
+                    Paragraph(
+                        content=[
+                            TextRun(
+                                "Theme color",
+                                style=TextStyle(
+                                    color=color,
+                                    properties={
+                                        "color_source": "theme",
+                                        "color_theme": "accent1",
+                                        "color_modifiers": {"tint": 128 / 255},
+                                    },
+                                ),
+                            )
+                        ]
+                    )
+                ]
+            )
+        ]
+    )
+
+    report = write_docx_model(document, output)
+    restored = read_docx_model(output)
+
+    assert report.success is True
+    with zipfile.ZipFile(output) as package:
+        xml = package.read("word/document.xml").decode("utf-8")
+    assert 'w:themeColor="accent1"' in xml
+    assert 'w:themeTint="80"' in xml
+    style = restored.sections[0].blocks[0].content[0].style
+    assert style.properties["color_theme"] == "accent1"
+    assert style.properties["color_modifiers"]["tint"] == 128 / 255
+
+
 def test_write_docx_model_preserves_native_omml(tmp_path):
     output = tmp_path / "formula.docx"
     omml = '<m:oMath xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:r><m:t>x+1</m:t></m:r></m:oMath>'
@@ -102,6 +217,102 @@ def test_write_docx_model_preserves_native_omml(tmp_path):
         xml = archive.read("word/document.xml").decode("utf-8")
     assert "<m:oMath" in xml
     assert "x+1" in xml
+
+
+def test_write_docx_model_restores_native_revision_and_content_control_xml(tmp_path):
+    namespace = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    output = tmp_path / "advanced-inline.docx"
+    document = DocumentModel(
+        sections=[
+            Section(
+                blocks=[
+                    Paragraph(
+                        content=[
+                            TextRun(
+                                "inserted",
+                                properties={
+                                    "docx_raw_inline_type": "ins",
+                                    "docx_raw_inline_xml": (
+                                        f'<w:ins xmlns:w="{namespace}" w:id="7" w:author="Editor">'
+                                        "<w:r><w:t>inserted</w:t></w:r></w:ins>"
+                                    ),
+                                },
+                            ),
+                            TextRun(
+                                "Alice",
+                                properties={
+                                    "docx_raw_inline_type": "sdt",
+                                    "docx_raw_inline_xml": (
+                                        f'<w:sdt xmlns:w="{namespace}"><w:sdtPr><w:tag w:val="student-name"/></w:sdtPr>'
+                                        "<w:sdtContent><w:r><w:t>Alice</w:t></w:r></w:sdtContent></w:sdt>"
+                                    ),
+                                },
+                            ),
+                        ]
+                    )
+                ]
+            )
+        ]
+    )
+
+    report = write_docx_model(document, output)
+
+    assert report.success is True
+    with zipfile.ZipFile(output) as package:
+        xml = package.read("word/document.xml").decode("utf-8")
+    assert "<w:ins" in xml and 'w:author="Editor"' in xml
+    assert "<w:sdt" in xml and 'w:val="student-name"' in xml
+
+
+def test_write_docx_model_restores_document_protection(tmp_path):
+    output = tmp_path / "protected.docx"
+    namespace = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    document = DocumentModel(
+        metadata={
+            "docx_features": {
+                "document_protection_xml": (
+                    f'<w:documentProtection xmlns:w="{namespace}" w:edit="readOnly" w:enforcement="1"/>'
+                )
+            }
+        },
+        sections=[Section(blocks=[Paragraph(content=[TextRun("Protected")])])],
+    )
+
+    report = write_docx_model(document, output)
+
+    assert report.lossless
+    with zipfile.ZipFile(output) as package:
+        settings = package.read("word/settings.xml").decode("utf-8")
+    assert "documentProtection" in settings
+    assert 'w:edit="readOnly"' in settings
+
+
+def test_write_docx_model_restores_block_content_control(tmp_path):
+    output = tmp_path / "block-sdt.docx"
+    namespace = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+    raw_xml = (
+        f'<w:sdt xmlns:w="{namespace}"><w:sdtPr><w:tag w:val="lesson"/></w:sdtPr>'
+        "<w:sdtContent><w:p><w:r><w:t>Controlled block</w:t></w:r></w:p></w:sdtContent></w:sdt>"
+    )
+    document = DocumentModel(
+        sections=[
+            Section(
+                blocks=[
+                    Paragraph(
+                        content=[TextRun("Controlled block")],
+                        properties={"docx_raw_block_type": "sdt", "docx_raw_block_xml": raw_xml},
+                    )
+                ]
+            )
+        ]
+    )
+
+    report = write_docx_model(document, output)
+    restored = read_docx_model(output)
+
+    assert report.lossless
+    assert restored.sections[0].blocks[0].properties["docx_raw_block_type"] == "sdt"
+    assert restored.sections[0].blocks[0].plain_text == "Controlled block"
 
 
 def test_write_docx_model_reports_formula_fallback(tmp_path):
@@ -193,6 +404,8 @@ def test_write_docx_model_prefers_office_svg_over_raster_fallback(tmp_path):
     assert fallback_id is not None
     assert restored.resources[fallback_id].kind is ResourceKind.RASTER_IMAGE
     assert restored.resources[fallback_id].data == fallback_png
+    assert restored_image.visual_surrogate is not None
+    assert restored_image.visual_surrogate.resource_id == fallback_id
     with zipfile.ZipFile(second_output) as archive:
         xml = archive.read("word/document.xml").decode("utf-8")
         media_names = {name for name in archive.namelist() if name.startswith("word/media/")}

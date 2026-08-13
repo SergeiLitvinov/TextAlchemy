@@ -164,3 +164,14 @@ def my_operation(*, input_name: InputType, param1: str = "default") -> OutputTyp
 ```
 recursive-include src/textalchemy/путь/к/ассетам *
 ```
+
+## 15. Архитектурные границы
+
+- Модуль имеет одну причину для изменения. Маршрут Web не выполняет конвертацию, конвертер не знает об HTTP, а шаблон не содержит бизнес-правил.
+- Направление зависимостей: `presentation/web → application/use-cases → domain/core`. Работа с файлами, OOXML, OCR и внешними движками подключается через infrastructure adapters.
+- Этапы преобразования разделяются явными типизированными контрактами: `parse → normalize → analyze/layout → render/serialize → verify`.
+- Format-specific данные хранятся в namespaced extensions и обрабатываются адаптером формата; общая модель не импортирует реализации DOCX/PDF/PPTX.
+- Новые Python-модули ориентируются на 400 строк. Файл больше 600 строк требует декомпозиции либо документированного исключения для таблиц данных/сгенерированного кода.
+- Jinja-шаблоны отвечают за разметку. Повторяемые части оформляются partial/component, а page state, API-вызовы и DOM-rendering размещаются в отдельных JS-модулях.
+- Route handler выполняет только разбор/валидацию запроса, вызов use-case и формирование ответа. Очереди, workspace, planning и persistence не реализуются внутри handler.
+- Запрещены циклические импорты и обратные зависимости из `core` в `web`, CLI или конкретный backend.

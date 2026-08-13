@@ -31,10 +31,6 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     del application
-    # Lazy import avoids the app/routes import cycle while allowing persisted
-    # conversion descriptors to be requeued after a process restart.
-    from textalchemy.web.routes.convert import resume_conversion_task
-
     recovery = recover_persisted_tasks(tasks_store, {"convert": resume_conversion_task})
     if recovery.resumed:
         logger.info("Возобновлено %d задач после перезапуска", recovery.resumed)
@@ -174,6 +170,31 @@ def _save_config(cfg):
 # не держат байты результата в памяти). Просроченные удаляются по TTL.
 _TASK_TTL_SECONDS = 3600
 tasks_store = TaskStore(data_dir / "tasks", ttl_seconds=_TASK_TTL_SECONDS)
+
+
+def _run_persisted_conversion(task_id: str) -> None:
+    """Execute a durable conversion without depending on the HTTP route layer."""
+    conversion_task_service().run_stored(task_id)
+
+
+def conversion_task_service():
+    """Собрать прикладной сервис конвертации в composition root."""
+    from textalchemy.core.inspection import compare_inspections, inspect_path
+    from textalchemy.web.services.conversion_tasks import ConversionTaskService
+    from textalchemy.web.workspace import create_web_workspace
+
+    return ConversionTaskService(
+        store=tasks_store,
+        queue=task_queue,
+        workspace_factory=create_web_workspace,
+        inspector=inspect_path,
+        comparer=compare_inspections,
+    )
+
+
+def resume_conversion_task(task_id: str) -> None:
+    """Submit a durable conversion during normal work or lifespan recovery."""
+    task_queue.submit_named(task_id, _run_persisted_conversion, task_id)
 
 
 def _prune_tasks() -> int:

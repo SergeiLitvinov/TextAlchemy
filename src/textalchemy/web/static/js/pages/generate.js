@@ -1,0 +1,300 @@
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const TYPE_LABELS = {
+    string: 'текст', integer: 'целое число', number: 'число', boolean: 'да/нет',
+    array: 'список (JSON)', object: 'объект (JSON)', image: 'изображение', formula: 'формула (LaTeX)', any: 'любой'
+};
+const FIELD_LABELS = {
+    author: 'Автор', body: 'Основной текст', title: 'Заголовок', abstract: 'Аннотация',
+    date: 'Дата', organization: 'Организация', bibliography: 'Список литературы',
+};
+const SCHEMA_SOURCE_LABELS = {
+    derived: 'поля определены автоматически', sidecar: 'проверяемая схема шаблона',
+};
+let currentSchema = null;
+let previewState = null;
+
+function setStatus(msg, type) {
+    const el = $('status');
+    el.hidden = !msg;
+    if (!msg) return;
+    el.className = 'status-bar ' + (type || 'info');
+    el.textContent = msg;
+}
+
+function fieldErrorId(name) {
+    return 'field-error-' + name.replace(/[^A-Za-z0-9_-]/g, '-');
+}
+
+function fieldLabel(name) {
+    if (FIELD_LABELS[name]) return FIELD_LABELS[name];
+    const readable = name.replace(/[_-]+/g, ' ').trim();
+    return readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : name;
+}
+
+function buildField(field) {
+    const type = field.type || 'any';
+    const name = field.name;
+    const required = Boolean(field.required);
+    const def = field.hasOwnProperty('default') ? field.default : '';
+    const wrap = document.createElement('div');
+    wrap.className = 'form-group';
+    wrap.dataset.fieldName = name;
+
+    const label = document.createElement('label');
+    label.setAttribute('for', 'field-' + name);
+    label.textContent = fieldLabel(name) + (required ? ' *' : '');
+    const hint = document.createElement('span');
+    hint.className = 'field-help';
+    hint.textContent = ' — ' + (field.description || TYPE_LABELS[type] || type);
+    label.appendChild(hint);
+    wrap.appendChild(label);
+
+    let input;
+    if (type === 'boolean') {
+        input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = 'field-' + name;
+        input.checked = Boolean(def);
+    } else if (type === 'integer' || type === 'number') {
+        input = document.createElement('input');
+        input.type = 'number';
+        input.id = 'field-' + name;
+        if (type === 'integer') input.step = '1';
+        if (def !== '' && def !== undefined && def !== null) input.value = def;
+    } else if (type === 'array' || type === 'object') {
+        input = document.createElement('textarea');
+        input.id = 'field-' + name;
+        input.rows = 3;
+        input.placeholder = type === 'array' ? '[ "item1", "item2" ]' : '{ "key": "value" }';
+        if (def !== '' && def !== undefined && def !== null) input.value = JSON.stringify(def, null, 2);
+    } else if (type === 'image') {
+        input = document.createElement('input');
+        input.type = 'file';
+        input.id = 'field-' + name;
+        input.accept = 'image/*';
+        input.dataset.imageField = name;
+    } else if (type === 'formula') {
+        input = document.createElement('textarea');
+        input.id = 'field-' + name;
+        input.rows = 2;
+        input.placeholder = 'E = mc^2';
+        if (def !== '' && def !== undefined && def !== null) input.value = def;
+    } else {
+        input = document.createElement('input');
+        input.type = 'text';
+        input.id = 'field-' + name;
+        if (def !== '' && def !== undefined && def !== null) input.value = def;
+    }
+
+    const error = document.createElement('p');
+    error.className = 'field-help';
+    error.id = fieldErrorId(name);
+    error.style.color = '#991b1b';
+    error.style.display = 'none';
+    wrap.appendChild(input);
+    wrap.appendChild(error);
+    return wrap;
+}
+
+function collectParams() {
+    const params = {};
+    if (!currentSchema) return params;
+    for (const field of currentSchema.fields) {
+        const name = field.name;
+        const input = $('field-' + name);
+        if (!input) continue;
+        const type = field.type || 'any';
+        let value;
+        if (type === 'boolean') {
+            value = input.checked;
+        } else if (type === 'integer' || type === 'number') {
+            if (input.value === '') continue;
+            value = type === 'integer' ? parseInt(input.value, 10) : parseFloat(input.value);
+        } else if (type === 'array' || type === 'object') {
+            if (!input.value.trim()) continue;
+            try {
+                value = JSON.parse(input.value);
+            } catch (err) {
+                toast('Поле «' + name + '»: некорректный JSON', 'error');
+                showFieldError(name, 'некорректный JSON: ' + err.message);
+                return null;
+            }
+        } else if (type === 'image') {
+            if (input.dataset.imageData) {
+                value = input.dataset.imageData;
+            } else {
+                continue;
+            }
+        } else {
+            value = input.value;
+        }
+        if (value !== undefined && value !== '') params[name] = value;
+    }
+    return params;
+}
+
+function clearFieldErrors() {
+    document.querySelectorAll('[id^="field-error-"]').forEach((el) => { el.style.display = 'none'; });
+}
+
+function showFieldError(name, message) {
+    const el = $(fieldErrorId(name));
+    if (!el) return;
+    el.textContent = message;
+    el.style.display = 'block';
+}
+
+function renderErrors(errors) {
+    clearFieldErrors();
+    if (!errors) return;
+    for (const [name, message] of Object.entries(errors)) {
+        showFieldError(name, message);
+    }
+}
+
+async function loadTemplates() {
+    try {
+        const templates = await api('/api/generate/templates');
+        const sel = $('template');
+        for (const t of templates) {
+            const opt = document.createElement('option');
+            opt.value = t.name;
+            opt.textContent = t.name + (t.description ? ' — ' + t.description : '');
+            sel.appendChild(opt);
+        }
+        if (templates.length) {
+            sel.value = templates[0].name;
+            loadTemplate(templates[0].name);
+        }
+    } catch (_) { /* toast уже показан */ }
+}
+
+async function loadTemplate(name) {
+    currentSchema = null;
+    previewState = null;
+    $('fieldsContainer').innerHTML = '';
+    $('previewSection').hidden = true;
+    $('templateDesc').textContent = '';
+    try {
+        const data = await api('/api/generate/templates/' + encodeURIComponent(name) + '/schema');
+        currentSchema = data.schema;
+        $('templateDesc').textContent = data.description + ' · ' + (SCHEMA_SOURCE_LABELS[data.source] || data.source);
+        const container = $('fieldsContainer');
+        for (const field of currentSchema.fields) {
+            const wrap = buildField(field);
+            container.appendChild(wrap);
+            const input = wrap.querySelector('input[type="file"]');
+            if (input) {
+                input.addEventListener('change', (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) { input.dataset.imageData = ''; return; }
+                    const reader = new FileReader();
+                    reader.onload = () => { input.dataset.imageData = reader.result; };
+                    reader.readAsDataURL(file);
+                });
+            }
+        }
+        if (!currentSchema.fields.length) {
+            const empty = document.createElement('p');
+            empty.className = 'field-help';
+            empty.textContent = 'У шаблона нет параметров.';
+            container.appendChild(empty);
+        }
+        await loadPreviewMeta(name);
+    } catch (_) { /* toast уже показан */ }
+}
+
+async function loadPreviewMeta(name) {
+    try {
+        const meta = await api('/api/generate/templates/' + encodeURIComponent(name) + '/preview/meta');
+        if (!meta.available || meta.pages < 1) return;
+        previewState = { name, pages: meta.pages, page: 1 };
+        $('previewSection').hidden = false;
+        renderPreview();
+    } catch (_) { /* preview необязателен */ }
+}
+
+function renderPreview() {
+    if (!previewState) return;
+    const canvas = $('previewCanvas');
+    $('previewPageLabel').textContent = previewState.page + ' / ' + previewState.pages;
+    canvas.innerHTML = '<figure><img src="/api/generate/templates/' + encodeURIComponent(previewState.name) +
+        '/preview?page=' + previewState.page + '&dpi=110" alt="Страница ' + previewState.page + '"></figure>';
+    $('previewPrev').disabled = previewState.page <= 1;
+    $('previewNext').disabled = previewState.page >= previewState.pages;
+}
+
+function updateFormatButtons() {
+    const format = $('formatGroup').querySelector('.format-option.active').dataset.format;
+    const out = $('output');
+    const stem = out.value.replace(/\.(docx|pdf|html)$/i, '') || 'output';
+    out.value = stem + '.' + format;
+}
+
+$('formatGroup').addEventListener('click', (e) => {
+    const btn = e.target.closest('.format-option');
+    if (!btn || btn.disabled) return;
+    $('formatGroup').querySelectorAll('.format-option').forEach((b) => b.classList.toggle('active', b === btn));
+    updateFormatButtons();
+});
+
+$('previewPrev').addEventListener('click', () => {
+    if (previewState && previewState.page > 1) { previewState.page -= 1; renderPreview(); }
+});
+$('previewNext').addEventListener('click', () => {
+    if (previewState && previewState.page < previewState.pages) { previewState.page += 1; renderPreview(); }
+});
+$('previewCanvas').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft') $('previewPrev').click();
+    if (e.key === 'ArrowRight') $('previewNext').click();
+});
+
+$('generate-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clearFieldErrors();
+    const template = $('template').value;
+    if (!template) { toast('Выберите шаблон', 'error'); return; }
+    const output = $('output').value || 'output.docx';
+    const format = $('formatGroup').querySelector('.format-option.active').dataset.format;
+    const params = collectParams();
+    if (params === null) return;
+    const fd = new FormData();
+    fd.set('template', template);
+    fd.set('output', output);
+    fd.set('format', format);
+    fd.set('params', JSON.stringify(params));
+    const btn = $('genBtn');
+    setLoading(btn, true);
+    setStatus('Генерация…', 'info');
+    try {
+        const res = await fetch('/api/generate', { method: 'POST', body: fd });
+        const ct = res.headers.get('Content-Type') || '';
+        if (ct.includes('application/json')) {
+            const data = await res.json();
+            renderErrors(data.errors);
+            setStatus('Ошибка: ' + (data.error || 'неизвестно'), 'error');
+        } else if (res.ok) {
+            const blob = await res.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = output;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            setStatus('Документ сгенерирован и загружен.', 'success');
+            toast('Документ готов', 'success');
+        } else {
+            setStatus('Ошибка генерации', 'error');
+        }
+    } catch (err) {
+        setStatus('Ошибка сети: ' + err.message, 'error');
+    } finally {
+        setLoading(btn, false);
+    }
+});
+
+$('template').addEventListener('change', () => {
+    if ($('template').value) loadTemplate($('template').value);
+});
+loadTemplates();

@@ -1,14 +1,17 @@
-<div class="header">
-    <h1>TextAlchemy</h1>
-    <button class="theme-toggle" onclick="toggleTheme()" title="Переключить тему" aria-label="Переключить тему">🌓</button>
-    <nav>
-        <a href="/" {% if active == 'index' %}class="active"{% endif %}>Главная</a>
-        <a href="/extract" {% if active == 'extract' %}class="active"{% endif %}>Извлечь</a>
-        <a href="/convert" {% if active == 'convert' %}class="active"{% endif %}>Конверт</a>
-        <a href="/bibliography" {% if active == 'bibliography' %}class="active"{% endif %}>Библиография</a>
-        <a href="/matching" {% if active == 'matching' %}class="active"{% endif %}>Сопоставление</a>
-        <a href="/pipeline" {% if active == 'pipeline' %}class="active"{% endif %}>Pipeline</a>
-        <a href="/recognize" {% if active == 'recognize' %}class="active"{% endif %}>Распознать</a>
-        <a href="/export" {% if active == 'export' %}class="active"{% endif %}>Экспорт</a>
-    </nav>
-</div>
+<header class="header">
+    <button class="icon-button nav-toggle" type="button" data-nav-open aria-controls="app-sidebar" aria-expanded="false" aria-label="Открыть меню">
+        <svg class="ui-icon" aria-hidden="true"><use href="#icon-menu"/></svg>
+    </button>
+    <a class="brand" href="/" aria-label="TextAlchemy — главная">
+        <span class="brand-mark" aria-hidden="true">T</span>
+        <span><h1>TextAlchemy</h1><small>Документы без потерь</small></span>
+    </a>
+    <div class="header-actions">
+        <button class="task-center-trigger" type="button" data-task-center-open aria-controls="taskCenter" aria-expanded="false">
+            <svg class="ui-icon" aria-hidden="true"><use href="#icon-clock"/></svg><span data-i18n="header.tasks">Задачи</span><strong id="activeTaskCount" hidden>0</strong>
+        </button>
+        <a class="header-action" href="/convert" aria-label="Новая конвертация">+ <span data-i18n="header.new_conversion">Новая конвертация</span></a>
+        <button class="language-trigger" type="button" data-language-open aria-haspopup="dialog" aria-controls="languageDialog"><svg class="ui-icon" aria-hidden="true"><use href="#icon-language"/></svg><span>Русский</span></button>
+        <button class="icon-button theme-toggle" type="button" onclick="toggleTheme()" title="Включить тёмную тему" aria-label="Включить тёмную тему"><svg class="ui-icon" aria-hidden="true"><use href="#icon-moon"/></svg></button>
+    </div>
+</header>

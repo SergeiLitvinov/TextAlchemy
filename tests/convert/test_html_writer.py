@@ -4,6 +4,7 @@ import pytest
 from PIL import Image as PillowImage
 
 from textalchemy.convert.html_writer import _chart_axis_style, write_html_model
+from textalchemy.core.color import ColorValue
 from textalchemy.core.diagnostics import IssueSeverity
 from textalchemy.core.document_model import (
     Box,
@@ -29,6 +30,32 @@ def _png_bytes(tmp_path):
     path = tmp_path / "picture.png"
     PillowImage.new("RGB", (8, 6), "red").save(path)
     return path.read_bytes()
+
+
+def test_write_html_model_renders_canonical_color_and_blend_mode(tmp_path):
+    output = tmp_path / "canonical-color.html"
+    document = DocumentModel(
+        sections=[
+            Section(
+                blocks=[
+                    Paragraph(
+                        content=[
+                            TextRun(
+                                "Tinted",
+                                style=TextStyle(color=ColorValue.from_hex("#33669980", blend_mode="multiply")),
+                            )
+                        ]
+                    )
+                ]
+            )
+        ]
+    )
+
+    write_html_model(document, output)
+
+    html = output.read_text(encoding="utf-8")
+    assert "color:rgba(51, 102, 153, 0.502)" in html
+    assert "mix-blend-mode:multiply" in html
 
 
 def test_write_html_model_preserves_styles_tables_images_and_geometry(tmp_path):

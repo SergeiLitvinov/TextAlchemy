@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import quote, urlsplit
 
+from textalchemy.convert.color_preflight import preflight_colors
+from textalchemy.convert.font_preflight import prepare_fonts
+from textalchemy.core.color import ColorValue, color_to_css
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_model import (
     Block,
@@ -25,6 +28,8 @@ from textalchemy.core.document_model import (
     TextRun,
     TextStyle,
 )
+from textalchemy.core.units import points_to_css_px
+from textalchemy.fonts.html_embedding import embedded_font_stylesheet
 
 _PRESET_GEOMETRY_CACHE: dict[str, tuple[str, bool]] | None = None
 
@@ -77,7 +82,6 @@ _MATHML_ELEMENTS = {
 _COLOR_RE = re.compile(r"^(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,24})$")
 _MEDIA_TYPE_RE = re.compile(r"^image/[a-zA-Z0-9.+-]+$")
 _HEADING_RE = re.compile(r"^(?:heading|заголовок)\s*([1-6])$", re.IGNORECASE)
-_PT_TO_PX = 96.0 / 72.0
 
 
 def write_html_model(document: DocumentModel, output_path: str | Path) -> ConversionReport:
@@ -86,15 +90,18 @@ def write_html_model(document: DocumentModel, output_path: str | Path) -> Conver
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     report = ConversionReport(output)
+    document = prepare_fonts(document, report)
+    preflight_colors(document, report, target="html")
     renderer = _HtmlRenderer(document, report)
     body = renderer.render()
+    font_styles = embedded_font_stylesheet(document, report)
     title = escape(str(document.metadata.get("title") or "Document"))
     language = escape(str(document.metadata.get("language") or "ru"), quote=True)
     html = (
         "<!doctype html>\n"
         f'<html lang="{language}">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        f"<title>{title}</title>\n<style>\n{renderer.stylesheet()}\n</style>\n"
+        f"<title>{title}</title>\n<style>\n{font_styles}\n{renderer.stylesheet()}\n</style>\n"
         f"</head>\n<body>\n{body}\n</body>\n</html>\n"
     )
     try:
@@ -176,8 +183,10 @@ class _HtmlRenderer:
         main = self._blocks(section.blocks, f"sections[{index}].blocks")
         footer = self._blocks(section.footers, f"sections[{index}].footers")
         section_styles: list[str] = []
-        background = section.properties.get("background_fill")
-        if isinstance(background, str) and _COLOR_RE.match(background):
+        background = _metadata_color(section.properties.get("background_color"), css=True) or color_to_css(
+            section.properties.get("background_fill")
+        )
+        if background:
             section_styles.append(f"background-color:{background}")
         return (
             f'<section class="ta-section ta-section-{index}"{_style_attribute(section_styles)}>'
@@ -356,10 +365,14 @@ class _HtmlRenderer:
             values.extend(("vertical-align:super", "font-size:smaller"))
         elif style.subscript is True:
             values.extend(("vertical-align:sub", "font-size:smaller"))
-        if style.color and _COLOR_RE.match(style.color):
-            values.append(f"color:{style.color}")
-        if style.background and _COLOR_RE.match(style.background):
-            values.append(f"background-color:{style.background}")
+        color = color_to_css(style.color)
+        if color:
+            values.append(f"color:{color}")
+            if isinstance(style.color, ColorValue) and style.color.blend_mode != "normal":
+                values.append(f"mix-blend-mode:{_css_identifier(style.color.blend_mode)}")
+        background = color_to_css(style.background)
+        if background:
+            values.append(f"background-color:{background}")
         return values
 
     @staticmethod
@@ -1726,12 +1739,12 @@ def _shape_svg_uri(shape: dict[str, Any]) -> str | None:
     if entry is None:
         return None
     path_d, stroke_only = entry
-    fill = shape.get("fill")
+    fill = _metadata_color(shape.get("fill_color"), css=False) or shape.get("fill")
     fill_attr = "none" if stroke_only or fill in (None, "none", "blip") else fill
     if fill_attr and not _COLOR_RE.match(fill_attr):
         fill_attr = "none"
     line = shape.get("line") or {}
-    stroke = line.get("color")
+    stroke = _metadata_color(line.get("stroke_color"), css=False) or line.get("color")
     if stroke and not _COLOR_RE.match(stroke):
         stroke = None
     if fill_attr == "none" and stroke is None:
@@ -1742,7 +1755,7 @@ def _shape_svg_uri(shape: dict[str, Any]) -> str | None:
         attributes += f' stroke="{stroke}"'
         width = line.get("width")
         if isinstance(width, (int, float)) and width > 0:
-            attributes += f' stroke-width="{width * _PT_TO_PX:.3g}px" vector-effect="non-scaling-stroke"'
+            attributes += f' stroke-width="{points_to_css_px(width):.3g}px" vector-effect="non-scaling-stroke"'
     elif stroke_only:
         attributes += ' stroke="#444444" stroke-width="1.5px"'
     parts.append(f'<path d="{path_d}"{attributes}/>')
@@ -1750,8 +1763,24 @@ def _shape_svg_uri(shape: dict[str, Any]) -> str | None:
     return "data:image/svg+xml," + quote("".join(parts), safe="")
 
 
+def _metadata_color(value: Any, *, css: bool) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    try:
+        color = ColorValue.from_dict(value)
+        return color.to_css() if css else color.to_hex(include_alpha=color.alpha < 1.0)
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def _css_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"').replace("\r", " ").replace("\n", " ")
+
+
+def _css_identifier(value: str) -> str:
+    """Keep format metadata from escaping an inline CSS declaration."""
+    token = value.strip().lower()
+    return token if re.fullmatch(r"[a-z][a-z0-9-]*", token) else "normal"
 
 
 def _safe_link(value: str) -> str | None:

@@ -52,6 +52,18 @@ def test_web_version_uses_package_metadata():
     assert app.version == __version__
 
 
+def test_locale_catalog_defaults_to_russian_and_is_extensible():
+    manifest = client.get("/api/locales")
+    catalog = client.get("/api/locales/ru")
+
+    assert manifest.status_code == 200
+    assert manifest.json() == {"default": "ru", "locales": [{"code": "ru", "name": "Русский"}]}
+    assert catalog.status_code == 200
+    assert catalog.json()["code"] == "ru"
+    assert catalog.json()["messages"]["nav.convert"] == "Преобразовать"
+    assert client.get("/api/locales/en").status_code == 404
+
+
 def test_dashboard():
     resp = client.get("/")
     assert resp.status_code == 200
@@ -59,28 +71,130 @@ def test_dashboard():
     assert f"/static/css/style.css?v={__version__}" in resp.text
     assert f"/static/js/app.js?v={__version__}" in resp.text
     assert f"/static/favicon.svg?v={__version__}" in resp.text
+    assert 'aria-label="Основная навигация"' in resp.text
+    assert 'href="/generate"' in resp.text
+    assert 'href="/reports"' in resp.text
+    assert "Проверить качество" in resp.text
+    assert "Автоматизировать обработку" in resp.text
+    assert 'data-task-center-open' in resp.text
+    assert '/static/js/components/task-center.js' in resp.text
+    assert '/static/js/i18n.js' in resp.text
+    assert 'data-i18n="nav.convert"' in resp.text
+    assert "tracked changes" not in resp.text
+    assert "payload" not in resp.text
+
+
+def test_global_task_center_reports_local_storage_policy():
+    store = _client_task_store()
+    store.set(
+        "task-center-test",
+        {
+            "status": "done",
+            "source_format": "docx",
+            "target_format": "pdf",
+            "filename": "result.pdf",
+            "artifact": "result.pdf",
+        },
+    )
+
+    response = client.get("/api/tasks")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["active"] == 0
+    assert payload["retention_seconds"] == 3600
+    assert payload["storage"]["scope"] == "local-device"
+    assert payload["storage"]["root_label"] == "каталог данных TextAlchemy"
+    assert isinstance(payload["storage"]["bytes"], int)
+    assert payload["storage"]["automatic_cleanup"] is True
+    assert payload["storage"]["external_uploads"] is False
+    assert payload["tasks"][0]["result_url"] == "/api/convert/result/task-center-test"
+
+
+def test_global_task_center_clears_only_finished_tasks():
+    store = _client_task_store()
+    store.set("finished-task", {"status": "done"})
+    store.set("active-task", {"status": "running"})
+
+    response = client.delete("/api/tasks/finished")
+
+    assert response.json() == {"success": True, "removed": 1}
+    assert store.get("finished-task") is None
+    assert store.get("active-task") is not None
+
+
+def test_global_task_center_can_rerun_individual_conversion(monkeypatch):
+    web_app = importlib.import_module("textalchemy.web.app")
+
+    store = _client_task_store()
+    task_id = "rerun-single"
+    source = Path(store.root) / task_id / "source"
+    source.mkdir(parents=True)
+    (source / "input.pdf").write_bytes(b"%PDF")
+    store.set(
+        task_id,
+        {"status": "error", "queue_kind": "convert", "source_format": "pdf", "target_format": "docx", "mode": "balanced"},
+    )
+    launched = []
+    monkeypatch.setattr(web_app.task_queue, "submit_named", lambda name, fn, *args: launched.append((name, fn, args)))
+
+    snapshot = client.get("/api/tasks").json()["tasks"][0]
+    response = client.post(f"/api/tasks/{task_id}/rerun")
+
+    assert snapshot["can_rerun"] is True
+    assert response.status_code == 200
+    assert response.json()["status"] == "queued"
+    assert launched and launched[0][0] == task_id
+
+
+def test_global_task_center_can_cancel_running_conversion(monkeypatch):
+    web_app = importlib.import_module("textalchemy.web.app")
+
+    store = _client_task_store()
+    task_id = "cancel-single"
+    store.set(task_id, {"status": "running", "queue_kind": "convert"})
+    monkeypatch.setattr(web_app.task_queue, "cancel", lambda name: name == task_id)
+
+    response = client.post(f"/api/tasks/{task_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "cancelled"
+    assert store.get(task_id)["status"] == "cancelled"
 
 
 def test_extract_page():
     resp = client.get("/extract")
     assert resp.status_code == 200
+    assert f'/static/js/pages/extract.js?v={__version__}' in resp.text
+    assert "Исходник LaTeX" in resp.text
 
 
 def test_convert_page():
     resp = client.get("/convert")
     assert resp.status_code == 200
     assert "Максимально похожий вид" in resp.text
+    assert "Можно удобно редактировать" in resp.text
+    assert "Визуальный preview" not in resp.text
+    assert "Preview, diff" not in resp.text
     assert "Скачать результат" in resp.text
     assert 'id="sourceInspection"' in resp.text
     assert 'id="comparisonSection"' in resp.text
+    assert 'id="objectDiff"' in resp.text
+    assert f'/static/js/pages/convert.js?v={__version__}' in resp.text
+    assert 'type="module"' in resp.text
+    assert 'convert-history.js' not in resp.text
+    assert "async function pollTask" not in resp.text
 
 
 def test_organize_page():
     resp = client.get("/pipeline")
     assert resp.status_code == 200
-    assert "Конструктор pipeline" in resp.text
+    assert "Соберите сценарий обработки" in resp.text
     assert 'id="opsPalette"' in resp.text
     assert 'id="expertMode"' in resp.text
+    assert f'/static/js/pages/pipeline.js?v={__version__}' in resp.text
+    assert 'type="module"' in resp.text
+    assert "function renderPalette" not in resp.text
 
 
 def test_api_operations_includes_param_schema():
@@ -222,6 +336,7 @@ class _A11yScanner(HTMLParser):
         self.controls = []  # (tag, attrs, in_wrapping_label)
         self.images = []
         self.dropzones = []
+        self.scripts = []
         self._label_for = None
         self._in_wrapping_label = False
 
@@ -238,6 +353,8 @@ class _A11yScanner(HTMLParser):
                 self.label_for.append(self._label_for)
         elif tag == "img":
             self.images.append(attrs)
+        elif tag == "script" and attrs.get("src"):
+            self.scripts.append(attrs["src"])
         if tag == "div" and "file-drop" in (attrs.get("class") or "").split():
             self.dropzones.append(attrs)
         if tag in _LABELABLE:
@@ -299,12 +416,15 @@ def test_dropzones_are_keyboard_operable():
             assert attrs.get("role") == "button", f"{path}: file-drop без role='button'"
             assert attrs.get("tabindex") == "0", f"{path}: file-drop без tabindex='0'"
         if scanner.dropzones:
-            assert "keydown" in scanner.html, f"{path}: file-drop без обработчика keydown (Enter/Space)"
+            scripts = "\n".join(client.get(source).text for source in scanner.scripts)
+            assert "keydown" in scanner.html + scripts, f"{path}: file-drop без обработчика keydown (Enter/Space)"
 
 
 def test_bibliography_page():
     resp = client.get("/bibliography")
     assert resp.status_code == 200
+    assert 'aria-label="Разделы библиотеки"' in resp.text
+    assert f'/static/js/pages/bibliography.js?v={__version__}' in resp.text
 
 
 def test_rename_page():
@@ -315,16 +435,19 @@ def test_rename_page():
 def test_matching_page():
     resp = client.get("/matching")
     assert resp.status_code == 200
+    assert f'/static/js/pages/matching.js?v={__version__}' in resp.text
 
 
 def test_reports_page():
     resp = client.get("/reports")
     assert resp.status_code == 200
+    assert f'/static/js/pages/reports.js?v={__version__}' in resp.text
 
 
 def test_export_page():
     resp = client.get("/export")
     assert resp.status_code == 200
+    assert f'/static/js/pages/export.js?v={__version__}' in resp.text
 
 
 def test_recognize_page():
@@ -572,6 +695,25 @@ def test_api_convert_capabilities_are_runtime_plans(monkeypatch):
     docx_targets = {target["format"]: target for target in sources["docx"]["targets"]}
     assert {"pdf", "html", "latex", "model"} <= docx_targets.keys()
     assert docx_targets["pdf"]["plans"]["faithful"]["steps"] == ["docx.model", "model.pdf"]
+    faithful = docx_targets["pdf"]["plans"]["faithful"]
+    assert 0 < faithful["visual_score"] < 1
+    assert faithful["editability_score"] < faithful["visual_score"]
+    assert set(faithful["preservation"]["scores"]) == {
+        "content", "semantics", "geometry", "style", "relationships", "editability",
+    }
+
+
+def test_api_convert_blocks_route_below_selected_loss_budget(monkeypatch):
+    monkeypatch.setattr("textalchemy.convert.executor.requirement_available", lambda _requirement: True)
+
+    response = client.post(
+        "/api/convert",
+        files={"file": ("budget.docx", b"placeholder", "application/octet-stream")},
+        data={"target_format": "pdf", "mode": "faithful", "min_retention": "0.9"},
+    )
+
+    assert response.status_code == 422
+    assert "ниже выбранного порога 90%" in response.json()["detail"]
 
 
 def test_api_convert_returns_report_and_separate_artifact(monkeypatch):
@@ -807,6 +949,35 @@ def test_api_convert_preview_meta_and_page(monkeypatch):
     assert client.get(f"/api/convert/preview/{task_id}?side=other").status_code == 400
     assert client.get(f"/api/convert/preview/{task_id}?side=target&page=0").status_code == 400
     assert client.get("/api/convert/preview/nonexistent/meta").status_code == 404
+
+
+def test_api_convert_preview_diff_returns_heatmap_and_metrics(monkeypatch):
+    from io import BytesIO
+
+    from PIL import Image, ImageDraw
+
+    store = _client_task_store()
+    task_id = _seed_preview_task(store, "diff-preview")
+
+    def png(offset):
+        image = Image.new("RGB", (80, 100), "white")
+        ImageDraw.Draw(image).rectangle((10 + offset, 10, 50 + offset, 40), fill="black")
+        output = BytesIO()
+        image.save(output, "PNG")
+        return output.getvalue()
+
+    def fake_png(_preview_dir, _file, side, _page_index, dpi=110):
+        return png(0 if side == "source" else 5)
+
+    monkeypatch.setattr("textalchemy.web.routes.convert.cached_page_png", fake_png)
+
+    response = client.get(f"/api/convert/preview/{task_id}/diff?page=1")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert 0 < float(response.headers["x-visual-similarity"]) < 1
+    assert float(response.headers["x-visual-rmse"]) > 0
+    assert response.content.startswith(b"\x89PNG")
 
 
 def test_api_convert_preview_requires_done_task(monkeypatch):

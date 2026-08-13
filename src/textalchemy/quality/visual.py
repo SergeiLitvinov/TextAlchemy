@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageFilter, ImageOps
@@ -30,6 +31,39 @@ class PerceptualComparison:
             and self.hash_distance <= thresholds.max_hash_distance
             and self.foreground_iou >= thresholds.min_foreground_iou
         )
+
+
+def difference_heatmap(
+    reference: Image.Image | str | Path,
+    candidate: Image.Image | str | Path,
+) -> tuple[Image.Image, PerceptualComparison]:
+    """Create a source/result overlay with red heat proportional to pixel differences."""
+    reference_image = _open_image(reference).convert("RGB")
+    candidate_image = _open_image(candidate).convert("RGB")
+    if candidate_image.size != reference_image.size:
+        candidate_image = ImageOps.contain(candidate_image, reference_image.size, method=Image.Resampling.LANCZOS)
+        canvas = Image.new("RGB", reference_image.size, "white")
+        offset = (
+            (canvas.width - candidate_image.width) // 2,
+            (canvas.height - candidate_image.height) // 2,
+        )
+        canvas.paste(candidate_image, offset)
+        candidate_image = canvas
+    difference = ImageChops.difference(reference_image, candidate_image).convert("L")
+    heat_alpha = difference.point(lambda value: min(220, value * 3))
+    overlay = Image.blend(reference_image, candidate_image, 0.35).convert("RGBA")
+    heat = Image.new("RGBA", reference_image.size, (220, 38, 38, 0))
+    heat.putalpha(heat_alpha)
+    overlay.alpha_composite(heat)
+    return overlay.convert("RGB"), compare_images(reference_image, candidate_image)
+
+
+def difference_heatmap_png(reference: bytes, candidate: bytes) -> tuple[bytes, PerceptualComparison]:
+    with Image.open(BytesIO(reference)) as left, Image.open(BytesIO(candidate)) as right:
+        image, comparison = difference_heatmap(left, right)
+    output = BytesIO()
+    image.save(output, format="PNG", optimize=True)
+    return output.getvalue(), comparison
 
 
 def normalise_image(image: Image.Image, *, size: tuple[int, int] = (160, 160)) -> Image.Image:
@@ -126,6 +160,8 @@ __all__ = [
     "PerceptualComparison",
     "PerceptualThresholds",
     "compare_images",
+    "difference_heatmap",
+    "difference_heatmap_png",
     "normalise_image",
     "render_pdf_pages",
 ]

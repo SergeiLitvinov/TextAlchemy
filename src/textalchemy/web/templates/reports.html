@@ -1,79 +1,48 @@
 {% extends "base.html" %}
 {% set active = 'reports' %}
-{% block title %}TextAlchemy — Отчёты{% endblock %}
+{% block title %}TextAlchemy — качество и результаты{% endblock %}
 {% block content %}
-    <div class="card">
-        <h2>📊 Отчёты и статистика</h2>
-        <div class="grid-2">
-            <div class="card">
-                <h3>Статистика</h3>
-                <div id="stats"><p class="hint">Загрузка…</p></div>
-            </div>
-            <div class="card">
-                <h3>Типы документов</h3>
-                <div id="docTypes"><p class="hint">Загрузка…</p></div>
-            </div>
-        </div>
-        <div class="card" style="margin-top:1rem;">
-            <div class="card-head">
-                <h3>Последнее сопоставление</h3>
-                <button type="button" id="refreshBtn">🔄 Обновить</button>
-            </div>
-            <div id="lastMatching"><p class="hint">Загрузка…</p></div>
-        </div>
-        <div id="status" class="status-bar" style="display:none;"></div>
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Контроль результата</p>
+        <h2>Качество документов и коллекции</h2>
+        <p class="lead">Проверяйте структуру и отличия страниц после преобразования, затем контролируйте полноту связей в библиотеке.</p>
     </div>
+    <a class="btn btn-primary" href="/convert">Проверить документ</a>
+</section>
+
+<section class="quality-workflow" aria-label="Возможности проверки качества">
+    <article><span>1</span><div><strong>До запуска</strong><small>Определяем структуру, доступные маршруты и прогноз сохранности.</small></div></article>
+    <article><span>2</span><div><strong>После преобразования</strong><small>Сравниваем текст, таблицы, изображения, формулы, связи и редактируемость.</small></div></article>
+    <article><span>3</span><div><strong>Визуальная проверка</strong><small>Показываем страницы до и после, различия и конкретные предупреждения.</small></div></article>
+</section>
+
+<div class="section-heading reports-section-heading">
+    <div><p class="eyebrow">Организация библиотеки</p><h2>Состояние коллекции</h2></div>
+    <button type="button" id="refreshBtn" class="btn-secondary">Обновить данные</button>
+</div>
+{% include "partials/library_nav.html" %}
+
+<section class="library-metrics" id="stats" aria-label="Основные показатели">
+    <div class="metric-skeleton"></div><div class="metric-skeleton"></div><div class="metric-skeleton"></div><div class="metric-skeleton"></div>
+</section>
+
+<div class="reports-layout">
+    <section class="card report-panel">
+        <div class="card-head"><div><p class="eyebrow">Распределение</p><h3>Типы источников</h3></div></div>
+        <div id="docTypes"><p class="hint">Загружаем статистику…</p></div>
+    </section>
+    <section class="card report-panel">
+        <div class="card-head">
+            <div><p class="eyebrow">Последняя проверка</p><h3>Связь источников и файлов</h3></div>
+            <a href="/matching" class="text-link">Повторить →</a>
+        </div>
+        <div id="lastMatching"><p class="hint">Загружаем результат…</p></div>
+    </section>
+</div>
+<div id="status" class="status-bar" hidden></div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const $ = (id) => document.getElementById(id);
-    function setStatus(msg, type) {
-        const el = $('status');
-        if (!msg) { el.style.display = 'none'; return; }
-        el.style.display = 'block';
-        el.className = 'status-bar ' + (type || 'info');
-        el.textContent = msg;
-    }
-
-    function renderStats(d) {
-        const stats = [
-            ['Записей в библиографии', d.total_bib],
-            ['Всего файлов', d.total_files],
-            ['Совпало', d.matched_files],
-            ['Без совпадения', d.unmatched],
-            ['Прогресс', d.progress + '%'],
-        ];
-        $('stats').innerHTML = stats.map(([k, v]) => `<p>${esc(k)}: <strong>${esc(String(v))}</strong></p>`).join('');
-        const dt = Object.entries(d.doc_types || {});
-        $('docTypes').innerHTML = dt.length
-            ? dt.map(([k, v]) => `<p>${esc(k)}: <strong>${esc(String(v))}</strong></p>`).join('')
-            : '<p class="hint">Нет данных</p>';
-    }
-
-    function renderMatching(r) {
-        const el = $('lastMatching');
-        if (!r) { el.innerHTML = '<p class="hint">Сопоставление ещё не запускалось.</p>'; return; }
-        const matched = Array.isArray(r.matched) ? r.matched : [];
-        const unmatched = Array.isArray(r.unmatched) ? r.unmatched : [];
-        const errors = Array.isArray(r.errors) ? r.errors : [];
-        let html = `<p>Совпадений: <strong>${matched.length}</strong>, без совпадений: <strong>${unmatched.length}</strong>, ошибок: <strong>${errors.length}</strong></p>`;
-        if (matched.length) {
-            html += '<table><thead><tr><th>Оригинал</th><th>Новое имя</th><th>Оценка</th></tr></thead><tbody>';
-            html += matched.map((m) => `<tr><td>${esc(m.original || '')}</td><td>${esc(m.new || '')}</td><td>${esc(String(m.score ?? ''))}</td></tr>`).join('');
-            html += '</tbody></table>';
-        }
-        el.innerHTML = html;
-    }
-
-    async function loadAll() {
-        try {
-            const d = await api('/api/stats');
-            renderStats(d);
-            renderMatching(d.matching);
-        } catch (_) { /* toast уже показан */ }
-    }
-    loadAll();
-    $('refreshBtn').addEventListener('click', () => { setStatus('Обновление…', 'info'); loadAll(); setTimeout(() => setStatus('', null), 1200); });
-</script>
+<script src="/static/js/pages/reports.js?v={{ asset_version }}" defer></script>
 {% endblock %}

@@ -8,6 +8,7 @@ from typing import Any
 
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_model import VECTOR_IMAGE_MEDIA_TYPES, DocumentModel, Image, Resource
+from textalchemy.core.units import degrees_to_ooxml_angle
 from textalchemy.ooxml.package import points_to_emu
 
 
@@ -147,7 +148,7 @@ def _apply_image_transform(drawing: Any, image: Image) -> None:
     transforms = drawing.xpath(".//pic:spPr/a:xfrm")
     if transforms:
         if image.box is not None and image.box.rotation:
-            transforms[0].set("rot", str(round(image.box.rotation * 60000)))
+            transforms[0].set("rot", str(degrees_to_ooxml_angle(image.box.rotation)))
         if image.properties.flip_horizontal is not None:
             transforms[0].set("flipH", str(int(image.properties.flip_horizontal)))
         if image.properties.flip_vertical is not None:

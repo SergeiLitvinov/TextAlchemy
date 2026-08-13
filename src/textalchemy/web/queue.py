@@ -29,6 +29,7 @@ class TaskQueue:
         self._pending = 0
         self._idle = threading.Event()
         self._idle.set()
+        self._futures: dict[str, Future[None]] = {}
 
     def submit(self, fn: Callable[..., None], *args: Any, **kwargs: Any) -> Future[None]:
         """Поставить задачу на выполнение (не блокирует вызывающий код)."""
@@ -45,6 +46,20 @@ class TaskQueue:
                 if self._pending == 0:
                     self._idle.set()
             raise
+
+    def submit_named(self, task_id: str, fn: Callable[..., None], *args: Any, **kwargs: Any) -> Future[None]:
+        """Поставить адресуемую задачу, которую можно снять до начала выполнения."""
+        future = self.submit(fn, *args, **kwargs)
+        with self._lock:
+            self._futures[task_id] = future
+        future.add_done_callback(lambda completed: self._forget(task_id, completed))
+        return future
+
+    def cancel(self, task_id: str) -> bool:
+        """Снять ожидающую задачу; выполняющаяся отменяется кооперативно use-case-слоем."""
+        with self._lock:
+            future = self._futures.get(task_id)
+        return bool(future and future.cancel())
 
     def wait_idle(self, timeout: float | None = None) -> bool:
         """Дождаться завершения всех поставленных задач; True, если успели."""
@@ -66,6 +81,15 @@ class TaskQueue:
             logger.exception("background task raised an unhandled error")
         finally:
             with self._lock:
+                self._pending -= 1
+                if self._pending == 0:
+                    self._idle.set()
+
+    def _forget(self, task_id: str, future: Future[None]) -> None:
+        with self._lock:
+            if self._futures.get(task_id) is future:
+                self._futures.pop(task_id, None)
+            if future.cancelled():
                 self._pending -= 1
                 if self._pending == 0:
                     self._idle.set()

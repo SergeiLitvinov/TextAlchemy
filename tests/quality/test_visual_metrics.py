@@ -2,7 +2,7 @@
 
 from PIL import Image, ImageDraw
 
-from textalchemy.quality.visual import PerceptualThresholds, compare_images, normalise_image
+from textalchemy.quality.visual import PerceptualThresholds, compare_images, difference_heatmap, normalise_image
 
 
 def _layout_image(offset: int = 0):
@@ -35,3 +35,17 @@ def test_perceptual_comparison_rejects_missing_page_content():
 
     assert comparison.passes() is False
     assert comparison.foreground_iou == 0
+
+
+def test_difference_heatmap_marks_changed_pixels_and_returns_metrics():
+    reference = _layout_image()
+    candidate = _layout_image(offset=8)
+
+    heatmap, comparison = difference_heatmap(reference, candidate)
+
+    assert heatmap.mode == "RGB"
+    assert heatmap.size == reference.size
+    assert comparison.similarity < 1
+    pixels = heatmap.get_flattened_data()
+    red_pixels = sum(1 for red, green, blue in pixels if red > green * 1.2 and red > blue * 1.2)
+    assert red_pixels > 0

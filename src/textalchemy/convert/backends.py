@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from textalchemy.convert.protocols import ConversionValue
+from textalchemy.convert.stages import StageContext, StageKind, StageResult
 from textalchemy.core.diagnostics import ConversionReport
 from textalchemy.core.document_model import DocumentModel
 
@@ -19,6 +20,7 @@ ConverterFunction = Callable[[Path, Path], ConversionReport]
 class ImporterBackend:
     id: str
     importer: ImporterFunction
+    kind: StageKind = StageKind.PARSE
 
     def read(self, input_path: Path) -> DocumentModel:
         return self.importer(input_path)
@@ -30,11 +32,15 @@ class ImporterBackend:
     ) -> tuple[DocumentModel, None]:
         return self.read(_require_path(value)), None
 
+    def execute_stage(self, value: ConversionValue, context: StageContext) -> StageResult:
+        return StageResult(self.read(_require_path(value)))
+
 
 @dataclass(frozen=True)
 class ExporterBackend:
     id: str
     exporter: ExporterFunction
+    kind: StageKind = StageKind.SERIALIZE
 
     def write(self, document: DocumentModel, output_path: Path) -> ConversionReport:
         return self.exporter(document, output_path)
@@ -47,11 +53,16 @@ class ExporterBackend:
         report = self.write(_require_model(value), output_path)
         return report.output_path, report
 
+    def execute_stage(self, value: ConversionValue, context: StageContext) -> StageResult:
+        report = self.write(_require_model(value), context.output_path)
+        return StageResult(report.output_path, report)
+
 
 @dataclass(frozen=True)
 class PathConverterBackend:
     id: str
     converter: ConverterFunction
+    kind: StageKind = StageKind.SERIALIZE
 
     def convert(self, input_path: Path, output_path: Path) -> ConversionReport:
         return self.converter(input_path, output_path)
@@ -63,6 +74,10 @@ class PathConverterBackend:
     ) -> tuple[Path, ConversionReport]:
         report = self.convert(_require_path(value), output_path)
         return report.output_path, report
+
+    def execute_stage(self, value: ConversionValue, context: StageContext) -> StageResult:
+        report = self.convert(_require_path(value), context.output_path)
+        return StageResult(report.output_path, report)
 
 
 def _require_path(value: ConversionValue) -> Path:

@@ -150,6 +150,22 @@ class TaskStore:
                 return
             self._delete_locked(task_id)
 
+    def clear_result(self, task_id: str) -> None:
+        """Удалить результат и preview, сохранив исходник для повторного запуска."""
+        with self._lock:
+            if not _valid_identifier(task_id):
+                return
+            task_dir = self._task_dir(task_id)
+            if not task_dir.is_dir():
+                return
+            for child in task_dir.iterdir():
+                if child.name == "source":
+                    continue
+                if child.is_dir():
+                    shutil.rmtree(child, ignore_errors=True)
+                else:
+                    child.unlink(missing_ok=True)
+
     def set_job(self, job_id: str, payload: dict[str, Any]) -> None:
         """Записать метаданные пакетной задачи (job) и протушить старые."""
         with self._lock:
@@ -206,6 +222,13 @@ class TaskStore:
         """Удалить все протухшие задачи и jobs; вернуть число удалённых."""
         with self._lock:
             return self._prune_locked()
+
+    def storage_bytes(self) -> int:
+        """Return the current local footprint of task metadata, sources, previews, and results."""
+        with self._lock:
+            if not self.root.is_dir():
+                return 0
+            return sum(path.stat().st_size for path in self.root.rglob("*") if path.is_file())
 
     def _task_dir(self, task_id: str) -> Path:
         return self.root / _safe_identifier(task_id)

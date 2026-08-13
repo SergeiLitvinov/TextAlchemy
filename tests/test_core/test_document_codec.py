@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from textalchemy.core.color import ColorValue
 from textalchemy.core.document_adapters import document_to_text, text_to_document
 from textalchemy.core.document_codec import document_from_dict, document_from_json, document_to_dict, document_to_json
 from textalchemy.core.document_model import (
@@ -21,6 +22,8 @@ from textalchemy.core.document_model import (
     PackageRelationship,
     Paragraph,
     ParagraphProperties,
+    Provenance,
+    ProvenanceEvent,
     Resource,
     ResourceKind,
     Section,
@@ -34,6 +37,7 @@ from textalchemy.core.document_model import (
     TextRun,
     TextStyle,
     TextStyleProperties,
+    VisualSurrogate,
 )
 from textalchemy.core.types import Block, BlockType, DocFormat, Text
 from textalchemy.core.types import Table as LegacyTable
@@ -46,12 +50,25 @@ def _complex_document() -> DocumentModel:
         media_type="image/svg+xml",
         data=b"<svg>\x00</svg>",
         filename="chart.svg",
+        provenance=Provenance(
+            source_format="docx",
+            source_path="original.docx",
+            package_part="/word/media/image1.svg",
+            object_id="rId5",
+            events=[ProvenanceEvent("import.docx", "copied vector resource")],
+        ),
     )
     paragraph = Paragraph(
         content=[
             TextRun(
                 "Result ",
-                style=TextStyle(font_family="PT Serif", font_size=Length(12), bold=True, superscript=True),
+                style=TextStyle(
+                    font_family="PT Serif",
+                    font_size=Length(12),
+                    bold=True,
+                    superscript=True,
+                    color=ColorValue.from_cmyk(0.0, 1.0, 1.0, 0.0, alpha=0.8, icc_profile="press.icc"),
+                ),
             ),
             Formula("x^2", FormulaFormat.LATEX, display=False),
             Image(
@@ -62,6 +79,18 @@ def _complex_document() -> DocumentModel:
             ),
         ],
         style_id="body",
+        provenance=Provenance(
+            source_format="docx",
+            package_part="/word/document.xml",
+            object_id="paragraph-1",
+            events=[ProvenanceEvent("normalize.runs", fallback_reason="unsupported WordArt")],
+        ),
+        visual_surrogate=VisualSurrogate(
+            resource_id="vector-1",
+            reason="WordArt editable approximation differs from source",
+            media_type="image/svg+xml",
+            fidelity=0.96,
+        ),
     )
     table = Table(rows=[TableRow(cells=[TableCell(blocks=[Paragraph(content=[TextRun("cell")])], column_span=2)])])
     return DocumentModel(

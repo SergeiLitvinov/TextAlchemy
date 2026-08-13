@@ -1,154 +1,70 @@
 {% extends "base.html" %}
 {% set active = 'matching' %}
-{% block title %}TextAlchemy — Сопоставление{% endblock %}
+{% block title %}TextAlchemy — связать документы с источниками{% endblock %}
 {% block content %}
-    <div class="card">
-        <h2>Параметры сопоставления</h2>
-        <form id="matchForm">
-            <div class="form-grid">
-                <div>
-                    <label for="source_dir">Директория исходных файлов</label>
-                    <input type="text" id="source_dir" value="{{ config.source_dir }}">
-                </div>
-                <div>
-                    <label for="output_dir">Директория для сохранения</label>
-                    <input type="text" id="output_dir" value="{{ config.output_dir }}">
-                </div>
-                <div>
-                    <label for="threshold">Порог совпадения (0–1)</label>
-                    <input type="number" id="threshold" step="0.01" min="0" max="1" value="{{ config.threshold }}">
-                </div>
-                <div>
-                    <label for="bibliography_file">Файл библиографии (опционально)</label>
-                    <input type="text" id="bibliography_file" value="{{ config.bibliography_file }}">
-                </div>
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Библиотека</p>
+        <h2>Свяжите записи с файлами</h2>
+        <p class="lead">TextAlchemy сравнит названия, авторов и метаданные, предложит понятные имена файлов и ничего не изменит без подтверждения.</p>
+    </div>
+</section>
+{% include "partials/library_nav.html" %}
+
+<section class="collection-summary library-overview">
+    <div><strong>{{ bib_items|length }}</strong><small>записей для сопоставления</small></div>
+    <div><strong>{{ files|length }}</strong><small>документов найдено</small></div>
+    <a href="/bibliography">Проверить источники →</a>
+</section>
+
+<section class="card matching-workspace">
+    <div class="card-head">
+        <div><p class="eyebrow">Безопасный предпросмотр</p><h3>Проверить предлагаемые связи</h3></div>
+        <span class="quality-badge good">Файлы пока не изменяются</span>
+    </div>
+    <p class="section-copy">Сначала запустите анализ. Вы увидите исходное имя, найденный источник, новое имя и уверенность совпадения.</p>
+    <form id="matchForm">
+        <details class="advanced-settings matching-settings">
+            <summary>Папки и точность сопоставления</summary>
+            <div class="form-grid advanced-grid">
+                <div><label for="source_dir">Папка с документами</label><input type="text" id="source_dir" value="{{ config.source_dir }}"></div>
+                <div><label for="output_dir">Папка результата</label><input type="text" id="output_dir" value="{{ config.output_dir }}"></div>
+                <div><label for="threshold">Минимальная уверенность</label><input type="number" id="threshold" step="0.01" min="0" max="1" value="{{ config.threshold }}"><p class="field-help">От 0 до 1; выше — строже совпадение.</p></div>
+                <div><label for="bibliography_file">Другой файл библиографии</label><input type="text" id="bibliography_file" value="{{ config.bibliography_file }}" placeholder="Необязательно"></div>
             </div>
+        </details>
+        <div class="matching-actions">
+            <label class="check-option"><input type="checkbox" id="dryRun" checked><span><strong>Только проверить</strong><small>Не копировать и не переименовывать файлы</small></span></label>
             <div class="form-actions">
-                <button type="button" id="previewBtn">Предпросмотр</button>
-                <button type="submit" id="runBtn">Запустить сопоставление</button>
-                <label style="display:flex;align-items:center;gap:.35rem;font-weight:400">
-                    <input type="checkbox" id="dryRun" checked> Только сухой прогон
-                </label>
+                <button type="button" id="previewBtn" class="btn-secondary">Показать предложения</button>
+                <button type="submit" id="runBtn">Выполнить выбранное <span aria-hidden="true">→</span></button>
             </div>
-        </form>
-        <div id="status" class="status-bar" style="display:none"></div>
-    </div>
-
-    <div class="card" id="resultsCard" style="display:none">
-        <div class="card-head">
-            <h2>Результаты</h2>
-            <button type="button" id="downloadBtn">⬇ Скачать отчёт</button>
         </div>
-        <div id="resultsSummary" style="margin-bottom:.75rem;color:var(--text-muted)"></div>
-        <table id="resultsTable">
-            <thead>
-                <tr>
-                    <th>Исходный файл</th>
-                    <th>Новое имя</th>
-                    <th>Совпадение</th>
-                    <th>Оценка</th>
-                </tr>
-            </thead>
-            <tbody id="resultsBody"></tbody>
-        </table>
-    </div>
+    </form>
+    <div id="status" class="status-bar" hidden></div>
+</section>
 
-    <div class="card">
-        <h2>Файлы в директории</h2>
-        <table>
-            <thead><tr><th>Файл</th></tr></thead>
-            <tbody>
-                {% for f in files %}
-                <tr><td>{{ f }}</td></tr>
-                {% else %}
-                <tr><td>Нет файлов (директория не существует или пуста)</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+<section class="card matching-results" id="resultsCard" hidden>
+    <div class="card-head">
+        <div><p class="eyebrow">Результат анализа</p><h3>Предлагаемые связи</h3></div>
+        <button type="button" id="downloadBtn" class="btn-secondary">Скачать отчёт</button>
     </div>
+    <div id="resultsSummary" class="matching-summary"></div>
+    <div class="table-scroll"><table id="resultsTable">
+        <thead><tr><th>Исходный файл</th><th>Предлагаемое имя</th><th>Статус</th><th>Уверенность</th></tr></thead>
+        <tbody id="resultsBody"></tbody>
+    </table></div>
+</section>
+
+<details class="card directory-files">
+    <summary><span><strong>Документы в выбранной папке</strong><small>{{ files|length }} файлов обнаружено при открытии страницы</small></span></summary>
+    <div class="table-scroll"><table><thead><tr><th>Имя файла</th></tr></thead><tbody>
+        {% for f in files %}<tr><td>{{ f }}</td></tr>
+        {% else %}<tr><td>Папка не существует или пока пуста.</td></tr>{% endfor %}
+    </tbody></table></div>
+</details>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const $ = (id) => document.getElementById(id);
-
-    function renderResults(data, isPreview) {
-        const body = $('resultsBody');
-        body.innerHTML = '';
-        const rows = isPreview ? data.preview : (data.matched.concat(
-            data.unmatched.map((u) => ({ original: u.file, new: '—', match: false, score: 0 }))
-        ));
-        for (const item of rows) {
-            const tr = document.createElement('tr');
-            tr.innerHTML =
-                `<td>${esc(item.original)}</td>` +
-                `<td>${esc(item.new)}</td>` +
-                `<td>${item.match ? '✅' : '❌'}</td>` +
-                `<td>${esc(item.score)}</td>`;
-            body.appendChild(tr);
-        }
-        const matched = isPreview ? data.matched : data.matched.length;
-        const unmatched = isPreview ? (data.total - data.matched) : data.unmatched.length;
-        $('resultsSummary').textContent =
-            `Всего: ${data.total}, совпадений: ${matched}, без совпадений: ${unmatched}` +
-            (data.errors && data.errors.length ? `, ошибок: ${data.errors.length}` : '');
-        $('resultsCard').style.display = 'block';
-        window._lastReport = data;
-    }
-
-    function setStatus(msg, type) {
-        const el = $('status');
-        if (!msg) { el.style.display = 'none'; return; }
-        el.style.display = 'block';
-        el.className = 'status-bar ' + (type || 'info');
-        el.textContent = msg;
-    }
-
-    $('previewBtn').addEventListener('click', async () => {
-        const fd = new FormData();
-        fd.set('source_dir', $('source_dir').value);
-        fd.set('threshold', $('threshold').value);
-        fd.set('bibliography_file', $('bibliography_file').value);
-        const btn = $('previewBtn');
-        setLoading(btn, true);
-        setStatus('Анализ файлов…', 'info');
-        try {
-            const data = await api('/api/preview/rename', { method: 'POST', formData: fd });
-            renderResults(data, true);
-            setStatus('Готово. Проверьте предпросмотр перед запуском.', 'success');
-        } catch (_) { setStatus('', null); }
-        finally { setLoading(btn, false); }
-    });
-
-    $('matchForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fd = new FormData();
-        fd.set('source_dir', $('source_dir').value);
-        fd.set('output_dir', $('output_dir').value);
-        fd.set('threshold', $('threshold').value);
-        fd.set('bibliography_file', $('bibliography_file').value);
-        fd.set('dry_run', $('dryRun').checked ? 'true' : 'false');
-        const btn = $('runBtn');
-        setLoading(btn, true);
-        setStatus('Сопоставление выполняется…', 'info');
-        try {
-            const data = await api('/api/match/run', { method: 'POST', formData: fd });
-            renderResults(data, false);
-            const verb = $('dryRun').checked ? 'Предпросмотр' : 'Переименование';
-            setStatus(`${verb} завершено: совпало ${data.matched.length}, без совпадений ${data.unmatched.length}.`, 'success');
-            toast('Сопоставление завершено', 'success');
-        } catch (_) { setStatus('', null); }
-        finally { setLoading(btn, false); }
-    });
-
-    $('downloadBtn').addEventListener('click', () => {
-        if (!window._lastReport) return;
-        const blob = new Blob([JSON.stringify(window._lastReport, null, 2)], { type: 'application/json' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'matching_report.json';
-        a.click();
-        URL.revokeObjectURL(a.href);
-    });
-</script>
+<script src="/static/js/pages/matching.js?v={{ asset_version }}" defer></script>
 {% endblock %}

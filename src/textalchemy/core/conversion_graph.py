@@ -34,6 +34,40 @@ class FeatureSupport(str, Enum):
     UNSUPPORTED = "unsupported"
 
 
+class PreservationDimension(str, Enum):
+    CONTENT = "content"
+    SEMANTICS = "semantics"
+    GEOMETRY = "geometry"
+    STYLE = "style"
+    RELATIONSHIPS = "relationships"
+    EDITABILITY = "editability"
+
+
+@dataclass(frozen=True)
+class PreservationProfile:
+    """Estimated 0..1 retention for independent qualities of a conversion edge."""
+
+    scores: Mapping[PreservationDimension, float]
+    basis: str = "declared"
+
+    def __post_init__(self) -> None:
+        missing = set(PreservationDimension) - set(self.scores)
+        if missing:
+            raise ValueError(f"preservation profile misses: {', '.join(sorted(item.value for item in missing))}")
+        invalid = {item.value: value for item, value in self.scores.items() if not 0.0 <= value <= 1.0}
+        if invalid:
+            raise ValueError(f"preservation scores must be between 0 and 1: {invalid}")
+
+    def score(self, dimension: PreservationDimension) -> float:
+        return self.scores[dimension]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "basis": self.basis,
+            "scores": {dimension.value: round(self.score(dimension), 4) for dimension in PreservationDimension},
+        }
+
+
 DEFAULT_FEATURES = frozenset(DocumentFeature)
 
 _SUPPORT_RANK = {
@@ -79,6 +113,7 @@ class ConverterCapabilities:
     base_cost: float = 1.0
     requirements: tuple[str, ...] = ()
     description: str = ""
+    preservation: PreservationProfile | None = None
 
     def support_for(self, feature: DocumentFeature) -> FeatureSupport:
         return self.features.get(feature, FeatureSupport.UNSUPPORTED)
@@ -97,10 +132,26 @@ class ConversionPlan:
     steps: tuple[ConverterCapabilities, ...]
     score: float
     feature_support: Mapping[DocumentFeature, FeatureSupport] = field(default_factory=dict)
+    preservation: PreservationProfile | None = None
 
     @property
     def lossless(self) -> bool:
-        return all(value is FeatureSupport.EXACT for value in self.feature_support.values())
+        return bool(self.preservation) and all(value >= 0.999 for value in self.preservation.scores.values())
+
+    @property
+    def visual_score(self) -> float:
+        if not self.preservation:
+            return 0.0
+        values = [
+            self.preservation.score(PreservationDimension.CONTENT),
+            self.preservation.score(PreservationDimension.GEOMETRY),
+            self.preservation.score(PreservationDimension.STYLE),
+        ]
+        return sum(values) / len(values)
+
+    @property
+    def editability_score(self) -> float:
+        return self.preservation.score(PreservationDimension.EDITABILITY) if self.preservation else 0.0
 
     @property
     def executable_requirements(self) -> tuple[str, ...]:
@@ -113,6 +164,9 @@ class ConversionPlan:
             "mode": self.mode.value,
             "score": round(self.score, 3),
             "lossless": self.lossless,
+            "visual_score": round(self.visual_score, 4),
+            "editability_score": round(self.editability_score, 4),
+            "preservation": self.preservation.to_dict() if self.preservation else None,
             "requested_features": sorted(feature.value for feature in self.requested_features),
             "feature_support": {
                 feature.value: self.feature_support[feature].value
@@ -174,7 +228,7 @@ class CapabilityRegistry:
         requested = frozenset(features)
         if source is target:
             support = {feature: FeatureSupport.EXACT for feature in requested}
-            return ConversionPlan(source, target, mode, requested, (), 0.0, support)
+            return ConversionPlan(source, target, mode, requested, (), 0.0, support, _identity_profile())
         if max_steps < 1:
             return None
 
@@ -187,7 +241,7 @@ class CapabilityRegistry:
             score, _, current, steps = heapq.heappop(queue)
             if current is target:
                 support = _compose_support(steps, requested)
-                return ConversionPlan(source, target, mode, requested, steps, score, support)
+                return ConversionPlan(source, target, mode, requested, steps, score, support, _compose_preservation(steps))
             if len(steps) >= max_steps:
                 continue
             visited_formats = {source, *(step.target for step in steps)}
@@ -219,6 +273,48 @@ def _compose_support(
     }
 
 
+def _identity_profile() -> PreservationProfile:
+    return PreservationProfile({dimension: 1.0 for dimension in PreservationDimension}, basis="identity")
+
+
+def _legacy_profile(capabilities: ConverterCapabilities) -> PreservationProfile:
+    values = {
+        FeatureSupport.EXACT: 1.0,
+        FeatureSupport.EDITABLE: 0.9,
+        FeatureSupport.VISUAL: 0.75,
+        FeatureSupport.PARTIAL: 0.5,
+        FeatureSupport.UNSUPPORTED: 0.0,
+    }
+    feature_values = [values[capabilities.support_for(feature)] for feature in DocumentFeature]
+    mean = sum(feature_values) / len(feature_values)
+    editable = sum(
+        values[capabilities.support_for(feature)]
+        for feature in (DocumentFeature.TEXT, DocumentFeature.TABLES, DocumentFeature.FORMULAS, DocumentFeature.FIELDS)
+    ) / 4
+    return PreservationProfile(
+        {dimension: editable if dimension is PreservationDimension.EDITABILITY else mean for dimension in PreservationDimension},
+        basis="legacy-feature-support",
+    )
+
+
+def _compose_preservation(steps: tuple[ConverterCapabilities, ...]) -> PreservationProfile:
+    profiles = [step.preservation or _legacy_profile(step) for step in steps]
+    return PreservationProfile(
+        {
+            dimension: round(_product(profile.score(dimension) for profile in profiles), 6)
+            for dimension in PreservationDimension
+        },
+        basis="composed-edge-profiles",
+    )
+
+
+def _product(values: Iterable[float]) -> float:
+    result = 1.0
+    for value in values:
+        result *= value
+    return result
+
+
 __all__ = [
     "CapabilityRegistry",
     "ConversionPlan",
@@ -226,4 +322,6 @@ __all__ = [
     "DEFAULT_FEATURES",
     "DocumentFeature",
     "FeatureSupport",
+    "PreservationDimension",
+    "PreservationProfile",
 ]

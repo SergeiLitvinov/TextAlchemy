@@ -68,6 +68,20 @@ def test_store_artifact_file(tmp_path):
     assert result.read_bytes() == b"artifact-bytes"
 
 
+def test_storage_bytes_counts_metadata_sources_previews_and_results(tmp_path):
+    store = TaskStore(tmp_path / "tasks")
+    source = tmp_path / "source.pdf"
+    source.write_bytes(b"source-bytes")
+    store.set("task-1", {"status": "done"})
+    store.store_source("task-1", source, "source.pdf")
+    store.store_artifact("task-1", source, "result.pdf")
+    preview = store.preview_dir("task-1")
+    (preview / "page.png").write_bytes(b"preview")
+
+    expected = sum(path.stat().st_size for path in store.root.rglob("*") if path.is_file())
+    assert store.storage_bytes() == expected
+
+
 def test_store_artifact_directory_becomes_zip(tmp_path):
     store = TaskStore(tmp_path)
     source_dir = tmp_path / "html"
@@ -284,3 +298,36 @@ def test_task_queue_submit_after_shutdown_does_not_leak_pending_count():
 
     assert queue.pending() == 0
     assert queue.wait_idle(timeout=0) is True
+
+
+def test_named_task_can_be_cancelled_before_it_starts():
+    queue = TaskQueue(max_workers=1)
+    gate = __import__("threading").Event()
+    try:
+        queue.submit(lambda: gate.wait(2))
+        future = queue.submit_named("cancel-me", lambda: pytest.fail("cancelled task ran"))
+
+        assert queue.cancel("cancel-me") is True
+        gate.set()
+        assert queue.wait_idle(timeout=5) is True
+        assert future.cancelled() is True
+        assert queue.pending() == 0
+    finally:
+        gate.set()
+        queue.shutdown(wait=True)
+
+
+def test_clear_result_preserves_source_for_rerun(tmp_path):
+    store = TaskStore(tmp_path)
+    task_dir = tmp_path / "rerunnable"
+    source_dir = task_dir / "source"
+    source_dir.mkdir(parents=True)
+    (source_dir / "input.pdf").write_bytes(b"source")
+    (task_dir / "output.docx").write_bytes(b"result")
+    (task_dir / "preview").mkdir()
+
+    store.clear_result("rerunnable")
+
+    assert store.source_path("rerunnable").read_bytes() == b"source"
+    assert not (task_dir / "output.docx").exists()
+    assert not (task_dir / "preview").exists()

@@ -8,6 +8,7 @@ import fitz
 import pytest
 from PIL import Image
 
+from textalchemy.core.color import ColorValue
 from textalchemy.formats.pdf_images import (
     ExtractedPdfImage,
     enrich_geometry_with_images,
@@ -131,7 +132,10 @@ class TestExtractVectorDrawings:
         d = drawings[0]
         assert d.page == 1
         assert d.items is not None
-        assert d.fill is not None
+        assert isinstance(d.fill, ColorValue)
+        assert d.fill.to_hex() == "#0000FF"
+        assert isinstance(d.stroke, ColorValue)
+        assert d.stroke.to_hex() == "#000000"
         assert d.width > 0
 
     def test_extract_no_vector(self, tmp_path):

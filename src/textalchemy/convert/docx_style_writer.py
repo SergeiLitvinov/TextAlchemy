@@ -98,7 +98,10 @@ def apply_text_style(run: Any, style: TextStyle) -> None:
 
 
 def apply_font_style(font: Any, style: TextStyle) -> None:
+    from docx.oxml.ns import qn
     from docx.shared import Pt, RGBColor
+
+    from textalchemy.core.color import ColorValue
 
     if style.font_family:
         font.name = style.font_family
@@ -110,9 +113,17 @@ def apply_font_style(font: Any, style: TextStyle) -> None:
     font.superscript = style.superscript
     font.subscript = style.subscript
     if style.color:
-        color = style.color.removeprefix("#")
+        color = style.color.to_hex().removeprefix("#") if isinstance(style.color, ColorValue) else style.color.removeprefix("#")
         if len(color) == 6:
             font.color.rgb = RGBColor.from_string(color)
+            color_node = font._element.get_or_add_rPr().find(qn("w:color"))
+            if color_node is not None and style.properties.get("color_theme"):
+                color_node.set(qn("w:themeColor"), str(style.properties["color_theme"]))
+                modifiers = style.properties.get("color_modifiers") or {}
+                for key, attribute in (("tint", "themeTint"), ("shade", "themeShade")):
+                    value = modifiers.get(key)
+                    if isinstance(value, (int, float)):
+                        color_node.set(qn(f"w:{attribute}"), f"{round(max(0.0, min(1.0, value)) * 255):02X}")
 
 
 def _apply_style_language(style: Any, language_code: str | None) -> None:

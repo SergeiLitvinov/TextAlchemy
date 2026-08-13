@@ -6,9 +6,9 @@ from collections.abc import Callable, Collection
 from typing import Any
 
 from textalchemy.core.document_model import PackageGraph, PackagePart, PackageRelationship
+from textalchemy.core.units import EMU_PER_POINT, points_to_emu
 
 DOCX_ROOT_PART = "/word/document.xml"
-EMU_PER_POINT = 12700
 
 OOXML_NAMESPACES = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
@@ -21,6 +21,16 @@ OOXML_NAMESPACES = {
 
 _RELATIONSHIP_BASE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 RELATIONSHIP_TYPE = {
+    "comments": f"{_RELATIONSHIP_BASE}/comments",
+    "comments_extended": "http://schemas.microsoft.com/office/2011/relationships/commentsExtended",
+    "comments_extensible": "http://schemas.microsoft.com/office/2018/08/relationships/commentsExtensible",
+    "people": "http://schemas.microsoft.com/office/2011/relationships/people",
+    "diagram_data": f"{_RELATIONSHIP_BASE}/diagramData",
+    "diagram_layout": f"{_RELATIONSHIP_BASE}/diagramLayout",
+    "diagram_colors": f"{_RELATIONSHIP_BASE}/diagramColors",
+    "diagram_quick_style": f"{_RELATIONSHIP_BASE}/diagramQuickStyle",
+    "ole_object": f"{_RELATIONSHIP_BASE}/oleObject",
+    "package": f"{_RELATIONSHIP_BASE}/package",
     "endnotes": f"{_RELATIONSHIP_BASE}/endnotes",
     "footnotes": f"{_RELATIONSHIP_BASE}/footnotes",
     "numbering": f"{_RELATIONSHIP_BASE}/numbering",
@@ -29,10 +39,6 @@ RELATIONSHIP_TYPE = {
 }
 
 RelationshipFilter = Callable[[Any], bool]
-
-
-def points_to_emu(value: float) -> int:
-    return round(value * EMU_PER_POINT)
 
 
 def load_package_graph(
@@ -94,9 +100,11 @@ def restore_package_graph(root_part: Any, graph: PackageGraph) -> None:
         source = root_part if relationship.source == graph.root else parts[relationship.source]
         destination = relationship.target if relationship.external else parts[relationship.target]
         if source is root_part:
-            source.relate_to(
-                destination,
+            _reserve_relationship_id(source, relationship.id)
+            source.rels.add_relationship(
                 relationship.relationship_type,
+                destination,
+                relationship.id,
                 is_external=relationship.external,
             )
         else:
@@ -106,6 +114,29 @@ def restore_package_graph(root_part: Any, graph: PackageGraph) -> None:
                 relationship.id,
                 is_external=relationship.external,
             )
+
+
+def _reserve_relationship_id(root_part: Any, relationship_id: str) -> None:
+    """Free an imported rId, moving a generated relationship without changing its references."""
+
+    existing = root_part.rels.get(relationship_id)
+    if existing is None:
+        return
+    replacement_id = root_part.rels._next_rId
+    root_part.rels.add_relationship(
+        existing.reltype,
+        existing.target_ref if existing.is_external else existing.target_part,
+        replacement_id,
+        is_external=existing.is_external,
+    )
+    root_part.drop_rel(relationship_id)
+    element = getattr(root_part, "element", None)
+    if element is None:
+        return
+    for node in element.iter():
+        for attribute, value in list(node.attrib.items()):
+            if value == relationship_id:
+                node.set(attribute, replacement_id)
 
 
 def _load_descendants(part: Any, graph: PackageGraph, visited: set[str]) -> None:

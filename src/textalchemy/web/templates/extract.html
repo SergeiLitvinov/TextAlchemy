@@ -1,92 +1,43 @@
 {% extends "base.html" %}
 {% set active = 'extract' %}
-{% block title %}TextAlchemy — Извлечь{% endblock %}
+{% block title %}TextAlchemy — извлечь содержимое{% endblock %}
 {% block content %}
-    <div class="card">
-        <h2>Извлечение текста</h2>
-        <div class="form-row">
-            <div class="form-group">
-                <label for="input-fmt">Формат файла</label>
-                <select id="input-fmt">
-                    <option value="auto">Автоопределение</option>
-                    <option value="pdf">PDF</option>
-                    <option value="docx">DOCX</option>
-                    <option value="txt">TXT</option>
-                    <option value="djvu">DJVU</option>
-                </select>
-            </div>
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">Извлечение содержимого</p>
+        <h2>Получите текст для анализа</h2>
+        <p class="lead">Извлеките чистый текст из PDF, Word, DjVu или TXT. Для документов Word можно также получить исходник LaTeX.</p>
+    </div>
+    <a class="text-link" href="/convert">Нужен новый документ? Преобразовать →</a>
+</section>
+
+<div class="extract-layout">
+    <section class="card extract-setup" aria-labelledby="extract-options-title">
+        <div class="card-head"><div><p class="eyebrow">Настройки</p><h3 id="extract-options-title">Что получить?</h3></div></div>
+        <div class="output-picker" role="radiogroup" aria-label="Тип результата">
+            <button type="button" class="output-option active" role="radio" aria-checked="true" data-output="text"><span>A</span><div><strong>Чистый текст</strong><small>Для поиска, анализа и копирования</small></div></button>
+            <button type="button" class="output-option" role="radio" aria-checked="false" data-output="latex"><span>TeX</span><div><strong>Исходник LaTeX</strong><small>Только для документов Word</small></div></button>
         </div>
-        <div class="file-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Выбрать файл">
-            <div style="font-size:3rem;margin-bottom:0.5rem;">📄</div>
-            <strong>Перетащите файл сюда</strong>
-            <div class="hint">или нажмите для выбора файла</div>
+        <input type="hidden" id="output-kind" value="text">
+        <div class="form-group compact-field"><label for="input-fmt">Формат исходника</label><select id="input-fmt">
+            <option value="auto">Определить автоматически</option><option value="pdf">PDF</option>
+            <option value="docx">Word (DOCX)</option><option value="txt">Обычный текст</option><option value="djvu">DjVu</option>
+        </select></div>
+        <div class="file-drop extract-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Выбрать файл">
+            <div class="drop-icon" aria-hidden="true">↥</div><strong>Перетащите файл или выберите на компьютере</strong><div class="hint">PDF, DOCX, TXT или DjVu</div>
             <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.djvu">
         </div>
-    </div>
+        <div id="status" class="status-bar" hidden></div>
+    </section>
 
-    <div class="card">
-        <div class="card-head">
-            <h2>Результат</h2>
-            <button type="button" id="copyBtn">📋 Копировать</button>
-        </div>
-        <textarea id="result" readonly aria-label="Извлечённый текст" placeholder="Извлечённый текст появится здесь..."></textarea>
-        <div id="status" class="status-bar" style="display:none"></div>
-    </div>
+    <section class="card extract-result" aria-labelledby="extract-result-title">
+        <div class="card-head"><div><p class="eyebrow">Результат</p><h3 id="extract-result-title">Извлечённый текст</h3></div><button type="button" id="copyBtn" class="btn-secondary" disabled>Копировать</button></div>
+        <div class="ocr-empty" id="resultEmpty"><span aria-hidden="true">A</span><strong>Содержимое появится здесь</strong><small>Загрузите файл — исходный документ останется без изменений.</small></div>
+        <textarea id="result" hidden readonly aria-label="Извлечённый текст" placeholder="Извлечённый текст появится здесь..."></textarea>
+    </section>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const $ = (id) => document.getElementById(id);
-    const dropZone = $('dropZone');
-    const fileInput = $('fileInput');
-    const resultArea = $('result');
-
-    function setStatus(msg, type) {
-        const el = $('status');
-        if (!msg) { el.style.display = 'none'; return; }
-        el.style.display = 'block';
-        el.className = 'status-bar ' + (type || 'info');
-        el.textContent = msg;
-    }
-
-    dropZone.addEventListener('click', () => fileInput.click());
-    dropZone.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
-    });
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
-    });
-    fileInput.addEventListener('change', () => {
-        if (fileInput.files[0]) handleFile(fileInput.files[0]);
-    });
-
-    async function handleFile(file) {
-        setStatus('Загрузка…', 'info');
-        const form = new FormData();
-        form.append('file', file);
-        form.append('fmt', $('input-fmt').value);
-        try {
-            const data = await api('/api/extract/text', { method: 'POST', formData: form });
-            resultArea.value = data.text;
-            setStatus(`Извлечено из «${data.filename}» (${data.text.length} символов)`, 'success');
-            toast('Текст извлечён', 'success');
-        } catch (_) { setStatus('', null); }
-    }
-
-    $('copyBtn').addEventListener('click', async () => {
-        if (!resultArea.value) { toast('Нечего копировать', 'warning'); return; }
-        try {
-            await navigator.clipboard.writeText(resultArea.value);
-            toast('Скопировано в буфер обмена', 'success');
-        } catch (_) {
-            resultArea.select();
-            document.execCommand('copy');
-            toast('Скопировано', 'success');
-        }
-    });
-</script>
+<script src="/static/js/pages/extract.js?v={{ asset_version }}" defer></script>
 {% endblock %}

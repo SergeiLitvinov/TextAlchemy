@@ -1,0 +1,23 @@
+<aside class="task-center" id="taskCenter" aria-labelledby="task-center-title" inert>
+    <div class="task-center-head">
+        <div>
+            <p class="eyebrow">На этом устройстве</p>
+            <h2 id="task-center-title">Задачи и результаты</h2>
+        </div>
+        <button class="icon-button" type="button" data-task-center-close aria-label="Закрыть центр задач">×</button>
+    </div>
+    <div class="storage-summary" id="storageSummary">
+        <span class="storage-indicator" aria-hidden="true"></span>
+        <p><strong>Обработка локальная</strong><small>Файлы не отправляются во внешние сервисы. Результаты автоматически очищаются через 1 час. Сейчас занято: <span id="taskStorageSize">—</span>.</small></p>
+    </div>
+    <div class="task-center-toolbar">
+        <p id="taskCenterStatus" role="status">Загружаем задачи…</p>
+        <button class="btn-link" type="button" id="clearFinishedTasks">Очистить завершённые</button>
+    </div>
+    <div class="task-center-list" id="globalTaskList" aria-live="polite"></div>
+    <div class="task-center-footer">
+        <a class="btn btn-primary" href="/convert">Новая конвертация</a>
+        <p><strong>Хранение:</strong> каталог данных TextAlchemy на этом компьютере. Исходники, изображения предпросмотра и результаты удаляются вместе с задачей.</p>
+    </div>
+</aside>
+<div class="task-center-backdrop" data-task-center-close hidden></div>

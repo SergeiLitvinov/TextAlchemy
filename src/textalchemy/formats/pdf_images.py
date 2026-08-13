@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from textalchemy.core.color import ColorValue
 from textalchemy.formats.pdf_geometry import (
     PdfBox,
     PdfGeometryDocument,
@@ -67,9 +68,8 @@ class PdfVectorDrawing:
     number: int
     page: int
     items: tuple[dict[str, Any], ...] = ()
-    fill: str | None = None
-    stroke: str | None = None
-    color: tuple[float, float, float] | None = None
+    fill: ColorValue | None = None
+    stroke: ColorValue | None = None
     width: float = 0.0
     fill_opacity: float = 1.0
     stroke_opacity: float = 1.0
@@ -91,6 +91,15 @@ def _to_int(value: object) -> int:
     if isinstance(value, (list, tuple)):
         return int(value[0]) if value else 0
     return int(value)  # type: ignore[arg-type]
+
+
+def _pdf_drawing_color(value: object, *, alpha: float) -> ColorValue | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        return None
+    try:
+        return ColorValue.from_srgb_components(*(float(component) for component in value), alpha=alpha)
+    except (TypeError, ValueError):
+        return None
 
 
 def extract_pdf_images(path: str | Path) -> tuple[list[ExtractedPdfImage], list[str]]:
@@ -195,9 +204,10 @@ def extract_pdf_vector_drawings(path: str | Path) -> tuple[list[PdfVectorDrawing
                 )
 
                 items = tuple(draw.get("items", []))
-                fill_color = draw.get("fill")
-                stroke_color = draw.get("stroke")
-                color_val = draw.get("color")
+                fill_opacity = float(draw.get("fill_opacity", 1.0) or 1.0)
+                stroke_opacity = float(draw.get("stroke_opacity", 1.0) or 1.0)
+                fill_color = _pdf_drawing_color(draw.get("fill"), alpha=fill_opacity)
+                stroke_color = _pdf_drawing_color(draw.get("stroke") or draw.get("color"), alpha=stroke_opacity)
 
                 drawings.append(
                     PdfVectorDrawing(
@@ -205,14 +215,11 @@ def extract_pdf_vector_drawings(path: str | Path) -> tuple[list[PdfVectorDrawing
                         number=draw_index + 1,
                         page=page_number,
                         items=items,
-                        fill=str(fill_color) if fill_color is not None else None,
-                        stroke=str(stroke_color) if stroke_color is not None else None,
-                        color=(
-                            tuple(float(c) for c in color_val) if color_val and isinstance(color_val, (list, tuple)) else None
-                        ),
+                        fill=fill_color,
+                        stroke=stroke_color,
                         width=float(draw.get("width", 0.0) or 0.0),
-                        fill_opacity=float(draw.get("fill_opacity", 1.0) or 1.0),
-                        stroke_opacity=float(draw.get("stroke_opacity", 1.0) or 1.0),
+                        fill_opacity=fill_opacity,
+                        stroke_opacity=stroke_opacity,
                         even_odd=bool(draw.get("even_odd", False)),
                         close_path=bool(draw.get("closePath", True)),
                         dashes=str(draw.get("dashes", "")),

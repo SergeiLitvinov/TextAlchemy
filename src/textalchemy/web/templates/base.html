@@ -4,15 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}TextAlchemy{% endblock %}</title>
+    <script>document.documentElement.dataset.theme=localStorage.getItem('textalchemy-theme')||'light';</script>
     <link rel="icon" href="/static/favicon.svg?v={{ asset_version }}" type="image/svg+xml">
     <link rel="stylesheet" href="/static/css/style.css?v={{ asset_version }}">
 </head>
 <body>
+    {% include "partials/icon_sprite.html" %}
+    <a class="skip-link" href="#main-content">Перейти к содержимому</a>
     {% include "partials/header.html" %}
-    <div class="container">
-        {% block content %}{% endblock %}
+    <div class="app-layout">
+        <aside class="app-sidebar" id="app-sidebar" aria-label="Основная навигация">
+            {% include "partials/navigation.html" %}
+        </aside>
+        <main class="app-main" id="main-content" tabindex="-1">
+            <div class="container">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
     </div>
+    <div class="nav-backdrop" data-nav-close hidden></div>
+    {% include "partials/task_center.html" %}
+    {% include "partials/language_dialog.html" %}
     <script src="/static/js/app.js?v={{ asset_version }}"></script>
+    <script src="/static/js/components/task-center.js?v={{ asset_version }}" type="module"></script>
+    <script src="/static/js/i18n.js?v={{ asset_version }}" type="module"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

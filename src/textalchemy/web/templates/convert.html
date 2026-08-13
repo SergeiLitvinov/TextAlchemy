@@ -3,6 +3,11 @@
 {% block title %}TextAlchemy — Конвертация{% endblock %}
 {% block content %}
 <section class="convert-workspace">
+    <ol class="workflow-steps conversion-workflow" aria-label="Этапы преобразования">
+        <li class="active"><span>1</span><div><strong>Документ</strong><small>Загрузка и preflight</small></div></li>
+        <li><span>2</span><div><strong>Результат</strong><small>Формат и приоритет</small></div></li>
+        <li><span>3</span><div><strong>Проверка</strong><small>Сравнение и скачивание</small></div></li>
+    </ol>
     <div class="card convert-intro">
         <div>
             <p class="eyebrow">Универсальный конвертор</p>
@@ -48,15 +53,26 @@
                     <p class="field-help" id="route-help"></p>
                 </div>
                 <div>
-                    <label for="mode">Приоритет</label>
-                    <select id="mode">
-                        <option value="balanced">Сбалансированный</option>
+                    <label for="mode">Что важнее</label>
+                    <select id="mode" aria-label="Приоритет">
+                        <option value="balanced">Разумный баланс</option>
                         <option value="faithful">Максимально похожий вид</option>
-                        <option value="editable">Удобство редактирования</option>
+                        <option value="editable">Можно удобно редактировать</option>
                     </select>
                     <p class="field-help" id="mode-help">Оптимальный баланс оформления и редактируемости.</p>
                 </div>
             </div>
+            <details class="conversion-loss-budget">
+                <summary>Расширенная проверка сохранности</summary>
+                <label for="minRetention">Минимальная сохранность каждого свойства</label>
+                <select id="minRetention">
+                    <option value="0">Не блокировать — показать отчёт</option>
+                    <option value="0.5">Не ниже 50%</option>
+                    <option value="0.7">Не ниже 70%</option>
+                    <option value="0.9">Не ниже 90%</option>
+                </select>
+                <p class="field-help">Конвертация не начнётся, если прогноз по содержимому, структуре, геометрии, стилю, связям или редактируемости ниже порога.</p>
+            </details>
             <button type="button" id="convertBtn">Начать конвертацию</button>
             <button type="button" id="batchConvertBtn" hidden>Начать пакетную конвертацию</button>
         </div>
@@ -81,7 +97,7 @@
             <h2>История конвертаций</h2>
             <button type="button" class="btn-link" id="historyRefresh">Обновить</button>
         </div>
-        <p class="field-help">Пакетные конвертации хранятся час. Готовые задачи можно перезапустить или удалить.</p>
+        <p class="field-help">Исходники и результаты хранятся локально один час. Эта же очередь доступна через кнопку «Задачи» на любой странице.</p>
         <div id="historyList" aria-live="polite"></div>
     </div>
 
@@ -106,14 +122,20 @@
             <h3>Сохранность структуры</h3>
             <div class="retention-grid" id="retentionGrid"></div>
             <p class="field-help inspection-message" id="comparisonMessage"></p>
+            <div id="objectDiff" class="object-diff" hidden>
+                <h4>Изменения по объектам</h4>
+                <div class="retention-grid" id="objectDiffMetrics"></div>
+                <ul class="issue-list" id="objectDiffList"></ul>
+            </div>
         </div>
         <div id="previewSection" hidden>
-            <h3>Визуальный preview</h3>
+            <h3>Сравнение страниц</h3>
             <div class="preview-toolbar">
                 <div class="preview-modes" role="group" aria-label="Режим просмотра">
                     <button type="button" class="preview-mode active" id="previewModeSource">Исходник</button>
                     <button type="button" class="preview-mode" id="previewModeTarget">Результат</button>
                     <button type="button" class="preview-mode" id="previewModeCompare">До / после</button>
+                    <button type="button" class="preview-mode" id="previewModeDiff">Различия</button>
                 </div>
                 <div class="preview-paging">
                     <button type="button" class="btn-secondary" id="previewPrev" aria-label="Предыдущая страница">‹</button>
@@ -124,7 +146,7 @@
             <div class="preview-canvas" id="previewCanvas" tabindex="0" aria-live="polite">
                 <p class="field-help" id="previewMessage">Рендерим страницы…</p>
             </div>
-            <p class="field-help">Листайте стрелками ← →. В режиме «До / после» показываются одинаковые страницы исходника и результата.</p>
+            <p class="field-help" id="previewHint">Листайте стрелками ← →. Красным подсвечиваются визуальные отличия результата.</p>
         </div>
         <div class="form-actions result-actions">
             <button type="button" id="downloadBtn">Скачать результат</button>
@@ -135,717 +157,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
-    const $ = (id) => document.getElementById(id);
-    const modeDescriptions = {
-        balanced: 'Оптимальный баланс оформления и редактируемости.',
-        faithful: 'Приоритет визуального сходства с оригиналом.',
-        editable: 'Приоритет структуры и удобства дальнейшего редактирования.',
-    };
-    let capabilities = {sources: []};
-    let pendingFile = null;
-    let selectedSource = null;
-    let batchFiles = null;
-    let batchTargets = null;
-    let activeTask = null;
-    let activeJob = null;
-    let activeTaskId = null;
-    let previewTaskId = null;
-    let previewMeta = null;
-    let previewMode = 'source';
-    let previewPage = 1;
-    let previewRequest = 0;
-    let inspectionRequest = 0;
-
-    function setStatus(message, type) {
-        const element = $('status');
-        element.hidden = !message;
-        element.className = 'status-bar ' + (type || 'info');
-        element.textContent = message || '';
-    }
-
-    function setProgress(visible, percent, message) {
-        $('progressWrap').hidden = !visible;
-        $('progressBar').style.width = `${percent}%`;
-        $('progressText').textContent = message;
-    }
-
-    async function loadCapabilities() {
-        try {
-            capabilities = await api('/api/convert/capabilities');
-            const extensions = capabilities.sources.flatMap((source) => source.extensions);
-            $('fileInput').accept = extensions.join(',');
-            $('drop-hint').textContent = extensions.map((item) => item.slice(1).toUpperCase()).join(', ') +
-                ' · формат определится автоматически · можно выбрать несколько файлов';
-        } catch (_) {
-            $('drop-hint').textContent = 'Не удалось получить список доступных форматов';
-        }
-    }
-
-    function sourceForFile(file) {
-        const name = file.name.toLowerCase();
-        return capabilities.sources.find((source) => source.extensions.some((extension) => name.endsWith(extension)));
-    }
-
-    function handleFiles(files) {
-        if (!files.length) return;
-        if (files.length === 1) {
-            selectFile(files[0]);
-        } else {
-            enterBatch(files);
-        }
-    }
-
-    function selectFile(file) {
-        const source = sourceForFile(file);
-        if (!source) {
-            setStatus('Для этого формата нет доступных маршрутов конвертации.', 'error');
-            return;
-        }
-        batchFiles = null;
-        batchTargets = null;
-        pendingFile = file;
-        selectedSource = source;
-        $('batchFileBlock').hidden = true;
-        $('batchConvertBtn').hidden = true;
-        $('convertBtn').hidden = false;
-        $('singleFileBlock').hidden = false;
-        $('sourceInspection').hidden = false;
-        $('sourceBadge').textContent = source.label;
-        $('sourceFilename').textContent = file.name;
-        $('conversionSetup').hidden = false;
-        $('resultCard').hidden = true;
-        setStatus('', 'info');
-        const target = $('target');
-        target.innerHTML = source.targets.map((item) =>
-            `<option value="${esc(item.format)}">${esc(item.label)} (${esc(item.extension)})</option>`
-        ).join('');
-        updateTarget();
-        inspectSelectedFile(file);
-    }
-
-    function enterBatch(files) {
-        const sources = files.map(sourceForFile);
-        if (sources.some((source) => !source)) {
-            setStatus('Один из файлов имеет формат без доступных маршрутов конвертации.', 'error');
-            return;
-        }
-        const targets = buildBatchTargets(sources);
-        if (!targets.length) {
-            setStatus('Для выбранного набора файлов нет общего формата результата. Конвертируйте их по отдельности.', 'error');
-            return;
-        }
-        batchFiles = files;
-        batchTargets = targets;
-        pendingFile = null;
-        selectedSource = null;
-        $('conversionSetup').hidden = false;
-        $('resultCard').hidden = true;
-        $('singleFileBlock').hidden = true;
-        $('sourceInspection').hidden = true;
-        $('convertBtn').hidden = true;
-        $('batchFileBlock').hidden = false;
-        $('batchConvertBtn').hidden = false;
-        $('batchFileSummary').textContent = `${files.length} файлов — общий формат результата`;
-        $('batchFileList').innerHTML = files.map((file) =>
-            `<li><span class="file-name">${esc(file.name)}</span><small>${esc(sourceForFile(file).label)}</small></li>`
-        ).join('');
-        const target = $('target');
-        target.innerHTML = targets.map((item) =>
-            `<option value="${esc(item.format)}">${esc(item.label)} (${esc(item.extension)})</option>`
-        ).join('');
-        updateTarget();
-        setStatus('', 'info');
-    }
-
-    function buildBatchTargets(sources) {
-        const common = new Set(sources[0].targets.map((item) => item.format));
-        for (const source of sources.slice(1)) {
-            const formats = new Set(source.targets.map((item) => item.format));
-            for (const format of Array.from(common)) {
-                if (!formats.has(format)) common.delete(format);
-            }
-        }
-        return sources[0].targets
-            .filter((item) => common.has(item.format))
-            .map((item) => {
-                const modeSets = sources.map((source) => {
-                    const entry = source.targets.find((target) => target.format === item.format);
-                    return new Set(entry ? entry.modes : []);
-                });
-                let modes = Array.from(modeSets[0]);
-                for (const set of modeSets.slice(1)) modes = modes.filter((mode) => set.has(mode));
-                return Object.assign({}, item, {modes});
-            })
-            .filter((item) => item.modes.length);
-    }
-
-    async function inspectSelectedFile(file) {
-        const request = ++inspectionRequest;
-        $('inspectionState').textContent = 'Проверяем…';
-        $('inspectionMetrics').innerHTML = '';
-        $('inspectionMessage').textContent = 'Анализируем страницы, текст, таблицы, изображения и формулы.';
-        const form = new FormData();
-        form.set('file', file);
-        try {
-            const data = await api('/api/convert/inspect', {method: 'POST', formData: form});
-            if (request !== inspectionRequest) return;
-            renderInspection(data.inspection);
-        } catch (_) {
-            if (request !== inspectionRequest) return;
-            $('inspectionState').textContent = 'Проверка недоступна';
-            $('inspectionMessage').textContent = 'Конвертацию всё равно можно запустить.';
-        }
-    }
-
-    function renderInspection(inspection) {
-        const metrics = inspection?.metrics || {};
-        const entries = [
-            ['Страницы', metrics.pages],
-            ['Абзацы', metrics.paragraphs],
-            ['Таблицы', metrics.tables],
-            ['Изображения', metrics.images],
-            ['Формулы', metrics.formulas],
-        ].filter((entry) => entry[1] !== undefined);
-        $('inspectionState').textContent = inspection?.valid ? 'Структура читается' : 'Есть ошибки структуры';
-        $('inspectionMetrics').innerHTML = entries.map(([label, value]) =>
-            `<div><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`
-        ).join('');
-        const issues = inspection?.issues || [];
-        $('inspectionMessage').textContent = issues.length
-            ? `Найдено замечаний: ${issues.length}. Они будут учтены в итоговом отчёте.`
-            : 'Критичных структурных проблем не найдено.';
-    }
-
-    function currentTargets() {
-        return batchFiles ? batchTargets : (selectedSource ? selectedSource.targets : []);
-    }
-
-    function selectedTarget() {
-        return currentTargets().find((target) => target.format === $('target').value);
-    }
-
-    function updateTarget() {
-        const target = selectedTarget();
-        if (!target) return;
-        const modes = new Set(target.modes);
-        for (const option of $('mode').options) option.disabled = !modes.has(option.value);
-        if (!modes.has($('mode').value)) $('mode').value = target.modes[0];
-        updateModeHelp();
-    }
-
-    function updateModeHelp() {
-        const target = selectedTarget();
-        const plan = target?.plans[$('mode').value];
-        $('mode-help').textContent = modeDescriptions[$('mode').value];
-        $('route-help').textContent = plan?.descriptions.length
-            ? `Маршрут: ${plan.descriptions.join(' → ')}`
-            : 'Прямое преобразование без промежуточных этапов';
-    }
-
-    $('target').addEventListener('change', updateTarget);
-    $('mode').addEventListener('change', updateModeHelp);
-    $('dropZone').addEventListener('click', () => $('fileInput').click());
-    $('dropZone').addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            $('fileInput').click();
-        }
-    });
-    $('dropZone').addEventListener('dragover', (event) => {
-        event.preventDefault();
-        $('dropZone').classList.add('dragover');
-    });
-    $('dropZone').addEventListener('dragleave', () => $('dropZone').classList.remove('dragover'));
-    $('dropZone').addEventListener('drop', (event) => {
-        event.preventDefault();
-        $('dropZone').classList.remove('dragover');
-        handleFiles(Array.from(event.dataTransfer.files));
-    });
-    $('fileInput').addEventListener('change', () => {
-        handleFiles(Array.from($('fileInput').files));
-    });
-    $('replaceBtn').addEventListener('click', () => $('fileInput').click());
-    $('batchReplaceBtn').addEventListener('click', () => $('fileInput').click());
-
-    $('convertBtn').addEventListener('click', async () => {
-        const target = selectedTarget();
-        if (!pendingFile || !selectedSource || !target) return;
-        const form = new FormData();
-        form.set('file', pendingFile);
-        form.set('source_format', 'auto');
-        form.set('target_format', target.format);
-        form.set('mode', $('mode').value);
-        $('resultCard').hidden = true;
-        setStatus('', 'info');
-        setProgress(true, 20, 'Загрузка документа…');
-        setLoading($('convertBtn'), true);
-        try {
-            activeTask = await api('/api/convert', {method: 'POST', formData: form});
-            activeTaskId = activeTask.task_id;
-            setProgress(true, 45, 'Анализ структуры и выбор маршрута…');
-            pollTask(activeTask.status);
-        } catch (_) {
-            setProgress(false, 0, '');
-            setLoading($('convertBtn'), false);
-        }
-    });
-
-    $('batchConvertBtn').addEventListener('click', async () => {
-        const target = selectedTarget();
-        if (!batchFiles || !target) return;
-        const form = new FormData();
-        for (const file of batchFiles) form.append('files', file);
-        form.set('target_format', target.format);
-        form.set('mode', $('mode').value);
-        setStatus('', 'info');
-        $('batchConvertBtn').hidden = true;
-        try {
-            activeJob = await api('/api/convert/batch', {method: 'POST', formData: form});
-            $('batchProgressCard').hidden = false;
-            $('batchProgressState').textContent = 'Конвертируем…';
-            $('batchProgressCard').scrollIntoView({behavior: 'smooth', block: 'start'});
-            pollJob(activeJob.job_id);
-        } catch (_) {
-            $('batchConvertBtn').hidden = false;
-        }
-    });
-
-    async function pollTask(url) {
-        try {
-            const data = await api(url);
-            if (data.status === 'done') {
-                setProgress(true, 100, 'Готово');
-                renderReport(data);
-                setLoading($('convertBtn'), false);
-                setTimeout(() => setProgress(false, 0, ''), 500);
-            } else if (data.status === 'error') {
-                setProgress(false, 0, '');
-                setLoading($('convertBtn'), false);
-                setStatus(`Не удалось конвертировать: ${data.error}`, 'error');
-                if (data.report) renderReport(data, true);
-            } else if (data.status === 'interrupted') {
-                setProgress(false, 0, '');
-                setLoading($('convertBtn'), false);
-                setStatus(data.error || 'Задача прервана перезапуском сервера', 'error');
-            } else {
-                setProgress(true, 70, 'Конвертация и проверка результата…');
-                setTimeout(() => pollTask(url), 900);
-            }
-        } catch (_) {
-            setProgress(false, 0, '');
-            setLoading($('convertBtn'), false);
-        }
-    }
-
-    async function pollJob(jobId) {
-        try {
-            const data = await api('/api/convert/jobs/' + jobId);
-            renderBatchProgress(data.tasks);
-            const running = data.tasks.some((task) => task.status === 'queued' || task.status === 'running');
-            if (running) {
-                $('batchProgressState').textContent = 'Конвертируем…';
-                setTimeout(() => pollJob(jobId), 900);
-            } else {
-                $('batchProgressState').textContent = 'Готово';
-                loadHistory();
-            }
-        } catch (_) {
-            $('batchProgressState').textContent = 'Не удалось получить статус';
-        }
-    }
-
-    function renderBatchProgress(tasks) {
-        const stateLabels = {
-            queued: 'В очереди…',
-            running: 'Конвертация…',
-            done: 'Готово',
-            error: 'Ошибка',
-            interrupted: 'Прервана',
-            expired: 'Истёк срок',
-        };
-        $('batchProgressList').innerHTML = tasks.map((task) => {
-            const label = stateLabels[task.status] || task.status;
-            const download = task.status === 'done' && task.result_url
-                ? `<button type="button" class="btn-link" data-download-url="${esc(task.result_url)}" data-filename="${esc(task.filename || task.name)}">Скачать</button>`
-                : '';
-            const preview = task.status === 'done'
-                ? `<button type="button" class="btn-link" data-preview-task="${esc(task.task_id)}">Просмотр</button>`
-                : '';
-            const error = (task.status === 'error' || task.status === 'interrupted') && task.error
-                ? `<small>${esc(task.error)}</small>` : '';
-            return `<li class="batch-progress-item ${esc(task.status)}"><span class="file-name">${esc(task.name)}</span>` +
-                `<span class="job-state ${esc(task.status)}">${esc(label)}</span>${download}${preview}${error}</li>`;
-        }).join('');
-    }
-
-    async function downloadResultUrl(url, filename) {
-        const response = await fetch(url);
-        if (!response.ok) {
-            toast('Результат пока недоступен', 'error');
-            return;
-        }
-        const blob = await response.blob();
-        const anchor = document.createElement('a');
-        anchor.href = URL.createObjectURL(blob);
-        anchor.download = filename || 'converted';
-        anchor.click();
-        setTimeout(() => URL.revokeObjectURL(anchor.href), 1000);
-    }
-
-    function renderReport(data, failed) {
-        const report = data.report || {issues: [], metrics: {}};
-        const issues = report.issues || [];
-        const losses = issues.filter((item) => item.severity === 'loss');
-        const warnings = issues.filter((item) => item.severity === 'warning');
-        const plannedSteps = report.metrics?.plan?.steps || [];
-        const steps = plannedSteps.length
-            ? plannedSteps.map((step) => step.description || step.id)
-            : report.metrics?.executed_steps || [];
-        $('resultCard').hidden = false;
-        $('resultTitle').textContent = failed ? 'Конвертация требует внимания' : 'Документ готов';
-        $('resultFilename').textContent = data.filename || 'Результат не создан';
-        $('resultMode').textContent = $('mode').selectedOptions[0].textContent;
-        $('resultRoute').textContent = steps.length ? steps.join(' → ') : 'Прямое преобразование';
-        const badge = $('qualityBadge');
-        badge.className = 'quality-badge ' + (failed ? 'bad' : losses.length ? 'warn' : 'good');
-        badge.textContent = failed ? 'Ошибка' : losses.length ? `Потери: ${losses.length}` : warnings.length ? `Замечания: ${warnings.length}` : 'Без потерь';
-        $('issuesSection').hidden = issues.length === 0;
-        $('issueList').innerHTML = issues.map((issue) =>
-            `<li class="issue-${esc(issue.severity)}"><strong>${esc(issue.feature)}</strong><span>${esc(issue.message)}</span></li>`
-        ).join('');
-        renderComparison(data.comparison, data.inspection_error);
-        initPreview(failed ? null : activeTaskId);
-        $('downloadBtn').hidden = Boolean(failed);
-        $('resultCard').scrollIntoView({behavior: 'smooth', block: 'start'});
-    }
-
-    function previewUrl(side, page, dpi) {
-        return `/api/convert/preview/${encodeURIComponent(previewTaskId)}?side=${side}&page=${page}&dpi=${dpi || 110}`;
-    }
-
-    async function initPreview(taskId) {
-        previewTaskId = taskId;
-        previewMeta = null;
-        previewMode = 'source';
-        previewPage = 1;
-        previewRequest += 1;
-        const section = $('previewSection');
-        section.hidden = true;
-        if (!taskId) return;
-        const canvas = $('previewCanvas');
-        canvas.innerHTML = '<p class="field-help" id="previewMessage">Рендерим страницы…</p>';
-        try {
-            const meta = await api(`/api/convert/preview/${encodeURIComponent(taskId)}/meta`);
-            previewMeta = meta;
-            if (!meta.source?.available && !meta.target?.available) return;
-            section.hidden = false;
-            syncPreviewModeButtons();
-            renderPreview();
-        } catch (_) {
-            section.hidden = true;
-        }
-    }
-
-    async function openPreviewTask(taskId) {
-        if (!taskId) return;
-        activeTaskId = taskId;
-        try {
-            const data = await api('/api/convert/status/' + encodeURIComponent(taskId));
-            if (data.status === 'done') {
-                renderReport(data, false);
-                return;
-            }
-        } catch (_) {
-            /* fall through to standalone preview below */
-        }
-        initPreview(taskId);
-        $('previewSection').scrollIntoView({behavior: 'smooth', block: 'center'});
-    }
-
-    function syncPreviewModeButtons() {
-        const sourceAvailable = Boolean(previewMeta?.source?.available);
-        const targetAvailable = Boolean(previewMeta?.target?.available);
-        if (previewMode === 'source' && !sourceAvailable) previewMode = targetAvailable ? 'target' : 'source';
-        if (previewMode === 'target' && !targetAvailable) previewMode = sourceAvailable ? 'source' : 'target';
-        if (previewMode === 'compare' && !(sourceAvailable && targetAvailable)) previewMode = 'source';
-        $('previewModeSource').disabled = !sourceAvailable;
-        $('previewModeTarget').disabled = !targetAvailable;
-        $('previewModeCompare').disabled = !sourceAvailable || !targetAvailable;
-        for (const [button, mode] of [
-            ['previewModeSource', 'source'],
-            ['previewModeTarget', 'target'],
-            ['previewModeCompare', 'compare'],
-        ]) {
-            $(button).classList.toggle('active', previewMode === mode);
-        }
-    }
-
-    function activePreviewPages() {
-        if (previewMode === 'compare') {
-            return Math.min(previewMeta?.source?.pages || 0, previewMeta?.target?.pages || 0);
-        }
-        return previewMeta?.[previewMode]?.pages || 0;
-    }
-
-    function renderPreviewControls() {
-        const pages = activePreviewPages();
-        if (previewPage > pages) previewPage = Math.max(1, pages);
-        $('previewPageLabel').textContent = pages ? `${previewPage} / ${pages}` : '—';
-        $('previewPrev').disabled = !pages || previewPage <= 1;
-        $('previewNext').disabled = !pages || previewPage >= pages;
-    }
-
-    async function renderPreview() {
-        const request = ++previewRequest;
-        const canvas = $('previewCanvas');
-        canvas.innerHTML = '<p class="field-help" id="previewMessage">Рендерим страницы…</p>';
-        renderPreviewControls();
-        const sides = previewMode === 'compare' ? ['source', 'target'] : [previewMode];
-        try {
-            const entries = await Promise.all(sides.map(async (side) => {
-                const response = await fetch(previewUrl(side, previewPage, 110));
-                if (!response.ok) throw new Error('preview fetch failed');
-                return {side, blob: await response.blob()};
-            }));
-            if (request !== previewRequest) return;
-            canvas.innerHTML = '';
-            const wrapper = document.createElement('div');
-            wrapper.className = previewMode === 'compare' ? 'preview-compare' : 'preview-single';
-            for (const {side, blob} of entries) {
-                const figure = document.createElement('figure');
-                const image = document.createElement('img');
-                image.alt = side === 'source' ? 'Страница исходника' : 'Страница результата';
-                image.loading = 'lazy';
-                image.src = URL.createObjectURL(blob);
-                const caption = document.createElement('figcaption');
-                caption.textContent = side === 'source' ? 'Исходник' : 'Результат';
-                figure.appendChild(image);
-                figure.appendChild(caption);
-                wrapper.appendChild(figure);
-            }
-            canvas.appendChild(wrapper);
-        } catch (_) {
-            if (request !== previewRequest) return;
-            canvas.innerHTML = '<p class="field-help" id="previewMessage">Не удалось отрисовать страницы.</p>';
-        }
-    }
-
-    function renderComparison(comparison, inspectionError) {
-        const section = $('comparisonSection');
-        const retention = comparison?.retention || {};
-        const names = {
-            characters: 'Текст', paragraphs: 'Абзацы', tables: 'Таблицы',
-            images: 'Изображения', formulas: 'Формулы', pages: 'Страницы',
-        };
-        const entries = Object.entries(names)
-            .filter(([name]) => retention[name])
-            .map(([name, label]) => [label, retention[name]]);
-        section.hidden = entries.length === 0 && !inspectionError;
-        $('retentionGrid').innerHTML = entries.map(([label, values]) => {
-            const percent = Math.round((values.ratio || 0) * 100);
-            const level = percent >= 99 ? 'good' : percent >= 80 ? 'warn' : 'bad';
-            return `<div class="retention-item ${level}"><span>${esc(label)}</span>` +
-                `<strong>${percent}%</strong><small>${esc(values.target)} из ${esc(values.source)}</small></div>`;
-        }).join('');
-        $('comparisonMessage').textContent = inspectionError || (comparison?.has_losses
-            ? 'Обнаружены структурные отличия — подробности перечислены в замечаниях.'
-            : 'Проверенные элементы структуры сохранены.');
-    }
-
-    $('downloadBtn').addEventListener('click', () => {
-        if (!activeTask) return;
-        downloadResultUrl(activeTask.result, $('resultFilename').textContent);
-    });
-    $('anotherBtn').addEventListener('click', () => {
-        $('resultCard').hidden = true;
-        $('conversionSetup').hidden = true;
-        $('fileInput').value = '';
-        pendingFile = null;
-        selectedSource = null;
-        batchFiles = null;
-        batchTargets = null;
-        activeTaskId = null;
-        previewRequest += 1;
-        $('previewSection').hidden = true;
-        inspectionRequest += 1;
-        $('dropZone').scrollIntoView({behavior: 'smooth', block: 'center'});
-    });
-
-    $('previewModeSource').addEventListener('click', () => { previewMode = 'source'; syncPreviewModeButtons(); renderPreview(); });
-    $('previewModeTarget').addEventListener('click', () => { previewMode = 'target'; syncPreviewModeButtons(); renderPreview(); });
-    $('previewModeCompare').addEventListener('click', () => { previewMode = 'compare'; syncPreviewModeButtons(); renderPreview(); });
-    $('previewPrev').addEventListener('click', () => {
-        if (previewPage > 1) { previewPage -= 1; renderPreview(); }
-    });
-    $('previewNext').addEventListener('click', () => {
-        if (previewPage < activePreviewPages()) { previewPage += 1; renderPreview(); }
-    });
-    $('previewCanvas').addEventListener('keydown', (event) => {
-        if (event.key === 'ArrowLeft' && previewPage > 1) { previewPage -= 1; renderPreview(); event.preventDefault(); }
-        if (event.key === 'ArrowRight' && previewPage < activePreviewPages()) { previewPage += 1; renderPreview(); event.preventDefault(); }
-    });
-
-    // ── История пакетных конвертаций ────────────────
-
-    async function loadHistory() {
-        try {
-            const data = await api('/api/convert/jobs');
-            renderHistory(data.jobs || []);
-        } catch (_) { /* панель истории не должна блокировать страницу */ }
-    }
-
-    function renderHistory(jobs) {
-        const container = $('historyList');
-        container.innerHTML = '';
-        if (!jobs.length) {
-            const empty = document.createElement('p');
-            empty.className = 'field-help';
-            empty.textContent = 'Пакетные конвертации из этой сессии появятся здесь.';
-            container.appendChild(empty);
-            return;
-        }
-        for (const job of jobs) {
-            const details = document.createElement('details');
-            details.className = 'job-entry';
-            details.dataset.job = job.job_id;
-            if (job.counts.queued || job.counts.running) details.open = true;
-
-            const summary = document.createElement('summary');
-            const title = document.createElement('span');
-            title.className = 'job-title';
-            title.textContent = job.files.join(', ');
-            const badge = document.createElement('span');
-            badge.className = 'job-state';
-            const total = Object.values(job.counts).reduce((a, b) => a + b, 0);
-            if (job.counts.queued || job.counts.running) {
-                badge.className += ' running';
-                badge.textContent = 'Конвертация…';
-            } else if (job.counts.error) {
-                badge.className += ' error';
-                badge.textContent = `${job.counts.error} ошибок`;
-            } else if (job.counts.interrupted) {
-                badge.className += ' error';
-                badge.textContent = `${job.counts.interrupted} прервано`;
-            } else {
-                badge.className += ' done';
-                badge.textContent = `${job.counts.done}/${total} готово`;
-            }
-            const mode = document.createElement('small');
-            mode.className = 'job-mode';
-            mode.textContent = job.mode || 'balanced';
-            summary.append(title, badge, mode);
-
-            const detail = document.createElement('div');
-            detail.className = 'job-detail';
-            detail.textContent = 'Загружается…';
-
-            details.append(summary, detail);
-            details.addEventListener('toggle', () => {
-                if (details.open) loadJobDetail(details.dataset.job, detail);
-            });
-            container.appendChild(details);
-        }
-    }
-
-    function renderJobDetail(job) {
-        const stateLabels = {
-            queued: 'В очереди…',
-            running: 'Конвертация…',
-            done: 'Готово',
-            error: 'Ошибка',
-            interrupted: 'Прервана',
-            expired: 'Истёк срок',
-        };
-        const rows = job.tasks.map((task) => {
-            const label = stateLabels[task.status] || task.status;
-            const download = task.status === 'done' && task.result_url
-                ? `<button type="button" class="btn-link" data-download-url="${esc(task.result_url)}" data-filename="${esc(task.filename || task.name)}">Скачать</button>`
-                : '';
-            const error = (task.status === 'error' || task.status === 'interrupted') && task.error
-                ? `<small>${esc(task.error)}</small>` : '';
-            const preview = task.status === 'done'
-                ? `<button type="button" class="btn-link" data-preview-task="${esc(task.task_id)}">Просмотр</button>`
-                : '';
-            return `<li class="batch-progress-item ${esc(task.status)}"><span class="file-name">${esc(task.name)}</span>` +
-                `<span class="job-state ${esc(task.status)}">${esc(label)}</span>${download}${preview}${error}</li>`;
-        }).join('');
-        const actions = `<div class="row-actions">` +
-            `<button type="button" data-rerun-job="${esc(job.job_id)}">Перезапустить</button>` +
-            `<button type="button" data-delete-job="${esc(job.job_id)}">Удалить</button></div>`;
-        return `<ul class="batch-progress-list">${rows || '<li class="field-help">Задач нет</li>'}</ul>${actions}`;
-    }
-
-    async function loadJobDetail(jobId, container) {
-        try {
-            const data = await api('/api/convert/jobs/' + jobId);
-            container.innerHTML = renderJobDetail(data);
-        } catch (_) {
-            container.innerHTML = '<p class="field-help">Не удалось загрузить задачу.</p>';
-        }
-    }
-
-    async function rerunJob(jobId) {
-        try {
-            const data = await api('/api/convert/jobs/' + jobId + '/rerun', {method: 'POST'});
-            toast(data.launched.length ? 'Задача перезапущена' : 'Нечего перезапускать', 'success');
-            loadHistory();
-            if (data.launched && data.launched.length) {
-                $('batchProgressCard').hidden = false;
-                $('batchProgressState').textContent = 'Перезапуск…';
-                $('batchProgressCard').scrollIntoView({behavior: 'smooth', block: 'start'});
-                pollJob(jobId);
-            }
-        } catch (_) {
-            toast('Не удалось перезапустить задачу', 'error');
-        }
-    }
-
-    async function deleteJob(jobId) {
-        try {
-            await api('/api/convert/jobs/' + jobId, {method: 'DELETE'});
-            toast('Задача удалена', 'success');
-            loadHistory();
-        } catch (_) {
-            toast('Не удалось удалить задачу', 'error');
-        }
-    }
-
-    $('historyRefresh').addEventListener('click', loadHistory);
-    $('historyList').addEventListener('click', (event) => {
-        const downloadBtn = event.target.closest('[data-download-url]');
-        if (downloadBtn) {
-            downloadResultUrl(downloadBtn.dataset.downloadUrl, downloadBtn.dataset.filename);
-            return;
-        }
-        const rerunBtn = event.target.closest('[data-rerun-job]');
-        if (rerunBtn) {
-            rerunJob(rerunBtn.dataset.rerunJob);
-            return;
-        }
-        const previewBtn = event.target.closest('[data-preview-task]');
-        if (previewBtn) {
-            openPreviewTask(previewBtn.dataset.previewTask);
-            return;
-        }
-        const deleteBtn = event.target.closest('[data-delete-job]');
-        if (deleteBtn) {
-            deleteJob(deleteBtn.dataset.deleteJob);
-        }
-    });
-    $('batchProgressList').addEventListener('click', (event) => {
-        const downloadBtn = event.target.closest('[data-download-url]');
-        if (downloadBtn) {
-            downloadResultUrl(downloadBtn.dataset.downloadUrl, downloadBtn.dataset.filename);
-            return;
-        }
-        const previewBtn = event.target.closest('[data-preview-task]');
-        if (previewBtn) {
-            openPreviewTask(previewBtn.dataset.previewTask);
-        }
-    });
-
-    loadCapabilities();
-    loadHistory();
-</script>
+<script src="/static/js/pages/convert.js?v={{ asset_version }}" type="module"></script>
 {% endblock %}

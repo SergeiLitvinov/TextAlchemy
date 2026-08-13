@@ -1,25 +1,24 @@
-"""HTML-страницы дашборда (рендерятся через Jinja2)."""
+"""Thin presentation routes for server-rendered pages."""
 from __future__ import annotations
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 
 from textalchemy.web.app import _load_bib, _load_config, _matching_path, app, templates
+from textalchemy.web.services.page_context import PageContextService
+
+
+def _context() -> PageContextService:
+    return PageContextService(
+        load_bibliography=_load_bib,
+        load_config=_load_config,
+        matching_path=_matching_path,
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    bib = _load_bib()
-    report_path = _matching_path()
-    report = report_path.read_text(encoding="utf-8") if report_path.exists() else None
-    if report is not None:
-        import json
-
-        report = json.loads(report)
-    return templates.TemplateResponse(request, "index.html", {
-        "bib_count": len(bib),
-        "report": report,
-    })
+    return templates.TemplateResponse(request, "index.html", _context().dashboard())
 
 
 @app.get("/extract", response_class=HTMLResponse)
@@ -39,42 +38,17 @@ async def pipeline_page(request: Request):
 
 @app.get("/bibliography", response_class=HTMLResponse)
 async def bibliography_page(request: Request):
-    bib = _load_bib()
-    return templates.TemplateResponse(request, "bibliography.html", {"bib_items": bib})
+    return templates.TemplateResponse(request, "bibliography.html", _context().bibliography())
 
 
 @app.get("/matching", response_class=HTMLResponse)
 async def matching_page(request: Request):
-    bib = _load_bib()
-    cfg = _load_config()
-    src_dir = cfg.get("source_dir", "./literature_files")
-    from pathlib import Path
-
-    files = sorted(
-        f.name for f in Path(src_dir).rglob("*") if f.is_file() and f.suffix.lower() in {".pdf", ".docx", ".djvu", ".txt"}
-    ) if Path(src_dir).exists() else []
-    return templates.TemplateResponse(request, "matching.html", {
-        "bib_items": bib,
-        "config": cfg,
-        "files": files,
-    })
+    return templates.TemplateResponse(request, "matching.html", _context().matching())
 
 
 @app.get("/reports", response_class=HTMLResponse)
 async def reports_page(request: Request):
-    bib = _load_bib()
-    cfg = _load_config()
-    report_path = _matching_path()
-    report = report_path.read_text(encoding="utf-8") if report_path.exists() else None
-    if report is not None:
-        import json
-
-        report = json.loads(report)
-    return templates.TemplateResponse(request, "reports.html", {
-        "bib_items": bib,
-        "config": cfg,
-        "report": report,
-    })
+    return templates.TemplateResponse(request, "reports.html", _context().reports())
 
 
 @app.get("/recognize", response_class=HTMLResponse)

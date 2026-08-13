@@ -6,6 +6,12 @@ from textalchemy.core.exceptions import GenerateError
 from textalchemy.core.io import check_archive_safety
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+_BUILTIN_TEMPLATE_DESCRIPTIONS = {
+    "abstract": "Аннотация научной работы",
+    "article": "Научная статья",
+    "laboratory": "Отчёт по лабораторной работе",
+    "report": "Универсальный отчёт",
+}
 
 
 def _replace_in_paragraph(paragraph, items):
@@ -59,7 +65,7 @@ class TemplateEngine:
                 templates.append(
                     DocumentTemplate(
                         name=f.stem,
-                        description=f"Template: {f.name}",
+                        description=_BUILTIN_TEMPLATE_DESCRIPTIONS.get(f.stem, f"Шаблон {f.name}"),
                         template_type=f.suffix[1:],
                     )
                 )

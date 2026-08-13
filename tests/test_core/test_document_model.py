@@ -9,6 +9,7 @@ from textalchemy.core.document_model import (
     FormulaFormat,
     Image,
     Paragraph,
+    Provenance,
     Resource,
     ResourceKind,
     Section,
@@ -17,6 +18,8 @@ from textalchemy.core.document_model import (
     TableRow,
     TextRun,
     TextStyle,
+    VisualSurrogate,
+    attach_visual_surrogate,
 )
 
 
@@ -80,3 +83,34 @@ def test_validate_reports_missing_image_fallback_resource():
     assert document.validate() == [
         "sections[0].blocks[0].content[0]: unknown fallback resource 'missing-preview'"
     ]
+
+
+def test_validate_reports_missing_visual_surrogate_resource():
+    document = DocumentModel(
+        sections=[Section(blocks=[Paragraph(content=[TextRun("editable")], visual_surrogate=VisualSurrogate(
+            resource_id="missing-preview",
+            reason="native shape is approximate",
+        ))])]
+    )
+
+    assert document.validate() == [
+        "sections[0].blocks[0]: unknown visual surrogate resource 'missing-preview'"
+    ]
+
+
+def test_visual_surrogate_validates_reason_and_fidelity():
+    with pytest.raises(ValueError, match="reason"):
+        VisualSurrogate(resource_id="preview", reason="")
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        VisualSurrogate(resource_id="preview", reason="approximation", fidelity=1.1)
+
+
+def test_attach_visual_surrogate_records_provenance_reason():
+    preview = Resource("preview", ResourceKind.RASTER_IMAGE, "image/png", data=b"png")
+    paragraph = Paragraph(provenance=Provenance(source_format="pdf", page=1, object_id="shape-2"))
+
+    attach_visual_surrogate(paragraph, preview, reason="native chart geometry is approximate", fidelity=0.92)
+
+    assert paragraph.visual_surrogate is not None
+    assert paragraph.visual_surrogate.resource_id == "preview"
+    assert paragraph.provenance.events[-1].fallback_reason == "native chart geometry is approximate"
