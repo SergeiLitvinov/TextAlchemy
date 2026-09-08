@@ -78,7 +78,23 @@ def extract_text(*, doc: Document) -> Text:
     )
 
 
-__all__ = ["extract_text", "extract_pdf_model", "extract_pptx_model"]
+__all__ = ["extract_text", "extract_pdf_model", "extract_pptx_model", "extract_epub_model"]
+
+
+@operation(
+    "extract.epub_model",
+    input_type="Document",
+    output_type="DocumentModel",
+    input_param="doc",
+    description="EPUB → DocumentModel (главы, ссылки, изображения и базовое CSS).",
+    tags=["extract", "epub", "document-model"],
+)
+def extract_epub_model(*, doc: Document) -> DocumentModel:
+    from textalchemy.formats.epub import read_epub_model
+
+    if doc.format is not DocFormat.EPUB:
+        raise ValueError("extract.epub_model requires an EPUB document")
+    return read_epub_model(doc.path)
 
 
 @operation(

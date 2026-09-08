@@ -4,6 +4,9 @@ import math
 
 from textalchemy.convert.pptx_chart_settings import configure_chart
 from textalchemy.convert.pptx_combo_writer import compose_combo, install_combo, is_combo
+from textalchemy.convert.pptx_label_writer import configure_labels
+from textalchemy.convert.pptx_plot_writer import configure_plots
+from textalchemy.convert.pptx_point_writer import configure_points
 from textalchemy.convert.pptx_text_writer import set_color
 from textalchemy.core.diagnostics import IssueSeverity
 
@@ -93,10 +96,15 @@ def write_chart(slide, data, geometry, report, location):
     if scene is not None:
         install_combo(chart, scene)
     configure_chart(chart, data, report, location)
+    configure_plots(chart=chart, data=data, report=report, location=location)
+    configure_labels(chart=chart, data=data, report=report, location=location)
     if data.get("title"):
         chart.has_title = True
         chart.chart_title.text_frame.text = data["title"]
     for source, target in zip(data["series"], chart.series):
+        configure_points(
+            source=source, target=target, kind=source.get("chart_type", data.get("chart_type")), report=report, location=location
+        )
         if source.get("marker_symbol") is not None and hasattr(target, "marker"):
             try:
                 target.marker.style = XL_MARKER_STYLE.from_xml(source["marker_symbol"])

@@ -5,6 +5,8 @@ from __future__ import annotations
 import uuid
 
 from fastapi import File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 
 from textalchemy.convert.executor import ConversionExecutor
 from textalchemy.core.document_model import ConversionMode
@@ -14,6 +16,8 @@ from textalchemy.core.text_quality_policy import resolve_text_policy
 from textalchemy.core.types import DocFormat
 from textalchemy.web.app import app
 from textalchemy.web.routes import convert as facade
+from textalchemy.web.services.batch_archive import build_batch_archive
+from textalchemy.web.services.batch_options import parse_batch_options
 
 _BATCH_LIMIT = 20
 _JOBS_HISTORY_LIMIT = 20
@@ -42,6 +46,7 @@ async def api_convert_batch(
     files: list[UploadFile] = File(...),
     target_format: str = Form(""),
     mode: str = Form("balanced"),
+    file_options: str = Form(""),
     min_retention: float = Form(0.0),
     max_loss_issues: int | None = Form(None, ge=0),
     max_lost_objects: int | None = Form(None, ge=0),
@@ -51,6 +56,7 @@ async def api_convert_batch(
 ):
     try:
         conversion_mode = ConversionMode(mode)
+        options = parse_batch_options(file_options, len(files), target=target_format, mode=conversion_mode)
         resolve_text_policy(require_unchanged_text, text_preservation, max_text_edits)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
@@ -64,18 +70,18 @@ async def api_convert_batch(
     workspaces = []
     prepared = []
     try:
-        for upload in files:
+        for upload, option in zip(files, options):
             workspace = facade.create_web_workspace()
             workspaces.append(workspace)
             source_path = await facade.save_upload(workspace, upload, fallback="document")
             source, target = facade._resolve_conversion(
                 source_path,
                 source_format="auto",
-                target_format=target_format,
+                target_format=option.target,
                 legacy_format="",
             )
-            _check_route(executor, source, target, conversion_mode, min_retention)
-            prepared.append((workspace, source_path, source, target))
+            _check_route(executor, source, target, option.mode, min_retention)
+            prepared.append((workspace, source_path, source, target, option.mode))
     except Exception:
         for workspace in workspaces:
             workspace.cleanup()
@@ -84,34 +90,48 @@ async def api_convert_batch(
     tasks: list[dict[str, object]] = []
     submissions: list[str] = []
     try:
-        for workspace, source_path, source, target in prepared:
+        for workspace, source_path, source, target, file_mode in prepared:
             task_id = str(uuid.uuid4())
             facade._persist_conversion_task(
-                task_id, source_path, source, target, conversion_mode, policy, object_policy,
-                require_unchanged_text, text_preservation, max_text_edits,
+                task_id,
+                source_path,
+                source,
+                target,
+                file_mode,
+                policy,
+                object_policy,
+                require_unchanged_text,
+                text_preservation,
+                max_text_edits,
             )
             workspace.cleanup()
             submissions.append(task_id)
-            tasks.append({
-                "name": source_path.name,
-                "task_id": task_id,
-                "source_format": source.value,
-                "target_format": target.value,
-                "status": f"/api/convert/status/{task_id}",
-                "result": f"/api/convert/result/{task_id}",
-            })
+            tasks.append(
+                {
+                    "name": source_path.name,
+                    "task_id": task_id,
+                    "source_format": source.value,
+                    "target_format": target.value,
+                    "mode": file_mode.value,
+                    "status": f"/api/convert/status/{task_id}",
+                    "result": f"/api/convert/result/{task_id}",
+                }
+            )
         job_id = str(uuid.uuid4())
-        facade.tasks_store.set_job(job_id, {
-            "job_id": job_id,
-            "target_format": target_format,
-            "mode": conversion_mode.value,
-            "max_loss_issues": max_loss_issues,
-            "max_lost_objects": max_lost_objects,
-            "require_unchanged_text": require_unchanged_text,
-            "text_preservation": text_preservation,
-            "max_text_edits": max_text_edits,
-            "files": tasks,
-        })
+        facade.tasks_store.set_job(
+            job_id,
+            {
+                "job_id": job_id,
+                "target_format": target_format,
+                "mode": conversion_mode.value,
+                "max_loss_issues": max_loss_issues,
+                "max_lost_objects": max_lost_objects,
+                "require_unchanged_text": require_unchanged_text,
+                "text_preservation": text_preservation,
+                "max_text_edits": max_text_edits,
+                "files": tasks,
+            },
+        )
     except Exception:
         for workspace in workspaces:
             workspace.cleanup()
@@ -137,10 +157,16 @@ async def api_convert_jobs():
             task = facade.tasks_store.get(item["task_id"])
             status = task["status"] if task else "expired"
             counts[status] = counts.get(status, 0) + 1
-        result.append({
-            "job_id": job["job_id"], "created": job.get("_ts"), "target_format": job.get("target_format"),
-            "mode": job.get("mode"), "files": [item["name"] for item in files], "counts": counts,
-        })
+        result.append(
+            {
+                "job_id": job["job_id"],
+                "created": job.get("_ts"),
+                "target_format": job.get("target_format"),
+                "mode": job.get("mode"),
+                "files": [item["name"] for item in files],
+                "counts": counts,
+            }
+        )
     return {"jobs": result}
 
 
@@ -153,8 +179,12 @@ async def api_convert_job(job_id: str):
     for item in job.get("files", []):
         task = facade.tasks_store.get(item["task_id"])
         entry: dict[str, object] = {
-            "name": item["name"], "task_id": item["task_id"],
-            "status_url": item.get("status"), "result_url": item.get("result"),
+            "name": item["name"],
+            "task_id": item["task_id"],
+            "target_format": item.get("target_format"),
+            "mode": item.get("mode", job.get("mode")),
+            "status_url": item.get("status"),
+            "result_url": item.get("result"),
         }
         if task is None:
             entry.update(status="expired", error="Истёк срок хранения результата")
@@ -173,6 +203,36 @@ async def api_convert_job_delete(job_id: str):
         facade.tasks_store.delete(item["task_id"])
     facade.tasks_store.delete_job(job_id)
     return {"success": True, "job_id": job_id}
+
+
+@app.get("/api/convert/jobs/{job_id}/archive")
+def api_convert_job_archive(job_id: str):
+    try:
+        stream = build_batch_archive(facade.tasks_store, job_id)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except OverflowError as error:
+        raise HTTPException(status_code=413, detail=str(error)) from error
+    except OSError as error:
+        raise HTTPException(
+            status_code=409, detail="Результаты изменились или недоступны. Обновите пакет и повторите скачивание."
+        ) from error
+
+    def chunks():
+        try:
+            while chunk := stream.read(1024 * 1024):
+                yield chunk
+        finally:
+            stream.close()
+
+    return StreamingResponse(
+        chunks(),
+        media_type="application/zip",
+        background=BackgroundTask(stream.close),
+        headers={"Content-Disposition": 'attachment; filename="converted-batch.zip"'},
+    )
 
 
 @app.post("/api/convert/jobs/{job_id}/rerun")
@@ -195,20 +255,30 @@ async def api_convert_job_rerun(job_id: str):
         if task.get("status") in {"queued", "running", "cancelling"}:
             continue
         source, target = DocFormat(item["source_format"]), DocFormat(item["target_format"])
-        plan = executor.plan(source, target, mode=conversion_mode)
+        file_mode = ConversionMode(task.get("mode", item.get("mode", conversion_mode.value)))
+        plan = executor.plan(source, target, mode=file_mode)
         if plan is None or not facade._web_plan_supported(plan):
             continue
         facade.tasks_store.clear_result(task_id)
-        facade._register_task(task_id, {
-            **task,
-            "status": "queued", "queue_kind": "convert", "error": None, "report": None,
-            "artifact": None, "max_loss_issues": task.get("max_loss_issues", job.get("max_loss_issues")),
-            "max_lost_objects": task.get("max_lost_objects", job.get("max_lost_objects")),
-            "require_unchanged_text": task.get("require_unchanged_text", job.get("require_unchanged_text", False)),
-            "text_preservation": task.get("text_preservation", job.get("text_preservation")),
-            "max_text_edits": task.get("max_text_edits", job.get("max_text_edits")),
-            "source_format": source.value, "target_format": target.value, "mode": conversion_mode.value,
-        })
+        facade._register_task(
+            task_id,
+            {
+                **task,
+                "status": "queued",
+                "queue_kind": "convert",
+                "error": None,
+                "report": None,
+                "artifact": None,
+                "max_loss_issues": task.get("max_loss_issues", job.get("max_loss_issues")),
+                "max_lost_objects": task.get("max_lost_objects", job.get("max_lost_objects")),
+                "require_unchanged_text": task.get("require_unchanged_text", job.get("require_unchanged_text", False)),
+                "text_preservation": task.get("text_preservation", job.get("text_preservation")),
+                "max_text_edits": task.get("max_text_edits", job.get("max_text_edits")),
+                "source_format": source.value,
+                "target_format": target.value,
+                "mode": conversion_mode.value,
+            },
+        )
         submissions.append(task_id)
     launched = []
     for task_id in submissions:

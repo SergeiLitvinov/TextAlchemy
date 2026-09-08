@@ -21,9 +21,10 @@ export const conversionApi = {
         if (maxTextEdits !== '' && maxTextEdits != null) formData.set('max_text_edits', maxTextEdits);
         return window.api('/api/convert', {method: 'POST', formData});
     },
-    startBatch(files, targetFormat, mode, minRetention, maxLossIssues = '', maxLostObjects = '', requireUnchangedText = false, textPreservation = '', maxTextEdits = '') {
+    startBatch(files, targetFormat, mode, minRetention, maxLossIssues = '', maxLostObjects = '', requireUnchangedText = false, textPreservation = '', maxTextEdits = '', fileOptions = null) {
         const formData = new FormData();
         for (const file of files) formData.append('files', file);
+        if (fileOptions) formData.set('file_options', JSON.stringify(fileOptions));
         formData.set('target_format', targetFormat);
         formData.set('mode', mode);
         formData.set('min_retention', minRetention);
@@ -74,7 +75,8 @@ export const conversionApi = {
 export async function downloadResult(url, filename) {
     const response = await fetch(url);
     if (!response.ok) {
-        window.toast('Результат пока недоступен', 'error');
+        const error = await response.json().catch(() => ({}));
+        window.toast(typeof error.detail === 'string' ? error.detail : 'Результат пока недоступен', 'error');
         return;
     }
     const blob = await response.blob();

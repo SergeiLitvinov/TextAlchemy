@@ -37,6 +37,7 @@ _MODULE_REQUIREMENTS = {
     "python-docx": "docx",
     "python-pptx": "pptx",
     "pymupdf": "fitz",
+    "beautifulsoup4": "bs4",
 }
 
 
@@ -103,7 +104,11 @@ class ConversionExecutor:
                     from textalchemy.convert.object_quality import check_object_quality
 
                     check_object_quality(
-                        request.input_path, staged, report, request.object_loss_policy, request.text_preservation_policy,
+                        request.input_path,
+                        staged,
+                        report,
+                        request.object_loss_policy,
+                        request.text_preservation_policy,
                     )
                     if cancelled is not None and cancelled():
                         return _cancelled_report(report)
@@ -255,10 +260,12 @@ def _load_initial(request: ConversionRequest) -> Path | DocumentModel:
 def _built_in_backends() -> dict[str, ConversionBackend]:
     return {
         "txt.model": ImporterBackend("txt.model", _read_txt),
+        "epub.model": ImporterBackend("epub.model", _read_epub),
         "docx.model": ImporterBackend("docx.model", _read_docx),
         "pptx.model": ImporterBackend("pptx.model", _read_pptx),
         "model.docx": ExporterBackend("model.docx", _write_docx),
         "model.pptx": ExporterBackend("model.pptx", _write_pptx),
+        "model.txt": ExporterBackend("model.txt", _write_txt),
         "model.html": ExporterBackend("model.html", _write_html),
         "model.pdf": ExporterBackend("model.pdf", _write_pdf),
         "pdf.docx.pdf2docx": PathConverterBackend(
@@ -284,6 +291,12 @@ def _read_txt(source: Path) -> DocumentModel:
     return read_txt_model(source)
 
 
+def _read_epub(source: Path) -> DocumentModel:
+    from textalchemy.formats.epub import read_epub_model
+
+    return read_epub_model(source)
+
+
 def _read_docx(source: Path) -> DocumentModel:
     from textalchemy.formats.docx import read_docx_model
 
@@ -306,6 +319,12 @@ def _write_pptx(model: DocumentModel, output: Path) -> ConversionReport:
     from textalchemy.convert.pptx_writer import write_pptx_model
 
     return write_pptx_model(model, output)
+
+
+def _write_txt(model: DocumentModel, output: Path) -> ConversionReport:
+    from textalchemy.convert.txt_writer import write_txt_model
+
+    return write_txt_model(model, output)
 
 
 def _write_html(model: DocumentModel, output: Path) -> ConversionReport:

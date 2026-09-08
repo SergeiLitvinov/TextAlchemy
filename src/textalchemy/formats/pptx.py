@@ -1169,13 +1169,9 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
                 data["grouping"] = grouping.get("val")
             if shape is not None and shape.get("val"):
                 data["chart_3d_shape"] = shape.get("val")
-            for tag, key in (("gapWidth", "gap_width"), ("overlap", "overlap"), ("varyColors", "vary_colors")):
-                element = chart_node.find(_c(tag))
-                if element is not None and element.get("val") is not None:
-                    if tag == "varyColors":
-                        data[key] = _chart_bool(element.get("val"))
-                    else:
-                        data[key] = _chart_float(element.get("val"))
+            from textalchemy.formats.pptx_chart_data import plot_appearance
+
+            data.update(plot_appearance(chart_node))
         secondary_value_id = (axes.get("secondary_value") or {}).get("ax_id")
         series: list[dict[str, Any]] = []
         categories: list[str] = []
@@ -1199,6 +1195,11 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
                 item: dict[str, Any] = {"name": name, "values": values}
                 item.update(numeric_series(ser))
                 item["plot"], item["plot_index"] = plot_settings(node), node_index
+                if node_index > 0:
+                    item["plot"].update(plot_appearance(node))
+                plot_labels = _read_data_labels(node)
+                if plot_labels is not None and node_index > 0:
+                    item["plot"]["data_labels"] = plot_labels
                 if cat is not None and cats != categories:
                     item["categories"] = cats
                 item["chart_type"] = _chart_base_type(node_tag)
@@ -1411,28 +1412,26 @@ def _read_data_labels(node) -> dict[str, Any] | None:
         "showCatName": "show_category",
         "showSerName": "show_series",
         "showPercent": "show_percent",
+        "showBubbleSize": "show_bubble_size",
+        "showLeaderLines": "show_leader_lines",
+        "delete": "hidden",
     }
-    has_show = False
     for tag, key in show.items():
         element = labels.find(_c(tag))
         if element is None:
             continue
-        has_show = True
         info[key] = _chart_bool(element.get("val"))
-    if not has_show:
-        return None
     num_fmt = labels.find(_c("numFmt"))
     if num_fmt is not None and num_fmt.get("formatCode"):
         info["num_format"] = num_fmt.get("formatCode")
+        info["num_format_linked"] = _chart_bool(num_fmt.get("sourceLinked"), default=True)
     position = labels.find(_c("dLblPos"))
     if position is not None and position.get("val"):
         info["position"] = position.get("val")
     separator = labels.find(_c("separator"))
     if separator is not None:
-        value = separator.get("val") or separator.text
-        if value:
-            info["separator"] = value
-    return info
+        info["separator"] = separator.get("val", separator.text or "")
+    return info or None
 
 
 def _chart_element_title(element) -> str | None:

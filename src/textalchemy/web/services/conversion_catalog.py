@@ -9,6 +9,8 @@ from textalchemy.core.artifacts import ArtifactWorkspace
 from textalchemy.core.conversion_graph import ConversionPlan
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.types import DocFormat
+from textalchemy.web.services.conversion_availability import unavailable_reason
+from textalchemy.web.services.conversion_guidance import route_guidance
 
 LEGACY_CONVERSIONS = {
     "pdf": (DocFormat.PDF, DocFormat.DOCX),
@@ -21,8 +23,10 @@ DEFAULT_TARGETS = {
     DocFormat.DOCX: DocFormat.PDF,
     DocFormat.MODEL: DocFormat.DOCX,
     DocFormat.TXT: DocFormat.DOCX,
+    DocFormat.EPUB: DocFormat.HTML,
 }
 OUTPUT_SUFFIXES = {
+    DocFormat.TXT: ".txt",
     DocFormat.PPTX: ".pptx",
     DocFormat.DOCX: ".docx",
     DocFormat.HTML: ".html",
@@ -31,6 +35,7 @@ OUTPUT_SUFFIXES = {
     DocFormat.MODEL: ".json",
 }
 MEDIA_TYPES = {
+    DocFormat.TXT: "text/plain; charset=utf-8",
     DocFormat.PPTX: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     DocFormat.DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     DocFormat.HTML: "text/html; charset=utf-8",
@@ -39,6 +44,7 @@ MEDIA_TYPES = {
     DocFormat.MODEL: "application/json",
 }
 FORMAT_LABELS = {
+    DocFormat.EPUB: "Электронная книга (EPUB)",
     DocFormat.PDF: "PDF",
     DocFormat.DOCX: "Word (DOCX)",
     DocFormat.PPTX: "PowerPoint (PPTX)",
@@ -48,6 +54,7 @@ FORMAT_LABELS = {
     DocFormat.TXT: "Текст (TXT)",
 }
 SOURCE_EXTENSIONS = {
+    DocFormat.EPUB: (".epub",),
     DocFormat.PDF: (".pdf",),
     DocFormat.DOCX: (".docx",),
     DocFormat.PPTX: (".pptx",),
@@ -86,57 +93,74 @@ def preservation_below(plan: ConversionPlan, threshold: float) -> dict[str, floa
         raise ValueError("Минимальная сохранность должна быть от 0 до 1")
     if threshold == 0 or plan.preservation is None:
         return {}
-    return {
-        dimension.value: score
-        for dimension, score in plan.preservation.scores.items()
-        if score < threshold
-    }
+    return {dimension.value: score for dimension, score in plan.preservation.scores.items() if score < threshold}
 
 
 def available_conversions(executor: ConversionExecutor) -> dict[str, object]:
     """Построить пользовательский каталог реально достижимых направлений."""
-    sources = []
+    sources, unavailable_sources = [], []
     for source, extensions in SOURCE_EXTENSIONS.items():
-        targets = []
+        targets, unavailable_targets = [], []
         for target in OUTPUT_SUFFIXES:
             if target is source:
                 continue
-            plans = {
-                mode.value: plan
-                for mode in MODE_ORDER
-                if (plan := executor.plan(source, target, mode=mode)) is not None and web_plan_supported(plan)
-            }
-            if not plans:
-                continue
-            targets.append(
-                {
-                    "format": target.value,
-                    "label": FORMAT_LABELS[target],
-                    "extension": OUTPUT_SUFFIXES[target],
-                    "modes": list(plans),
-                    "plans": {
-                        mode: {
-                            "lossless": plan.lossless,
-                            "visual_score": plan.visual_score,
-                            "editability_score": plan.editability_score,
-                            "preservation": plan.preservation.to_dict() if plan.preservation else None,
-                            "steps": [step.id for step in plan.steps],
-                            "descriptions": [step.description or step.id for step in plan.steps],
-                        }
-                        for mode, plan in plans.items()
-                    },
-                }
-            )
+            entry = _target_entry(executor, source, target)
+            (targets if entry["modes"] else unavailable_targets).append(entry)
         if targets:
             sources.append(
                 {
                     "format": source.value,
                     "label": FORMAT_LABELS[source],
                     "extensions": list(extensions),
+                    "default_target": next(
+                        (
+                            item["format"]
+                            for item in targets
+                            if item["format"] == DEFAULT_TARGETS.get(source, DocFormat.DOCX).value
+                        ),
+                        targets[0]["format"],
+                    ),
                     "targets": targets,
+                    "unavailable_targets": unavailable_targets,
                 }
             )
-    return {"sources": sources, "modes": [mode.value for mode in MODE_ORDER]}
+        else:
+            unavailable_sources.append(
+                {
+                    "format": source.value,
+                    "label": FORMAT_LABELS[source],
+                    "extensions": list(extensions),
+                    "targets": [],
+                    "unavailable_targets": unavailable_targets,
+                }
+            )
+    return {"sources": sources, "unavailable_sources": unavailable_sources, "modes": [mode.value for mode in MODE_ORDER]}
+
+
+def _target_entry(executor: ConversionExecutor, source: DocFormat, target: DocFormat) -> dict[str, object]:
+    plans, unavailable = {}, {}
+    for mode in MODE_ORDER:
+        plan = executor.plan(source, target, mode=mode)
+        if plan is None or not web_plan_supported(plan):
+            unavailable[mode.value] = unavailable_reason(executor, source, target, mode, plan)
+            continue
+        plans[mode.value] = {
+            "lossless": plan.lossless,
+            "visual_score": plan.visual_score,
+            "editability_score": plan.editability_score,
+            "preservation": plan.preservation.to_dict() if plan.preservation else None,
+            "steps": [step.id for step in plan.steps],
+            "descriptions": [step.description or step.id for step in plan.steps],
+        }
+    return {
+        "format": target.value,
+        "label": FORMAT_LABELS[target],
+        "extension": OUTPUT_SUFFIXES[target],
+        "modes": list(plans),
+        "plans": plans,
+        "unavailable_modes": unavailable,
+        "guidance": route_guidance(source, target),
+    }
 
 
 def output_path_for(workspace: ArtifactWorkspace, source_path: Path, source: DocFormat, target: DocFormat) -> Path:

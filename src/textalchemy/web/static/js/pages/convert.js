@@ -1,6 +1,9 @@
 "use strict";
 
 import {conversionApi, downloadResult} from './convert/api.js';
+import {createBatchFilter} from './convert/batch-filter.js';
+import {createBatchOptions} from './convert/batch-options.js';
+import {renderCatalog, renderGuidance, unavailableModeHelp} from './convert/catalog.js';
 import {createHistoryController} from './convert/history.js';
 import {createPreviewController} from './convert/preview.js';
 import {createConversionView} from './convert/view.js';
@@ -17,7 +20,10 @@ const state = {
     batchFiles: null, batchTargets: null, activeTask: null, activeTaskId: null, inspectionRequest: 0,
 };
 const view = createConversionView($);
+const batchFilter = createBatchFilter($, view.batchProgress);
+const batchOptions = createBatchOptions($);
 let history;
+let batchPollVersion = 0;
 
 function sourceFor(file) {
     const name = file.name.toLowerCase();
@@ -49,6 +55,17 @@ function selectedTarget() {
 function updateModeHelp() {
     const plan = selectedTarget()?.plans[$('mode').value];
     $('mode-help').textContent = modeDescriptions[$('mode').value];
+    const sources = state.batchFiles ? state.batchFiles.map(sourceFor) : [state.selectedSource].filter(Boolean);
+    const unavailable = Array.from($('mode').options).filter((option) => option.disabled).map((option) => option.value);
+    if (unavailable.length) {
+        $('mode-help').textContent += ' ' + unavailableModeHelp(sources, $('target').value, unavailable);
+    }
+    $('routeGuidance').hidden = !renderGuidance($('routeGuidanceList'), sources, $('target').value);
+    if (state.batchFiles) {
+        batchOptions.defaults($('target').value, $('mode').value);
+        $('route-help').textContent = 'Для каждого файла будет выбран свой маршрут. Сохранность зависит от исходного формата; итоговые потери будут показаны в отчёте каждого файла.';
+        return;
+    }
     const route = plan?.descriptions.length
         ? `Маршрут: ${plan.descriptions.join(' → ')}` : 'Прямое преобразование без промежуточных этапов';
     if (!plan) {
@@ -57,7 +74,7 @@ function updateModeHelp() {
     }
     const visual = Math.round((plan.visual_score || 0) * 100);
     const editable = Math.round((plan.editability_score || 0) * 100);
-    $('route-help').textContent = `${route}. Прогноз: сходство ${visual}%, редактируемость ${editable}%.`;
+    $('route-help').textContent = `${route}. Прогноз: сходство ${visual}%, редактируемость ${editable}%. Это оценка маршрута, а не измерение вашего результата.`;
 }
 
 function updateTarget() {
@@ -89,6 +106,7 @@ function selectFile(file) {
     if (!source) return view.status('Для этого формата нет доступных маршрутов конвертации.', 'error');
     Object.assign(state, {batchFiles: null, batchTargets: null, pendingFile: file, selectedSource: source});
     $('batchFileBlock').hidden = true;
+    $('batchIndividualOptions').hidden = true;
     $('batchConvertBtn').hidden = true;
     $('convertBtn').hidden = false;
     $('singleFileBlock').hidden = false;
@@ -100,6 +118,7 @@ function selectFile(file) {
     view.status('');
     $('target').innerHTML = source.targets.map((item) =>
         `<option value="${window.esc(item.format)}">${window.esc(item.label)} (${window.esc(item.extension)})</option>`).join('');
+    if (source.targets.some((target) => target.format === source.default_target)) $('target').value = source.default_target;
     updateTarget();
     inspect(file);
 }
@@ -107,8 +126,8 @@ function selectFile(file) {
 function selectBatch(files) {
     const sources = files.map(sourceFor);
     if (sources.some((source) => !source)) return view.status('Один из файлов имеет формат без доступных маршрутов конвертации.', 'error');
-    const commonTargets = batchTargets(sources);
-    if (!commonTargets.length) return view.status('Для выбранных файлов нет общего формата результата. Конвертируйте их по отдельности.', 'error');
+    const sharedTargets = batchTargets(sources);
+    const commonTargets = sharedTargets.length ? sharedTargets : sources[0].targets;
     Object.assign(state, {batchFiles: files, batchTargets: commonTargets, pendingFile: null, selectedSource: null});
     $('conversionSetup').hidden = false;
     $('resultCard').hidden = true;
@@ -116,13 +135,17 @@ function selectBatch(files) {
     $('sourceInspection').hidden = true;
     $('convertBtn').hidden = true;
     $('batchFileBlock').hidden = false;
+    $('batchIndividualOptions').hidden = false;
+    $('batchIndividualOptions').open = !sharedTargets.length;
     $('batchConvertBtn').hidden = false;
-    $('batchFileSummary').textContent = `${files.length} файлов — общий формат результата`;
+    $('batchFileSummary').textContent = `${files.length} файлов — общие или индивидуальные настройки`;
     $('batchFileList').innerHTML = files.map((file) =>
         `<li><span class="file-name">${window.esc(file.name)}</span><small>${window.esc(sourceFor(file).label)}</small></li>`).join('');
     $('target').innerHTML = commonTargets.map((item) =>
         `<option value="${window.esc(item.format)}">${window.esc(item.label)} (${window.esc(item.extension)})</option>`).join('');
+    if (commonTargets.some((target) => target.format === sources[0].default_target)) $('target').value = sources[0].default_target;
     updateTarget();
+    batchOptions.mount(files, sources);
     view.status('');
 }
 
@@ -182,15 +205,26 @@ async function pollTask(url) {
     } catch (_) { view.progress(false, 0, ''); window.setLoading($('convertBtn'), false); }
 }
 
-async function pollJob(jobId) {
+async function pollJob(jobId, version = ++batchPollVersion) {
+    if (version !== batchPollVersion) return;
+    $('batchArchiveBtn').hidden = true;
     try {
         const data = await conversionApi.job(jobId);
-        view.batchProgress(data.tasks);
-        if (data.tasks.some((task) => ['queued', 'running'].includes(task.status))) {
+        if (version !== batchPollVersion) return;
+        batchFilter.update(jobId, data.tasks);
+        if (data.tasks.some((task) => ['queued', 'running', 'cancelling'].includes(task.status))) {
             $('batchProgressState').textContent = 'Конвертируем…';
-            setTimeout(() => pollJob(jobId), 900);
-        } else { $('batchProgressState').textContent = 'Готово'; history.load(); }
-    } catch (_) { $('batchProgressState').textContent = 'Не удалось получить статус'; }
+            setTimeout(() => pollJob(jobId, version), 900);
+        } else {
+            $('batchProgressState').textContent = 'Готово';
+            $('batchArchiveBtn').hidden = !data.tasks.some((task) => task.status === 'done');
+            $('batchArchiveBtn').onclick = () => downloadResult(
+                `/api/convert/jobs/${encodeURIComponent(jobId)}/archive`, 'converted-batch.zip');
+            history.load();
+        }
+    } catch (_) {
+        if (version === batchPollVersion) $('batchProgressState').textContent = 'Не удалось получить статус';
+    }
 }
 
 history = createHistoryController($, {openPreview: preview.open, pollJob});
@@ -224,7 +258,7 @@ async function startBatch() {
         const job = await conversionApi.startBatch(
             state.batchFiles, target.format, $('mode').value, $('minRetention').value,
             $('maxLossIssues').value, $('maxLostObjects').value, false, $('textPreservation').value,
-            $('textPreservation').value === 'flow' ? $('maxTextEdits').value : '');
+            $('textPreservation').value === 'flow' ? $('maxTextEdits').value : '', batchOptions.values());
         $('batchProgressCard').hidden = false;
         $('batchProgressState').textContent = 'Конвертируем…';
         $('batchProgressCard').scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -269,11 +303,15 @@ async function init() {
     history.load();
     try {
         state.capabilities = await conversionApi.capabilities();
+        renderCatalog($('formatCatalogContent'), state.capabilities);
         const extensions = state.capabilities.sources.flatMap((source) => source.extensions);
         $('fileInput').accept = extensions.join(',');
         $('drop-hint').textContent = extensions.map((item) => item.slice(1).toUpperCase()).join(', ') +
             ' · формат определится автоматически · можно выбрать несколько файлов';
-    } catch (_) { $('drop-hint').textContent = 'Не удалось получить список доступных форматов'; }
+    } catch (_) {
+        $('drop-hint').textContent = 'Не удалось получить список доступных форматов';
+        $('formatCatalogContent').textContent = 'Не удалось загрузить направления. Обновите страницу, чтобы повторить попытку.';
+    }
 }
 
 init();

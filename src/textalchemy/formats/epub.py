@@ -2,6 +2,7 @@
 
 Использует ``ebooklib`` для извлечения текстового содержимого из EPUB-файла.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -61,4 +62,11 @@ def read_epub(path: Union[str, Path]) -> Text:
     )
 
 
-__all__ = ["read_epub"]
+def read_epub_model(path: Union[str, Path]):
+    """Import EPUB spine chapters, links, media, and basic CSS into DocumentModel."""
+    from textalchemy.formats.epub_model import read_epub_model as read_model
+
+    return read_model(path)
+
+
+__all__ = ["read_epub", "read_epub_model"]

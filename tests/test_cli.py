@@ -446,7 +446,7 @@ def test_cli_plan_conversion_route_json(capsys):
 
 
 def test_cli_plan_reports_missing_route(capsys):
-    ret = main(["plan", "epub", "docx", "--json"])
+    ret = main(["plan", "latex", "pptx", "--json"])
 
     payload = json.loads(capsys.readouterr().out)
     assert ret == 1

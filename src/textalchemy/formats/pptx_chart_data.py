@@ -1,5 +1,9 @@
 """Indexed chart caches: preserve absent points and numeric XY dimensions."""
 
+from __future__ import annotations
+
+from typing import Any
+
 C = "{http://schemas.openxmlformats.org/drawingml/2006/chart}"
 
 
@@ -44,4 +48,25 @@ def plot_settings(node):
         element = node.find(C + tag)
         if element is not None:
             result[key] = element.get("val")
+    return result
+
+
+def plot_appearance(node: Any) -> dict[str, Any]:
+    """Прочитать явную геометрию столбцов и секторов отдельного набора."""
+    result = {}
+    for tag, key in (
+        ("gapWidth", "gap_width"),
+        ("overlap", "overlap"),
+        ("firstSliceAng", "first_slice_angle"),
+        ("holeSize", "hole_size"),
+    ):
+        element = node.find(C + tag)
+        if element is not None and element.get("val") is not None:
+            try:
+                result[key] = float(element.get("val"))
+            except ValueError:
+                continue
+    vary = node.find(C + "varyColors")
+    if vary is not None:
+        result["vary_colors"] = vary.get("val", "1").lower() in {"1", "true"}
     return result

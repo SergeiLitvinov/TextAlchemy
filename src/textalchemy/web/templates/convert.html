@@ -15,6 +15,11 @@
             <p class="lead">Загрузите документ — TextAlchemy определит формат, предложит доступные результаты и покажет качество преобразования.</p>
         </div>
 
+        <details class="conversion-catalog" id="formatCatalog">
+            <summary>Доступные форматы и возможности</summary>
+            <p class="field-help">Здесь показаны доступные направления и причины ограничений: поддержка движком, компоненты установки или возможности веб-интерфейса. Сохранение в тот же формат не изменяет документ.</p>
+            <div id="formatCatalogContent" aria-live="polite">Загружаем направления…</div>
+        </details>
         <div class="file-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput">
             <div class="drop-icon" aria-hidden="true">↥</div>
             <strong id="drop-label">Загрузите документ</strong>
@@ -62,6 +67,16 @@
                     <p class="field-help" id="mode-help">Оптимальный баланс оформления и редактируемости.</p>
                 </div>
             </div>
+            <div id="routeGuidance" aria-live="polite" hidden>
+                <h3>Что сохранится и что проверить</h3>
+                <ul id="routeGuidanceList" class="issue-list"></ul>
+            </div>
+            <details id="batchIndividualOptions" hidden>
+                <summary>Формат и приоритет каждого файла</summary>
+                <p class="field-help">Общие настройки применяются, пока вы не измените настройки файла отдельно. Если общий формат или режим недоступен, для файла выбирается доступный вариант — проверьте его ниже. Проверки сохранности остаются общими для всех файлов.</p>
+                <button type="button" class="btn-link" id="batchApplyDefaults">Применить общие настройки ко всем</button>
+                <div id="batchOptionsList"></div>
+            </details>
             <details class="conversion-loss-budget">
                 <summary>Расширенная проверка сохранности</summary>
                 <label for="maxLossIssues" data-i18n="quality.limit">Допустимое число сообщений о потерях</label>
@@ -117,7 +132,25 @@
             <h2>Пакетная конвертация</h2>
             <span id="batchProgressState" class="field-help"></span>
         </div>
+        <div class="form-grid">
+            <div><label for="batchStateFilter">Состояние файлов</label>
+                <select id="batchStateFilter">
+                    <option value="all">Все файлы</option>
+                    <option value="active">В очереди и в работе</option>
+                    <option value="done">Готовые</option>
+                    <option value="attention">Требуют внимания</option>
+                </select>
+            </div>
+            <div><label for="batchNameFilter">Найти по имени файла</label>
+                <input id="batchNameFilter" type="search" autocomplete="off">
+            </div>
+        </div>
+        <p id="batchFilterSummary" class="field-help" role="status"></p>
+        <button type="button" class="btn-link" id="batchFilterReset">Сбросить фильтры</button>
+        <p id="batchFilterEmpty" class="field-help" hidden>Нет файлов, соответствующих фильтрам.</p>
         <ul class="batch-progress-list" id="batchProgressList"></ul>
+        <button type="button" id="batchArchiveBtn" hidden>Скачать готовые результаты ZIP</button>
+        <p class="field-help">Фильтры меняют только список на экране. ZIP содержит все готовые результаты пакета и список статусов файлов; доступен после завершения пакета. Ошибочные файлы не включаются. Лимит результатов — 512 МБ.</p>
     </div>
 
     <div class="card conversion-history">

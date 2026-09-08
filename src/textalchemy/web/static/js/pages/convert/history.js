@@ -38,15 +38,20 @@ export function createHistoryController($, {openPreview, pollJob}) {
     }
 
     function detailMarkup(job) {
+        const ready = job.tasks.some((task) => task.status === 'done') &&
+            !job.tasks.some((task) => ['queued', 'running', 'cancelling'].includes(task.status));
+        const archive = ready ? `<button type="button" data-download-url="/api/convert/jobs/${encodeURIComponent(job.job_id)}/archive" data-filename="converted-batch.zip">Скачать готовые результаты ZIP</button>` : '';
         const rows = job.tasks.map((task) => {
             const download = task.status === 'done' && task.result_url
                 ? `<button type="button" class="btn-link" data-download-url="${window.esc(task.result_url)}" data-filename="${window.esc(task.filename || task.name)}">Скачать</button>` : '';
             const preview = task.status === 'done' ? `<button type="button" class="btn-link" data-preview-task="${window.esc(task.task_id)}">Просмотр</button>` : '';
             const error = ['error', 'interrupted'].includes(task.status) && task.error ? `<small>${window.esc(task.error)}</small>` : '';
+            const settings = task.target_format ? `<small>${window.esc(task.target_format.toUpperCase())} · ${window.esc(modeLabels[task.mode] || task.mode || '')}</small>` : '';
             return `<li class="batch-progress-item ${window.esc(task.status)}"><span class="file-name">${window.esc(task.name)}</span>` +
-                `<span class="job-state ${window.esc(task.status)}">${window.esc(labels[task.status] || task.status)}</span>${download}${preview}${error}</li>`;
+                `<span class="job-state ${window.esc(task.status)}">${window.esc(labels[task.status] || task.status)}</span>${settings}${download}${preview}${error}</li>`;
         }).join('');
-        return `<ul class="batch-progress-list">${rows || '<li class="field-help">Задач нет</li>'}</ul><div class="row-actions">` +
+        return `<ul class="batch-progress-list">${rows || '<li class="field-help">Задач нет</li>'}</ul><div class="row-actions">` + archive +
+            `<button type="button" data-open-job="${window.esc(job.job_id)}">Открыть пакет</button>` +
             `<button type="button" data-rerun-job="${window.esc(job.job_id)}">Перезапустить</button>` +
             `<button type="button" data-delete-job="${window.esc(job.job_id)}">Удалить</button></div>`;
     }
@@ -80,6 +85,13 @@ export function createHistoryController($, {openPreview, pollJob}) {
         if (download) return void downloadResult(download.dataset.downloadUrl, download.dataset.filename);
         const preview = event.target.closest('[data-preview-task]');
         if (preview) return void openPreview(preview.dataset.previewTask);
+        const openJob = event.target.closest('[data-open-job]');
+        if (openJob) {
+            $('batchProgressCard').hidden = false;
+            pollJob(openJob.dataset.openJob);
+            $('batchProgressCard').scrollIntoView({behavior: 'smooth', block: 'start'});
+            return;
+        }
         const rerunButton = event.target.closest('[data-rerun-job]');
         if (rerunButton) return void rerun(rerunButton.dataset.rerunJob);
         const deleteButton = event.target.closest('[data-delete-job]');

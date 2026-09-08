@@ -3,6 +3,7 @@
 const stateLabels = {
     queued: 'В очереди…', running: 'Конвертация…', done: 'Готово',
     error: 'Ошибка', interrupted: 'Прервана', expired: 'Истёк срок',
+    cancelling: 'Отмена…', cancelled: 'Отменена',
 };
 
 export function createConversionView($) {

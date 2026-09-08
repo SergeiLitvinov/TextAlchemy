@@ -188,8 +188,10 @@ class _HtmlRenderer:
         )
         if background:
             section_styles.append(f"background-color:{background}")
+        anchor = section.properties.get("anchor_id")
+        anchor_attr = f' id="{escape(str(anchor), quote=True)}"' if anchor else ""
         return (
-            f'<section class="ta-section ta-section-{index}"{_style_attribute(section_styles)}>'
+            f'<section class="ta-section ta-section-{index}"{anchor_attr}{_style_attribute(section_styles)}>'
             f'<header class="ta-header">{header}</header>'
             f'<main class="ta-main">{main}</main>'
             f'<footer class="ta-footer">{footer}</footer>'
@@ -258,7 +260,9 @@ class _HtmlRenderer:
         content = chart_svg or "".join(
             self._inline(item, f"{location}.content[{index}]") for index, item in enumerate(paragraph.content)
         )
-        return f"<{tag}{_style_attribute(styles)}>{content}</{tag}>"
+        anchor = paragraph.properties.get("anchor_id")
+        anchor_attr = f' id="{escape(str(anchor), quote=True)}"' if anchor else ""
+        return f"<{tag}{anchor_attr}{_style_attribute(styles)}>{content}</{tag}>"
 
     def _inline(self, item: TextRun | Formula | Image, location: str) -> str:
         if isinstance(item, TextRun):

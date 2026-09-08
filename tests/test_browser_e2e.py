@@ -158,6 +158,60 @@ def test_e2e_dashboard_loads_without_console_errors(e2e_server, page):
     assert page.e2e_errors == []
 
 
+def test_e2e_conversion_catalog_guidance_and_batch_forecast(e2e_server, page):
+    page.set_viewport_size({"width": 375, "height": 812})
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    summary = page.locator("#formatCatalog > summary")
+    summary.focus()
+    page.keyboard.press("Enter")
+    assert page.locator("#formatCatalog").get_attribute("open") is not None
+    assert "PowerPoint" in page.locator("#formatCatalogContent").text_content()
+    assert "EPUB" in page.locator("#formatCatalogContent").text_content()
+    page.locator("#fileInput").set_input_files({"name": "note.txt", "mimeType": "text/plain", "buffer": b"Test text"})
+    assert page.locator("#target").input_value() == "docx"
+    page.locator("#target").select_option("pptx")
+    assert "редактируемые объекты" in page.locator("#routeGuidance").text_content()
+    assert page.locator('#mode option[value="faithful"]').is_disabled()
+    page.locator("#target").select_option("docx")
+    assert page.locator("#routeGuidance").is_hidden()
+    page.locator("#fileInput").set_input_files([
+        {"name": "first.txt", "mimeType": "text/plain", "buffer": b"First"},
+        {"name": "second.txt", "mimeType": "text/plain", "buffer": b"Second"},
+    ])
+    page.locator("#target").select_option("pptx")
+    assert "Для каждого файла" in page.locator("#route-help").text_content()
+    assert "%" not in page.locator("#route-help").text_content()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    assert page.e2e_errors == []
+
+
+def test_e2e_conversion_catalog_failure_is_explained(e2e_server, page):
+    page.route("**/api/convert/capabilities", lambda route: route.fulfill(status=503, body="Unavailable"))
+    page.goto(f"{e2e_server}/convert")
+    page.wait_for_function("document.getElementById('formatCatalogContent').textContent.includes('Обновите страницу')")
+    assert "Не удалось" in page.locator("#drop-hint").text_content()
+
+
+def test_e2e_catalog_explains_missing_components(e2e_server, page):
+    from textalchemy.convert.executor import ConversionExecutor
+    from textalchemy.web.services.conversion_catalog import available_conversions
+
+    catalog = available_conversions(ConversionExecutor(requirement_checker=lambda name: name != "python-pptx"))
+    page.route("**/api/convert/capabilities", lambda route: route.fulfill(json=catalog))
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.locator("#formatCatalog > summary").click()
+    content = page.locator("#formatCatalogContent")
+    assert "python-pptx" in content.text_content()
+    assert "Преобразование в этом режиме пока не поддерживается" in content.text_content()
+    assert "нет доступных направлений" in content.text_content()
+    assert ".pptx" not in page.locator("#fileInput").get_attribute("accept")
+    page.locator("#fileInput").set_input_files({"name": "note.txt", "mimeType": "text/plain", "buffer": b"Text"})
+    assert page.locator('#target option[value="pptx"]').count() == 0
+    assert page.e2e_errors == []
+
+
 def test_e2e_global_task_center_explains_storage(e2e_server, page):
     page.goto(f"{e2e_server}/")
     page.wait_for_load_state("networkidle")
@@ -468,9 +522,22 @@ def test_e2e_convert_batch_flow(e2e_server, page, tmp_path, task_store):
     done_items = page.locator("#batchProgressList .batch-progress-item.done")
     assert done_items.count() == 2
 
+    with page.expect_download() as download:
+        page.locator("#batchArchiveBtn").click()
+    archive_path = tmp_path / "batch.zip"
+    download.value.save_as(archive_path)
+    import json
+    from zipfile import ZipFile
+
+    with ZipFile(archive_path) as archive:
+        manifest = json.loads(archive.read("manifest.json"))
+        assert len(manifest["files"]) == 2
+        assert all(item["status"] == "done" and item["file"] in archive.namelist() for item in manifest["files"])
+
     page.wait_for_selector("#historyList details.job-entry", timeout=30000)
     page.locator("#historyList details.job-entry summary").first.click()
     page.wait_for_selector("[data-rerun-job]", timeout=30000)
+    assert page.locator('#historyList [data-download-url$="/archive"]').is_visible()
     page.click("[data-rerun-job]")
     page.locator("#toast-container div").first.wait_for(timeout=30000)
     assert "перезапущена" in page.locator("#toast-container").inner_text().lower()
@@ -561,3 +628,95 @@ def test_e2e_convert_controls_have_accessible_names(e2e_server, page, tmp_path, 
     assert page.get_by_role("combobox", name="Приоритет").count() == 1
     assert page.get_by_role("button", name="Начать конвертацию").count() == 1
     assert page.get_by_role("button", name="Выбрать другой").count() == 1
+
+
+def test_e2e_batch_filters_persist_and_switch_jobs(e2e_server, page, task_store):
+    files = [
+        {"task_id": "filter-running", "name": "В работе.txt"},
+        {"task_id": "filter-done", "name": "Отчёт.txt"},
+        {"task_id": "filter-error", "name": "Ошибка.txt"},
+        {"task_id": "filter-expired", "name": "Старый.txt"},
+    ]
+    for item, status in zip(files, ["running", "done", "error"]):
+        task_store.set(item["task_id"], {"status": status})
+    task_store.set_job("filter-batch", {"job_id": "filter-batch", "files": files})
+    task_store.set_job("filter-other", {"job_id": "filter-other", "files": [files[1]]})
+    page.set_viewport_size({"width": 375, "height": 812})
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.locator('[data-open-job="filter-batch"]').click()
+    page.wait_for_function("document.getElementById('batchFilterSummary').textContent.includes('4 из 4')")
+    page.select_option("#batchStateFilter", "attention")
+    assert page.locator("#batchProgressList > li").count() == 2
+    task_store.set("filter-running", {"status": "error"})
+    page.wait_for_function("document.getElementById('batchFilterSummary').textContent.includes('3 из 4')")
+    assert page.locator("#batchStateFilter").input_value() == "attention"
+    page.select_option("#batchStateFilter", "done")
+    page.locator("#batchNameFilter").fill("ОТЧЁТ")
+    assert page.locator("#batchProgressList > li").count() == 1
+    page.locator("#batchNameFilter").fill("Несуществующий")
+    assert page.locator("#batchFilterEmpty").is_visible()
+    assert page.locator("#batchArchiveBtn").is_visible()
+    page.locator("#batchFilterReset").click()
+    assert page.locator("#batchProgressList > li").count() == 4
+    page.locator("#batchNameFilter").fill("Ошибка")
+    page.locator('[data-job="filter-other"] > summary').click()
+    page.locator('[data-open-job="filter-other"]').click()
+    page.wait_for_function("document.getElementById('batchFilterSummary').textContent.includes('1 из 1')")
+    assert page.locator("#batchNameFilter").input_value() == ""
+    assert page.locator("#batchStateFilter").input_value() == "all"
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    assert page.e2e_errors == []
+
+
+def test_e2e_individual_batch_formats(e2e_server, page, task_store):
+    page.set_viewport_size({"width": 375, "height": 812})
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.locator("#fileInput").set_input_files([
+        {"name": "same.txt", "mimeType": "text/plain", "buffer": b"First"},
+        {"name": "same.txt", "mimeType": "text/plain", "buffer": b"Second"},
+    ])
+    page.locator("#batchIndividualOptions > summary").click()
+    page.select_option("#batchTarget0", "model")
+    page.select_option("#batchMode0", "editable")
+    page.select_option("#target", "html")
+    assert page.locator("#batchTarget0").input_value() == "model"
+    assert page.locator("#batchTarget1").input_value() == "html"
+    page.locator("#batchApplyDefaults").click()
+    assert page.locator("#batchTarget0").input_value() == "html"
+    page.select_option("#batchTarget0", "model")
+    page.select_option("#batchMode0", "editable")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    with page.expect_response(lambda response: response.url.endswith("/api/convert/batch")) as response:
+        page.locator("#batchConvertBtn").click()
+    created = response.value.json()
+    page.wait_for_function("document.getElementById('batchProgressState').textContent === 'Готово'")
+    first, second = [task_store.get(item["task_id"]) for item in created["tasks"]]
+    assert (first["target_format"], first["mode"], first["status"]) == ("model", "editable", "done")
+    assert (second["target_format"], second["status"]) == ("html", "done")
+    assert page.e2e_errors == []
+
+
+def test_e2e_batch_without_common_target(e2e_server, page):
+    from textalchemy.convert.executor import ConversionExecutor
+    from textalchemy.web.services.conversion_catalog import available_conversions
+
+    catalog = available_conversions(ConversionExecutor(requirement_checker=lambda _: True))
+    for source in catalog["sources"]:
+        if source["format"] in {"txt", "model"}:
+            target = "model" if source["format"] == "txt" else "docx"
+            source["targets"] = [item for item in source["targets"] if item["format"] == target]
+            source["default_target"] = target
+    page.route("**/api/convert/capabilities", lambda route: route.fulfill(json=catalog))
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.locator("#fileInput").set_input_files([
+        {"name": "text.txt", "mimeType": "text/plain", "buffer": b"Text"},
+        {"name": "model.json", "mimeType": "application/json", "buffer": b"{}"},
+    ])
+    assert page.locator("#batchIndividualOptions").get_attribute("open") is not None
+    assert page.locator("#batchTarget0").input_value() == "model"
+    assert page.locator("#batchTarget1").input_value() == "docx"
+    assert page.locator("#batchConvertBtn").is_visible()
+    assert page.e2e_errors == []

@@ -1247,3 +1247,14 @@ select { color-scheme: light dark; }
 .object-diff h4 {
   margin: 0 0 .75rem;
 }
+
+#batchOptionsList fieldset {
+  min-inline-size: 0;
+  margin-block: 1rem;
+  border: 1px solid var(--border);
+}
+
+#batchOptionsList legend {
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
