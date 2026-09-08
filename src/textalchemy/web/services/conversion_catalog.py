@@ -20,8 +20,10 @@ DEFAULT_TARGETS = {
     DocFormat.PPTX: DocFormat.HTML,
     DocFormat.DOCX: DocFormat.PDF,
     DocFormat.MODEL: DocFormat.DOCX,
+    DocFormat.TXT: DocFormat.DOCX,
 }
 OUTPUT_SUFFIXES = {
+    DocFormat.PPTX: ".pptx",
     DocFormat.DOCX: ".docx",
     DocFormat.HTML: ".html",
     DocFormat.LATEX: ".tex",
@@ -29,6 +31,7 @@ OUTPUT_SUFFIXES = {
     DocFormat.MODEL: ".json",
 }
 MEDIA_TYPES = {
+    DocFormat.PPTX: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     DocFormat.DOCX: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     DocFormat.HTML: "text/html; charset=utf-8",
     DocFormat.LATEX: "application/x-tex",
@@ -42,12 +45,14 @@ FORMAT_LABELS = {
     DocFormat.HTML: "HTML",
     DocFormat.LATEX: "LaTeX",
     DocFormat.MODEL: "TextAlchemy Model",
+    DocFormat.TXT: "Текст (TXT)",
 }
 SOURCE_EXTENSIONS = {
     DocFormat.PDF: (".pdf",),
     DocFormat.DOCX: (".docx",),
     DocFormat.PPTX: (".pptx",),
     DocFormat.MODEL: (".json",),
+    DocFormat.TXT: (".txt",),
 }
 MODE_ORDER = (ConversionMode.BALANCED, ConversionMode.FAITHFUL, ConversionMode.EDITABLE)
 

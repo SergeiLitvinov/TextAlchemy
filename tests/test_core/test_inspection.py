@@ -20,6 +20,18 @@ from textalchemy.core.document_model import (
 from textalchemy.core.inspection import DocumentInspection, compare_inspections, inspect_document_model, inspect_path
 
 
+def test_inspect_txt_has_text_structure_but_no_invented_page_geometry(tmp_path):
+    source = tmp_path / "source.txt"
+    source.write_text("Первая\n\nПоследняя", encoding="utf-8")
+    report = inspect_path(source)
+    assert report.source_format == "txt"
+    assert report.valid
+    assert report.metrics["paragraphs"] == 3
+    assert len(report.objects) == 3
+    assert report.pages == []
+    assert "pages" not in report.metrics
+
+
 def test_inspect_document_model_counts_nested_features_and_resources():
     document = DocumentModel(
         resources={

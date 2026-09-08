@@ -10,19 +10,14 @@ from textalchemy.convert.executor import ConversionExecutor, ConversionRequest
 from textalchemy.core.artifacts import ArtifactWorkspace
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.inspection import compare_inspections, inspect_path
+from textalchemy.core.object_quality_policy import ObjectLossPolicy
+from textalchemy.core.quality_policy import QualityPolicy
 from textalchemy.core.types import DocFormat
 from textalchemy.web.queue import TaskQueue
-from textalchemy.web.services.conversion_catalog import MEDIA_TYPES, output_path_for
+from textalchemy.web.services.conversion_catalog import output_path_for
+from textalchemy.web.services.conversion_policy import request_policy_fields, stored_policy_fields
+from textalchemy.web.services.conversion_results import artifact_meta, inspection_payload
 from textalchemy.web.tasks import TaskStore
-
-
-def inspection_payload(inspection, display_name: str) -> dict[str, object] | None:
-    """Подготовить результат инспекции для публичного API."""
-    if inspection is None:
-        return None
-    payload = inspection.to_dict()
-    payload["source_path"] = display_name
-    return payload
 
 
 class ConversionTaskService:
@@ -50,8 +45,12 @@ class ConversionTaskService:
         source: DocFormat,
         target: DocFormat,
         mode: ConversionMode,
+        quality_policy: QualityPolicy | None = None,
+        object_loss_policy: ObjectLossPolicy | None = None,
+        require_unchanged_text: bool = False,
+        text_preservation: str | None = None,
+        max_text_edits: int | None = None,
     ) -> None:
-        """Сохранить описание и исходник до постановки в очередь."""
         self._store.set(
             task_id,
             {
@@ -63,6 +62,9 @@ class ConversionTaskService:
                 "target_format": target.value,
                 "mode": mode.value,
                 "source_name": source_path.name,
+                **stored_policy_fields(
+                    quality_policy, object_loss_policy, require_unchanged_text, text_preservation, max_text_edits,
+                ),
             },
         )
         try:
@@ -152,12 +154,16 @@ class ConversionTaskService:
     ) -> None:
         source_inspection = None
         inspection_error = None
+        task = self._store.get(task_id) or {}
         try:
             try:
                 source_inspection = self._inspector(source_path)
             except Exception as error:  # noqa: BLE001 - inspection must not block conversion
                 inspection_error = f"Не удалось проверить исходный документ: {error}"
-            request = ConversionRequest(input_path=source_path, output_path=output_path, source=source, target=target, mode=mode)
+            request = ConversionRequest(
+                input_path=source_path, output_path=output_path, source=source, target=target, mode=mode,
+                **request_policy_fields(task),
+            )
             executor = ConversionExecutor()
 
             def cancellation() -> bool:
@@ -169,7 +175,6 @@ class ConversionTaskService:
                 report = executor.execute(request)
             report_payload = report.to_dict()
             if self._is_cancelled(task_id) or report.metrics.get("cancelled"):
-                output_path.unlink(missing_ok=True)
                 self._mark_cancelled(task_id)
                 return
             if not report.success:
@@ -180,6 +185,7 @@ class ConversionTaskService:
                 self._store.set(
                     task_id,
                     {
+                        **task,
                         "status": "error",
                         "error": error,
                         "report": report_payload,
@@ -189,7 +195,7 @@ class ConversionTaskService:
                 )
                 return
             workspace.validate_artifact(output_path)
-            filename, media_type = self._artifact_meta(output_path, source_path.stem, target)
+            filename, media_type = artifact_meta(output_path, source_path.stem, target)
             artifact_name = self._store.store_artifact(task_id, output_path, filename)
             target_inspection = None
             comparison = None
@@ -202,6 +208,7 @@ class ConversionTaskService:
             self._store.set(
                 task_id,
                 {
+                    **task,
                     "status": "done",
                     "artifact": artifact_name,
                     "filename": filename,
@@ -221,6 +228,7 @@ class ConversionTaskService:
             self._store.set(
                 task_id,
                 {
+                    **task,
                     "status": "error",
                     "error": str(error),
                     "report": None,
@@ -240,9 +248,3 @@ class ConversionTaskService:
         if current is not None:
             self._store.set(task_id, {**current, "status": "cancelled", "error": None, "report": None})
             self._store.clear_result(task_id)
-
-    @staticmethod
-    def _artifact_meta(output_path: Path, source_stem: str, target: DocFormat) -> tuple[str, str]:
-        if output_path.is_dir():
-            return f"{source_stem}-html", "application/zip"
-        return output_path.name, MEDIA_TYPES[target]

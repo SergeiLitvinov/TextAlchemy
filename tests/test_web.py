@@ -716,6 +716,26 @@ def test_api_convert_blocks_route_below_selected_loss_budget(monkeypatch):
     assert "ниже выбранного порога 90%" in response.json()["detail"]
 
 
+def test_api_convert_txt_to_native_pptx():
+    from io import BytesIO
+
+    from pptx import Presentation
+
+    started = client.post(
+        "/api/convert", files={"file": ("slide.txt", "Редактируемый слайд".encode(), "text/plain")},
+        data={"source_format": "txt", "target_format": "pptx", "mode": "editable"},
+    )
+    assert started.status_code == 200
+    _wait_for_convert_tasks()
+    status = client.get(started.json()["status"]).json()
+    assert status["status"] == "done"
+    result = client.get(started.json()["result"])
+    assert result.status_code == 200
+    assert "presentationml.presentation" in result.headers["content-type"]
+    assert "slide.pptx" in result.headers["content-disposition"]
+    assert Presentation(BytesIO(result.content)).slides[0].shapes[0].text == "Редактируемый слайд"
+
+
 def test_api_convert_returns_report_and_separate_artifact(monkeypatch):
     captured = {}
 
@@ -1068,7 +1088,7 @@ def test_api_convert_batch_rejects_unavailable_target_and_cleans(monkeypatch, tm
         "textalchemy.web.routes.convert.create_web_workspace",
         lambda: ArtifactWorkspace(parent=tmp_path),
     )
-    response = client.post("/api/convert/batch", files=_batch_files(), data={"target_format": "pptx"})
+    response = client.post("/api/convert/batch", files=_batch_files(), data={"target_format": "epub"})
     assert response.status_code == 400
     assert "недоступен" in response.json()["detail"]
     assert list(tmp_path.iterdir()) == []
@@ -1158,12 +1178,17 @@ def test_api_convert_job_rerun_uses_stored_sources(monkeypatch):
     calls = []
 
     def fake_execute(_executor, request):
+        assert request.quality_policy.max_loss_issues == 2
+        assert request.object_loss_policy.max_lost_objects == 3
+        assert request.text_preservation_policy is not None
         calls.append(request.input_path.name)
         request.output_path.write_bytes(b"converted")
         return ConversionReport(request.output_path)
 
     monkeypatch.setattr("textalchemy.web.routes.convert.ConversionExecutor.execute", fake_execute)
-    created = client.post("/api/convert/batch", files=_batch_files()).json()
+    created = client.post("/api/convert/batch", files=_batch_files(), data={
+        "max_loss_issues": 2, "max_lost_objects": 3, "require_unchanged_text": True,
+    }).json()
     _wait_for_convert_tasks()
     assert len(calls) == 2
 
@@ -1175,6 +1200,124 @@ def test_api_convert_job_rerun_uses_stored_sources(monkeypatch):
 
     job = client.get(f"/api/convert/jobs/{created['job_id']}").json()
     assert [task["status"] for task in job["tasks"]] == ["done", "done"]
+
+
+def test_completed_conversion_can_rerun_with_persisted_quality_policy():
+    response = client.post(
+        "/api/convert", files={"file": ("source.txt", "Первая\nВторая".encode(), "text/plain")},
+        data={"target_format": "model", "max_loss_issues": 0, "max_lost_objects": 0, "require_unchanged_text": True},
+    )
+    assert response.status_code == 200
+    created = response.json()
+    _wait_for_convert_tasks()
+    first = client.get(created["status"]).json()
+    assert first["status"] == "done", first
+    assert first["max_loss_issues"] == 0
+    assert first["report"]["metrics"]["quality_gate"]["accepted"] is True
+    first_result = client.get(created["result"]).json()
+
+    rerun = client.post(f"/api/tasks/{created['task_id']}/rerun")
+    assert rerun.status_code == 200, rerun.text
+    _wait_for_convert_tasks()
+    second = client.get(created["status"]).json()
+    assert second["status"] == "done", second
+    assert second["source_format"] == "txt"
+    assert second["report"]["metrics"]["quality_gate"]["max_loss_issues"] == 0
+    assert second["report"]["metrics"]["object_quality_gate"]["max_lost_objects"] == 0
+    assert second["max_lost_objects"] == 0
+    assert second["require_unchanged_text"] is True
+    assert second["report"]["metrics"]["text_quality_gate"]["accepted"] is True
+    assert client.get(created["result"]).json() == first_result
+
+
+@pytest.mark.parametrize("batch", [False, True])
+def test_text_flow_mode_survives_rerun(batch):
+    endpoint = "/api/convert/batch" if batch else "/api/convert"
+    field = "files" if batch else "file"
+    response = client.post(endpoint, files={field: ("source.txt", b"First Second", "text/plain")},
+                           data={"target_format": "model", "text_preservation": "flow", "max_text_edits": 2})
+    assert response.status_code == 200
+    created = response.json()
+    tasks = created["tasks"] if batch else [created]
+    rerun_url = f"/api/convert/jobs/{created['job_id']}/rerun" if batch else f"/api/tasks/{created['task_id']}/rerun"
+    for attempt in range(2):
+        if attempt:
+            assert client.post(rerun_url).status_code == 200
+        _wait_for_convert_tasks()
+        for item in tasks:
+            task = client.get(item["status"]).json()
+            assert task["status"] == "done", task
+            assert task["text_preservation"] == "flow"
+            assert task["max_text_edits"] == 2
+            assert task["report"]["metrics"]["text_quality_gate"]["max_text_edits"] == 2
+            assert task["report"]["metrics"]["text_quality_gate"]["mode"] == "flow"
+
+
+@pytest.mark.parametrize("endpoint, field", [("/api/convert", "file"), ("/api/convert/batch", "files")])
+@pytest.mark.parametrize("params", [
+    {"text_preservation": "invalid"}, {"text_preservation": "flow", "require_unchanged_text": True},
+])
+def test_web_rejects_conflicting_or_unknown_text_mode(endpoint, field, params):
+    response = client.post(endpoint, files={field: ("source.txt", b"Text", "text/plain")},
+                           data={"target_format": "model", **params})
+    assert response.status_code == 400
+
+
+def test_unverifiable_object_budget_survives_web_rerun():
+    response = client.post(
+        "/api/convert", files={"file": ("source.txt", b"Unique text", "text/plain")},
+        data={"target_format": "html", "max_lost_objects": 0},
+    )
+    assert response.status_code == 200
+    created = response.json()
+    for attempt in range(2):
+        if attempt:
+            assert client.post(f"/api/tasks/{created['task_id']}/rerun").status_code == 200
+        _wait_for_convert_tasks()
+        task = client.get(created["status"]).json()
+        assert task["status"] == "error"
+        assert task["max_lost_objects"] == 0
+        assert task["report"]["metrics"]["object_quality_gate"]["reason"] == "unavailable"
+        assert client.get(created["result"]).status_code != 200
+
+
+@pytest.mark.parametrize("endpoint, field", [("/api/convert", "file"), ("/api/convert/batch", "files")])
+@pytest.mark.parametrize("limit_field", ["max_loss_issues", "max_lost_objects", "max_text_edits"])
+def test_web_conversion_rejects_negative_loss_budget(endpoint, field, limit_field):
+    response = client.post(
+        endpoint, files={field: ("source.txt", b"text", "text/plain")},
+        data={"target_format": "model", limit_field: -1},
+    )
+    assert response.status_code == 422
+
+
+def test_rejected_web_conversion_keeps_policy_for_rerun(monkeypatch):
+    from textalchemy.core.diagnostics import IssueSeverity
+
+    def lossy_export(model, output):
+        output.write_text("<p>Incomplete</p>", encoding="utf-8")
+        report = ConversionReport(output)
+        report.add(IssueSeverity.LOSS, "text", "Text lost during export")
+        return report
+
+    monkeypatch.setattr("textalchemy.convert.executor._write_html", lossy_export)
+    response = client.post(
+        "/api/convert", files={"file": ("source.txt", b"text", "text/plain")},
+        data={"target_format": "html", "max_loss_issues": 0},
+    )
+    assert response.status_code == 200
+    created = response.json()
+    for attempt in range(2):
+        if attempt:
+            assert client.post(f"/api/tasks/{created['task_id']}/rerun").status_code == 200
+        _wait_for_convert_tasks()
+        task = client.get(created["status"]).json()
+        assert task["status"] == "error", task
+        assert task["report"]["metrics"]["quality_gate"]["accepted"] is False
+        assert task["max_loss_issues"] == 0
+        assert client.get(created["result"]).status_code != 200
+        stored = _client_task_store().get(created["task_id"])
+        assert not stored.get("artifact")
 
 
 def test_api_convert_jobs_report_interrupted_tasks(monkeypatch):

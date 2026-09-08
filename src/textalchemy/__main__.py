@@ -135,6 +135,19 @@ def _setup_parser():
         help="Приоритетная функция документа; можно повторять",
     )
     p.add_argument("--max-steps", type=int, default=4)
+    p.add_argument("--max-loss-issues", type=int, help="Максимум диагностированных потерь; 0 запрещает любые LOSS")
+    text_check = p.add_mutually_exclusive_group()
+    text_check.add_argument(
+        "--require-unchanged-text", action="store_true", help="Требовать точного сохранения текста исходных абзацев",
+    )
+    text_check.add_argument("--text-preservation", choices=["paragraphs", "flow"], help="Режим проверки сохранности текста")
+    p.add_argument(
+        "--max-text-edits", type=int, help="Допуск вставок, удалений и замен слов; включает проверку последовательности",
+    )
+    p.add_argument(
+        "--max-lost-objects", type=int,
+        help="Максимум объектов без совпадения, включая вложенные; непроверяемый бюджет блокирует результат",
+    )
     p.add_argument("--json", action="store_true", help="Вывод в JSON")
 
     p = sub.add_parser("inspect", help="Проверить структуру и качество DOCX, PDF или JSON-модели")

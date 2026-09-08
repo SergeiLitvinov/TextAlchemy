@@ -26,6 +26,9 @@ from textalchemy.core.document_model import (
     TextRun,
 )
 from textalchemy.core.exceptions import TextAlchemyError
+from textalchemy.core.object_inventory import OBJECT_INVENTORY_SCOPE, inspect_objects
+from textalchemy.core.object_matching import match_objects
+from textalchemy.core.text_flow import TextFlowFingerprint
 
 
 @dataclass
@@ -163,7 +166,11 @@ def compare_inspections(source: DocumentInspection, target: DocumentInspection) 
     )
     font_comparison, font_issues = _compare_fonts(source.fonts, target.fonts)
     issues.extend(font_issues)
-    object_diff, object_issues = _compare_objects(source.objects, target.objects)
+    scope = source.metadata.get("object_inventory_scope")
+    object_diff, object_issues = _compare_objects(
+        source.objects, target.objects,
+        available=bool(scope) and scope == target.metadata.get("object_inventory_scope"),
+    )
     issues.extend(object_issues)
     return DocumentComparison(
         source=source,
@@ -182,49 +189,54 @@ def compare_inspections(source: DocumentInspection, target: DocumentInspection) 
 
 
 def _compare_objects(
-    source_objects: list[dict[str, Any]], target_objects: list[dict[str, Any]]
+    source_objects: list[dict[str, Any]], target_objects: list[dict[str, Any]], *, available: bool = True,
 ) -> tuple[dict[str, Any], list[ConversionIssue]]:
-    """Match structural objects by provenance identity, then by stable model location."""
-
-    def identity(item: dict[str, Any]) -> str:
-        provenance = item.get("provenance") or {}
-        origin = provenance.get("identity")
-        return f"origin:{origin}" if origin else f"location:{item.get('location')}:{item.get('type')}"
-
-    source = {identity(item): item for item in source_objects}
-    target = {identity(item): item for item in target_objects}
+    """Compare matched occurrences; location-only matches are explicitly heuristic."""
+    if not available:
+        return {
+            "source_count": len(source_objects), "target_count": len(target_objects),
+            "available": False, "retained": [], "changed": [], "lost": [], "added": [],
+            "retention_ratio": None, "recommendations": [],
+        }, []
+    matches, lost, added = match_objects(source_objects, target_objects)
     retained: list[dict[str, Any]] = []
     changed: list[dict[str, Any]] = []
-    for key in sorted(source.keys() & target.keys()):
-        before, after = source[key], target[key]
-        changes = [name for name in ("content_hash", "geometry", "style_id") if before.get(name) != after.get(name)]
-        entry = {"identity": key, "type": before.get("type"), "source": before, "target": after}
+    for match in matches:
+        before, after = match["source"], match["target"]
+        changes = [name for name in ("content_hash", "geometry", "style_id", "location") if before.get(name) != after.get(name)]
+        entry = {**match, "identity": f"occurrence:{match['source_index']}", "type": before.get("type")}
+        if before.get("text_hash") is not None and after.get("text_hash") is not None:
+            if before["text_hash"] != after["text_hash"]:
+                entry["text_change"] = {
+                    "source_characters": before["text_characters"], "target_characters": after["text_characters"],
+                    "net_character_reduction": max(0, before["text_characters"] - after["text_characters"]),
+                }
+                if not changes:
+                    changes.append("text")
         if changes:
             entry["changes"] = changes
             changed.append(entry)
         else:
             retained.append(entry)
-    lost = [source[key] for key in sorted(source.keys() - target.keys())]
-    added = [target[key] for key in sorted(target.keys() - source.keys())]
     recommendations = []
     if lost:
         recommendations.append({
             "code": "restore-lost-objects",
-            "message": "Restore lost objects or attach visual surrogates before export.",
+            "message": "Проверьте объекты без совпадения: при необходимости восстановите их или добавьте визуальную копию.",
             "locations": [item.get("location") for item in lost],
         })
     geometry_changed = [item for item in changed if "geometry" in item["changes"]]
     if geometry_changed:
         recommendations.append({
             "code": "review-object-geometry",
-            "message": "Review object positions and bounds against the source overlay.",
+            "message": "Сверьте расположение и размеры объектов с исходным документом.",
             "locations": [item["source"].get("location") for item in geometry_changed],
         })
     issues = [
         ConversionIssue(
             IssueSeverity.LOSS,
             "object-loss",
-            f"{len(lost)} structural object(s) lost",
+            "Structural object has no match in the target inventory",
             str(item.get("location") or ""),
         )
         for item in lost
@@ -232,12 +244,20 @@ def _compare_objects(
     return {
         "source_count": len(source_objects),
         "target_count": len(target_objects),
+        "available": True,
         "retained": retained,
         "changed": changed,
         "lost": lost,
         "added": added,
         "retention_ratio": round(_ratio(len(retained) + len(changed), len(source_objects)), 4),
         "recommendations": recommendations,
+        "content_changes": {
+            "changed_text_objects": sum("text_change" in item for item in changed),
+            "net_character_reduction": sum(item.get("text_change", {}).get("net_character_reduction", 0) for item in changed),
+            "basis": "matched_object_text_lengths_not_deleted_characters",
+        },
+        "matching": {"heuristic": sum(item["match_basis"] == "location" for item in matches),
+                     "ambiguous": sum(item["ambiguous"] for item in matches)},
     }, issues
 
 
@@ -557,6 +577,8 @@ def inspect_document_model(
     path = Path(source_path) if source_path is not None else None
     report = DocumentInspection(path, source_format or document.source_format or "document-model")
     report.metadata = dict(document.metadata)
+    report.metadata["object_inventory_scope"] = OBJECT_INVENTORY_SCOPE
+    text_flow = TextFlowFingerprint()
     counters: Counter[str] = Counter(
         sections=len(document.sections),
         pages=len(document.sections),
@@ -568,44 +590,6 @@ def inspect_document_model(
     fonts: Counter[str] = Counter()
     formula_formats: Counter[str] = Counter()
     referenced_resources: set[str] = set()
-
-    def record_object(value: Any, location: str, object_type: str, page_index: int) -> None:
-        provenance = getattr(value, "provenance", None)
-        identity = None
-        provenance_data = None
-        if provenance is not None:
-            identity = "|".join(
-                str(item or "")
-                for item in (
-                    provenance.source_format,
-                    provenance.source_path,
-                    provenance.page,
-                    provenance.package_part,
-                    provenance.object_id,
-                )
-            )
-            provenance_data = {
-                "identity": identity,
-                "source_format": provenance.source_format,
-                "page": provenance.page,
-                "object_id": provenance.object_id,
-                "package_part": provenance.package_part,
-            }
-        box = getattr(value, "box", None)
-        geometry = None if box is None else {
-            "x": round(box.x, 3), "y": round(box.y, 3),
-            "width": round(box.width, 3), "height": round(box.height, 3), "rotation": round(box.rotation, 3),
-        }
-        content = _object_content(value)
-        report.objects.append({
-            "location": location,
-            "page": page_index,
-            "type": object_type,
-            "content_hash": hashlib.sha256(content.encode("utf-8")).hexdigest() if content else None,
-            "geometry": geometry,
-            "style_id": getattr(value, "style_id", None),
-            "provenance": provenance_data,
-        })
 
     for error in document.validate():
         report.add(IssueSeverity.ERROR, "model-validation", error)
@@ -624,7 +608,9 @@ def inspect_document_model(
             counters[f"{collection_name}_top_level"] += len(blocks)
             for block_index, block in enumerate(blocks):
                 block_location = f"sections[{section_index}].{collection_name}[{block_index}]"
-                record_object(block, block_location, type(block).__name__.lower(), section_index)
+                report.objects.extend(inspect_objects(
+                    block, block_location, section_index, document.resources, text_flow=text_flow,
+                ))
                 _inspect_block(
                     block,
                     block_location,
@@ -651,33 +637,27 @@ def inspect_document_model(
         report.add(IssueSeverity.WARNING, "unused-resource", f"resource {resource_id!r} is not referenced")
 
     report.metrics = dict(sorted(counters.items()))
+    report.metadata["text_flow"] = text_flow.to_dict()
     report.fonts = dict(fonts.most_common())
     report.formula_formats = dict(sorted(formula_formats.items()))
     return report
 
 
-def _object_content(value: Any) -> str:
-    if isinstance(value, Paragraph):
-        return value.plain_text
-    if isinstance(value, Formula):
-        return value.value
-    if isinstance(value, Image):
-        return value.resource_id
-    if isinstance(value, Table):
-        return "\n".join(
-            "\t".join(" ".join(_object_content(block) for block in cell.blocks) for cell in row.cells)
-            for row in value.rows
-        )
-    return ""
-
-
 def inspect_path(path: str | Path) -> DocumentInspection:
-    """Inspect DOCX, PDF, PPTX, HTML, LaTeX or a JSON-serialized DocumentModel."""
+    """Inspect DOCX, PDF, PPTX, TXT, HTML, LaTeX or a JSON-serialized DocumentModel."""
 
     source = Path(path)
     if not source.is_file():
         raise FileNotFoundError(source)
     suffix = source.suffix.lower()
+    if suffix == ".txt":
+        from textalchemy.formats.txt import read_txt_model
+
+        report = inspect_document_model(read_txt_model(source), source_path=source, source_format="txt")
+        # Model defaults are not evidence of pagination in a plain-text source.
+        report.pages.clear()
+        report.metrics.pop("pages", None)
+        return report
     if suffix == ".docx":
         from textalchemy.formats.docx import read_docx_model
 

@@ -319,6 +319,16 @@ def render_docx_model(*, document: DocumentModel, output_path: Union[str, Path])
 
 
 @operation(
+    "render.pptx_model", input_type="DocumentModel", output_type="dict", input_param="document",
+    description="Модель → редактируемый PPTX с отчётом о потерях.", tags=["render", "pptx", "document-model"],
+)
+def render_pptx_model(*, document: DocumentModel, output_path: Union[str, Path]) -> dict:
+    from textalchemy.convert.pptx_writer import write_pptx_model
+
+    return write_pptx_model(document, output_path).to_dict()
+
+
+@operation(
     "render.json",
     input_type="list[BibItem]",
     output_type="str",

@@ -4,7 +4,7 @@
 {% block content %}
 <section class="convert-workspace">
     <ol class="workflow-steps conversion-workflow" aria-label="Этапы преобразования">
-        <li class="active"><span>1</span><div><strong>Документ</strong><small>Загрузка и preflight</small></div></li>
+        <li class="active"><span>1</span><div><strong>Документ</strong><small>Загрузка и проверка</small></div></li>
         <li><span>2</span><div><strong>Результат</strong><small>Формат и приоритет</small></div></li>
         <li><span>3</span><div><strong>Проверка</strong><small>Сравнение и скачивание</small></div></li>
     </ol>
@@ -64,14 +64,42 @@
             </div>
             <details class="conversion-loss-budget">
                 <summary>Расширенная проверка сохранности</summary>
-                <label for="minRetention">Минимальная сохранность каждого свойства</label>
-                <select id="minRetention">
+                <label for="maxLossIssues" data-i18n="quality.limit">Допустимое число сообщений о потерях</label>
+                <select id="maxLossIssues" aria-describedby="lossBudgetHelp">
+                    <option value="" data-i18n="quality.report_only">Не блокировать — показать отчёт</option>
+                    <option value="0" data-i18n="quality.strict">Ни одного</option>
+                    <option value="1" data-i18n="quality.one">Не больше одного</option>
+                    <option value="5" data-i18n="quality.five">Не больше пяти</option>
+                </select>
+                <p class="field-help" id="lossBudgetHelp" data-i18n="quality.help">Если конвертер зарегистрирует больше сообщений о потерях, результат не будет выдан. Это число сообщений, а не потерянных объектов; отсутствие сообщений не гарантирует полную сохранность.</p>
+                <label for="maxLostObjects" data-i18n="objects.limit">Допустимое число объектов без совпадения</label>
+                <select id="maxLostObjects" aria-describedby="objectBudgetHelp">
+                    <option value="" data-i18n="objects.disabled">Не применять бюджет объектов</option>
+                    <option value="0" data-i18n="quality.strict">Ни одного</option>
+                    <option value="1" data-i18n="quality.one">Не больше одного</option>
+                    <option value="5" data-i18n="quality.five">Не больше пяти</option>
+                </select>
+                <p class="field-help" id="objectBudgetHelp" data-i18n="objects.help">Проверяем абзацы, таблицы, изображения и формулы, включая вложенные. Таблица и каждый вложенный объект учитываются отдельно. При превышении лимита или недостоверном сравнении результат не выдаётся. Частичные изменения текста и оформление этим лимитом не ограничиваются.</p>
+                <label for="textPreservation" data-i18n="textcheck.mode">Проверка текста</label>
+                <select id="textPreservation" aria-describedby="textPolicyHelp">
+                    <option value="" data-i18n="textcheck.disabled">Не блокировать по тексту</option>
+                    <option value="paragraphs" data-i18n="textcheck.exact">Исходные абзацы — дословно</option>
+                    <option value="flow" data-i18n="textcheck.flow">Текст по порядку — допускается переразбиение</option>
+                </select>
+                <p class="field-help" id="textPolicyHelp" data-i18n="textcheck.modes_help">Дословный режим сохраняет каждый исходный абзац, допуская перестановки и добавления. Режим последовательности игнорирует пробелы и границы абзацев. При нулевом допуске слова, порядок, регистр и пунктуация должны совпадать. Формулы и оформление не проверяются.</p>
+                <div id="textEditBudget" hidden>
+                    <label for="maxTextEdits" data-i18n="textedits.label">Допустимое число правок слов</label>
+                    <input id="maxTextEdits" type="number" min="0" step="1" value="0" disabled required aria-describedby="textEditsHelp">
+                    <p class="field-help" id="textEditsHelp" data-i18n="textedits.help">Вставка, удаление или замена слова — одна правка. Слова разделяются пробелами, пунктуация входит в слово. Ноль запрещает изменения. Для больших документов расчёт может быть недоступен — тогда результат не выдаётся. Это не оценка смысловых потерь.</p>
+                </div>
+                <label for="minRetention">Минимальный прогноз сохранности каждого свойства</label>
+                <select id="minRetention" aria-describedby="retentionHelp">
                     <option value="0">Не блокировать — показать отчёт</option>
                     <option value="0.5">Не ниже 50%</option>
                     <option value="0.7">Не ниже 70%</option>
                     <option value="0.9">Не ниже 90%</option>
                 </select>
-                <p class="field-help">Конвертация не начнётся, если прогноз по содержимому, структуре, геометрии, стилю, связям или редактируемости ниже порога.</p>
+                <p class="field-help" id="retentionHelp">Оценка маршрута до запуска, а не измерение результата. Конвертация не начнётся, если прогноз по одному из свойств ниже порога. Для пакета оба ограничения применяются к каждому файлу отдельно.</p>
             </details>
             <button type="button" id="convertBtn">Начать конвертацию</button>
             <button type="button" id="batchConvertBtn" hidden>Начать пакетную конвертацию</button>
@@ -107,13 +135,16 @@
                 <p class="eyebrow">Результат</p>
                 <h2 id="resultTitle">Документ готов</h2>
             </div>
-            <span class="quality-badge" id="qualityBadge">Без потерь</span>
+            <span class="quality-badge" id="qualityBadge">Ожидает проверки</span>
         </div>
         <div class="result-summary">
             <div><span>Файл</span><strong id="resultFilename">—</strong></div>
             <div><span>Режим</span><strong id="resultMode">—</strong></div>
             <div><span>Маршрут</span><strong id="resultRoute">—</strong></div>
         </div>
+        <p class="field-help" id="qualityGateSummary" role="status" hidden></p>
+        <p class="field-help" id="objectGateSummary" role="status" hidden></p>
+        <p class="field-help" id="textGateSummary" role="status" hidden></p>
         <div id="issuesSection" hidden>
             <h3>Что требует внимания</h3>
             <ul class="issue-list" id="issueList"></ul>
@@ -124,6 +155,7 @@
             <p class="field-help inspection-message" id="comparisonMessage"></p>
             <div id="objectDiff" class="object-diff" hidden>
                 <h4>Изменения по объектам</h4>
+                <p class="field-help" id="objectMatchingMessage"></p>
                 <div class="retention-grid" id="objectDiffMetrics"></div>
                 <ul class="issue-list" id="objectDiffList"></ul>
             </div>

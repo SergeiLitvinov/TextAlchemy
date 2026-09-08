@@ -11,6 +11,8 @@ from fastapi.responses import FileResponse
 from textalchemy.convert.executor import ConversionExecutor
 from textalchemy.core.document_model import ConversionMode
 from textalchemy.core.inspection import compare_inspections, inspect_path
+from textalchemy.core.object_quality_policy import ObjectLossPolicy
+from textalchemy.core.quality_policy import QualityPolicy
 from textalchemy.core.types import DocFormat
 from textalchemy.web.app import (
     _register_task,  # noqa: F401 - compatibility facade for job routes and tests
@@ -53,9 +55,17 @@ def _persist_conversion_task(
     source: DocFormat,
     target: DocFormat,
     mode: ConversionMode,
+    quality_policy: QualityPolicy | None = None,
+    object_loss_policy: ObjectLossPolicy | None = None,
+    require_unchanged_text: bool = False,
+    text_preservation: str | None = None,
+    max_text_edits: int | None = None,
 ) -> None:
     """Compatibility wrapper around the application service."""
-    _task_service().persist(task_id, source_path, source, target, mode)
+    _task_service().persist(
+        task_id, source_path, source, target, mode, quality_policy, object_loss_policy,
+        require_unchanged_text, text_preservation, max_text_edits,
+    )
 
 
 def _run_stored_conversion(task_id: str) -> None:
@@ -96,6 +106,11 @@ async def api_convert(
     mode: str = Form("balanced"),
     fmt: str = Form(""),
     min_retention: float = Form(0.0),
+    max_loss_issues: int | None = Form(None, ge=0),
+    max_lost_objects: int | None = Form(None, ge=0),
+    require_unchanged_text: bool = Form(False),
+    text_preservation: str | None = Form(None),
+    max_text_edits: int | None = Form(None, ge=0),
 ):
     workspace = create_web_workspace()
     try:
@@ -123,7 +138,12 @@ async def api_convert(
                 detail=f"Прогноз ниже выбранного порога {min_retention:.0%}: {details}",
             )
         task_id = str(uuid.uuid4())
-        _persist_conversion_task(task_id, source_path, source, target, conversion_mode)
+        policy = QualityPolicy(max_loss_issues) if max_loss_issues is not None else None
+        object_policy = ObjectLossPolicy(max_lost_objects) if max_lost_objects is not None else None
+        _persist_conversion_task(
+            task_id, source_path, source, target, conversion_mode, policy, object_policy,
+            require_unchanged_text, text_preservation, max_text_edits,
+        )
     except HTTPException:
         workspace.cleanup()
         raise

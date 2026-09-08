@@ -31,6 +31,44 @@ def _png_bytes(tmp_path):
     return path.read_bytes()
 
 
+@pytest.mark.parametrize("from_file", [False, True])
+def test_svg_is_visible_with_explicit_rasterization_loss(tmp_path, from_file):
+    import fitz
+
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80" fill="red"/></svg>'
+    source = tmp_path / "vector.svg"
+    source.write_bytes(svg)
+    resource = Resource(
+        "vector",
+        ResourceKind.VECTOR_IMAGE,
+        "image/svg+xml",
+        data=None if from_file else svg,
+        source=str(source) if from_file else None,
+    )
+    document = DocumentModel(
+        resources={"vector": resource}, sections=[Section(blocks=[Image("vector", alt_text="vector fallback")])]
+    )
+    output = tmp_path / "vector.pdf"
+    report = write_pdf_model(document, output)
+    assert report.success and not report.lossless
+    assert any(issue.feature == "image-vector" and issue.severity == IssueSeverity.LOSS for issue in report.issues)
+    assert resource.media_type == "image/svg+xml" and resource.data == (None if from_file else svg)
+    assert source.read_bytes() == svg
+    with fitz.open(output) as pdf:
+        assert pdf[0].get_images()
+        assert "vector fallback" not in pdf[0].get_text()
+        samples = pdf[0].get_pixmap(alpha=False).samples
+        assert sum(r > 200 and g < 50 and b < 50 for r, g, b in zip(samples[::3], samples[1::3], samples[2::3])) > 1000
+
+
+def test_invalid_svg_reports_error_instead_of_silent_placeholder(tmp_path):
+    resource = Resource("broken", ResourceKind.VECTOR_IMAGE, "image/svg+xml", data=b"not an SVG")
+    document = DocumentModel(resources={"broken": resource}, sections=[Section(blocks=[Image("broken")])])
+    report = write_pdf_model(document, tmp_path / "broken.pdf")
+    assert not report.success
+    assert any(issue.feature == "image" and issue.severity == IssueSeverity.ERROR for issue in report.issues)
+
+
 def test_write_pdf_model_preserves_page_text_table_image_link_and_metadata(tmp_path):
     import fitz
 
@@ -141,9 +179,7 @@ def test_write_pdf_model_embeds_and_verifies_resolved_font(tmp_path):
     face = faces[0]
     output = tmp_path / "embedded-font.pdf"
     document = DocumentModel(
-        sections=[
-            Section(blocks=[Paragraph(content=[TextRun("abc", TextStyle(font_family=face.family, font_size=Length(12)))])])
-        ]
+        sections=[Section(blocks=[Paragraph(content=[TextRun("abc", TextStyle(font_family=face.family, font_size=Length(12)))])])]
     )
 
     report = write_pdf_model(document, output)

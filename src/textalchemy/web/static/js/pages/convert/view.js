@@ -64,13 +64,22 @@ export function createConversionView($) {
             ? 'Обнаружены структурные отличия — подробности перечислены в замечаниях.'
             : 'Проверенные элементы структуры сохранены.');
         const objectDiff = comparisonData?.object_diff;
-        const hasObjectData = Boolean(objectDiff?.source_count || objectDiff?.target_count);
+        const hasObjectData = Boolean(objectDiff);
         $('objectDiff').hidden = !hasObjectData;
         if (hasObjectData) {
+            $('objectDiffMetrics').hidden = objectDiff.available === false;
+            const matching = objectDiff.matching || {};
+            $('objectMatchingMessage').textContent = objectDiff.available === false
+                ? 'Сравнение объектов недоступно: документы не предоставляют сопоставимые списки объектов. Потери не измерены.'
+                : `Сравниваются объекты, включая содержимое таблиц и изображения и формулы внутри абзацев. Совпадений только по позиции: ${matching.heuristic || 0}; неоднозначных: ${matching.ambiguous || 0}. Такие совпадения требуют проверки.`;
+            const contentChanges = objectDiff.content_changes;
+            if (contentChanges?.changed_text_objects) {
+                $('objectMatchingMessage').textContent += ` Текст изменён в ${contentChanges.changed_text_objects} объектах; суммарное сокращение длины — ${contentChanges.net_character_reduction} символов. Это не число удалённых символов: замены могут сохранять длину.`;
+            }
             const metrics = [
                 ['Сохранено', objectDiff.retained?.length || 0, 'good'],
                 ['Изменено', objectDiff.changed?.length || 0, objectDiff.changed?.length ? 'warn' : 'good'],
-                ['Потеряно', objectDiff.lost?.length || 0, objectDiff.lost?.length ? 'bad' : 'good'],
+                ['Без совпадения', objectDiff.lost?.length || 0, objectDiff.lost?.length ? 'bad' : 'good'],
                 ['Добавлено', objectDiff.added?.length || 0, 'warn'],
             ];
             $('objectDiffMetrics').innerHTML = metrics.map(([label, value, level]) =>

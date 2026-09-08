@@ -4,6 +4,7 @@ import {conversionApi, downloadResult} from './convert/api.js';
 import {createHistoryController} from './convert/history.js';
 import {createPreviewController} from './convert/preview.js';
 import {createConversionView} from './convert/view.js';
+import {renderObjectGate, renderQualityGate, renderTextGate} from './convert/quality.js';
 
 const $ = (id) => document.getElementById(id);
 const modeDescriptions = {
@@ -143,7 +144,10 @@ function renderReport(data, failed = false, taskId = state.activeTaskId) {
     $('resultMode').textContent = $('mode').selectedOptions[0]?.textContent || '—';
     $('resultRoute').textContent = steps.length ? steps.join(' → ') : 'Прямое преобразование';
     $('qualityBadge').className = `quality-badge ${failed ? 'bad' : losses.length ? 'warn' : 'good'}`;
-    $('qualityBadge').textContent = failed ? 'Ошибка' : losses.length ? `Потери: ${losses.length}` : warnings.length ? `Замечания: ${warnings.length}` : 'Без потерь';
+    $('qualityBadge').textContent = failed ? 'Ошибка' : losses.length ? `Сообщений о потерях: ${losses.length}` : warnings.length ? `Замечания: ${warnings.length}` : 'Потерь не зарегистрировано';
+    renderQualityGate($, report);
+    renderObjectGate($, report);
+    renderTextGate($, report);
     $('issuesSection').hidden = !issues.length;
     $('issueList').innerHTML = issues.map((issue) =>
         `<li class="issue-${window.esc(issue.severity)}"><strong>${window.esc(issue.feature)}</strong><span>${window.esc(issue.message)}</span></li>`).join('');
@@ -194,12 +198,16 @@ history = createHistoryController($, {openPreview: preview.open, pollJob});
 async function startSingle() {
     const target = selectedTarget();
     if (!state.pendingFile || !state.selectedSource || !target) return;
+    if ($('textPreservation').value === 'flow' && !$('maxTextEdits').reportValidity()) return;
     $('resultCard').hidden = true;
     view.status('');
     view.progress(true, 20, 'Загрузка документа…');
     window.setLoading($('convertBtn'), true);
     try {
-        state.activeTask = await conversionApi.start(state.pendingFile, target.format, $('mode').value, $('minRetention').value);
+        state.activeTask = await conversionApi.start(
+            state.pendingFile, target.format, $('mode').value, $('minRetention').value,
+            $('maxLossIssues').value, $('maxLostObjects').value, false, $('textPreservation').value,
+            $('textPreservation').value === 'flow' ? $('maxTextEdits').value : '');
         state.activeTaskId = state.activeTask.task_id;
         view.progress(true, 45, 'Анализ структуры и выбор маршрута…');
         pollTask(state.activeTask.status);
@@ -209,10 +217,14 @@ async function startSingle() {
 async function startBatch() {
     const target = selectedTarget();
     if (!state.batchFiles || !target) return;
+    if ($('textPreservation').value === 'flow' && !$('maxTextEdits').reportValidity()) return;
     view.status('');
     $('batchConvertBtn').hidden = true;
     try {
-        const job = await conversionApi.startBatch(state.batchFiles, target.format, $('mode').value, $('minRetention').value);
+        const job = await conversionApi.startBatch(
+            state.batchFiles, target.format, $('mode').value, $('minRetention').value,
+            $('maxLossIssues').value, $('maxLostObjects').value, false, $('textPreservation').value,
+            $('textPreservation').value === 'flow' ? $('maxTextEdits').value : '');
         $('batchProgressCard').hidden = false;
         $('batchProgressState').textContent = 'Конвертируем…';
         $('batchProgressCard').scrollIntoView({behavior: 'smooth', block: 'start'});
@@ -237,6 +249,11 @@ async function init() {
     bindUpload();
     $('target').addEventListener('change', updateTarget);
     $('mode').addEventListener('change', updateModeHelp);
+    $('textPreservation').addEventListener('change', () => {
+        const enabled = $('textPreservation').value === 'flow';
+        $('textEditBudget').hidden = !enabled;
+        $('maxTextEdits').disabled = !enabled;
+    });
     $('convertBtn').addEventListener('click', startSingle);
     $('batchConvertBtn').addEventListener('click', startBatch);
     $('downloadBtn').addEventListener('click', () => state.activeTask && downloadResult(state.activeTask.result, $('resultFilename').textContent));

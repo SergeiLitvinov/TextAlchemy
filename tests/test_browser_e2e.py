@@ -288,6 +288,166 @@ def test_e2e_convert_single_pdf_to_docx(e2e_server, page, tmp_path, task_store):
     assert page.e2e_errors == []
 
 
+@pytest.mark.parametrize("budget, rejected", [("", False), ("0", True), ("1", False)])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_e2e_quality_budget(e2e_server, page, task_store, monkeypatch, budget, rejected, theme):
+    from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
+
+    def export_with_loss(model, output):
+        output.write_text("<p>Result</p>", encoding="utf-8")
+        report = ConversionReport(output)
+        report.add(IssueSeverity.LOSS, "text", "Текст сокращён")
+        return report
+
+    monkeypatch.setattr("textalchemy.convert.executor._write_html", export_with_loss)
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.evaluate("theme => document.documentElement.dataset.theme = theme", theme)
+    page.set_viewport_size({"width": 375, "height": 900})
+    page.set_input_files("#fileInput", {"name": "source.txt", "mimeType": "text/plain", "buffer": b"Original"})
+    page.select_option("#target", "html")
+    page.locator(".conversion-loss-budget summary").click()
+    page.select_option("#maxLossIssues", budget)
+    with page.expect_response(
+        lambda response: response.url.endswith('/api/convert') and response.request.method == 'POST'
+    ) as response:
+        page.click("#convertBtn")
+    created = response.value.json()
+    page.wait_for_selector("#resultCard:not([hidden])", timeout=30000)
+    stored = task_store.get(created["task_id"])
+    assert stored["max_loss_issues"] == (int(budget) if budget else None)
+    assert page.locator("#downloadBtn").is_visible() is not rejected
+    summary = page.locator("#qualityGateSummary").inner_text()
+    if rejected:
+        assert "Результат не выдан" in summary
+        assert page.locator("#qualityBadge").inner_text() == "Превышен бюджет потерь"
+        assert not stored.get("artifact")
+    elif budget:
+        assert "Бюджет соблюдён" in summary
+    else:
+        assert "не проверялся" in summary
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    assert page.e2e_errors == []
+
+
+def test_e2e_download_editable_pptx(e2e_server, page, tmp_path, task_store):
+    from pptx import Presentation
+
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.set_input_files("#fileInput", {
+        "name": "slide.txt", "mimeType": "text/plain", "buffer": "Редактируемый слайд".encode(),
+    })
+    page.select_option("#target", "pptx")
+    page.click("#convertBtn")
+    page.wait_for_selector("#resultCard:not([hidden])", timeout=30000)
+    assert page.locator("#downloadBtn").is_visible()
+    with page.expect_download() as pending:
+        page.click("#downloadBtn")
+    path = tmp_path / pending.value.suggested_filename
+    pending.value.save_as(path)
+    assert path.suffix == ".pptx"
+    assert Presentation(path).slides[0].shapes[0].text == "Редактируемый слайд"
+    assert page.e2e_errors == []
+
+
+def test_e2e_batch_passes_quality_budget_to_each_file(e2e_server, page, task_store):
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.set_input_files("#fileInput", [
+        {"name": "first.txt", "mimeType": "text/plain", "buffer": b"First"},
+        {"name": "second.txt", "mimeType": "text/plain", "buffer": b"Second"},
+    ])
+    page.select_option("#target", "model")
+    page.locator(".conversion-loss-budget summary").click()
+    page.select_option("#maxLossIssues", "0")
+    page.select_option("#maxLostObjects", "0")
+    page.select_option("#textPreservation", "paragraphs")
+    with page.expect_response(lambda response: response.url.endswith('/api/convert/batch')) as response:
+        page.click("#batchConvertBtn")
+    created = response.value.json()
+    page.wait_for_function("document.getElementById('batchProgressState').textContent === 'Готово'", timeout=30000)
+    for item in created["tasks"]:
+        task = task_store.get(item["task_id"])
+        assert task["status"] == "done"
+        assert task["max_loss_issues"] == 0
+        assert task["max_lost_objects"] == 0
+        assert task["report"]["metrics"]["object_quality_gate"]["accepted"] is True
+        assert task["text_preservation"] == "paragraphs"
+        assert task["report"]["metrics"]["text_quality_gate"]["accepted"] is True
+        assert task["report"]["metrics"]["quality_gate"]["accepted"] is True
+    assert page.e2e_errors == []
+
+
+@pytest.mark.parametrize("target, accepted", [("docx", True), ("html", False)])
+def test_e2e_object_budget_reports_verification(e2e_server, page, task_store, target, accepted):
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.set_input_files("#fileInput", {"name": "source.txt", "mimeType": "text/plain", "buffer": b"Unique text"})
+    page.select_option("#target", target)
+    page.locator(".conversion-loss-budget summary").click()
+    page.select_option("#maxLostObjects", "0")
+    page.click("#convertBtn")
+    page.wait_for_selector("#resultCard:not([hidden])", timeout=30000)
+    summary = page.locator("#objectGateSummary").inner_text()
+    assert ("Бюджет объектов соблюдён" if accepted else "не удалось проверить") in summary
+    assert page.locator("#downloadBtn").is_visible() is accepted
+    assert page.e2e_errors == []
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_e2e_exact_text_check(e2e_server, page, task_store, monkeypatch, changed):
+    from textalchemy.convert.docx_writer import write_docx_model
+    from textalchemy.core.document_model import TextRun
+
+    def export(model, output):
+        if changed:
+            model.sections[0].blocks[0].content = [TextRun("Replaced")]
+        return write_docx_model(model, output)
+
+    monkeypatch.setattr("textalchemy.convert.executor._write_docx", export)
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.set_viewport_size({"width": 375, "height": 900})
+    page.set_input_files("#fileInput", {"name": "source.txt", "mimeType": "text/plain", "buffer": b"Original"})
+    page.select_option("#target", "docx")
+    page.locator(".conversion-loss-budget summary").click()
+    page.select_option("#textPreservation", "paragraphs")
+    page.click("#convertBtn")
+    page.wait_for_selector("#resultCard:not([hidden])", timeout=30000)
+    summary = page.locator("#textGateSummary").inner_text()
+    assert ("Не совпал текст" if changed else "сохранён дословно") in summary
+    assert page.locator("#downloadBtn").is_visible() is not changed
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    assert page.e2e_errors == []
+
+
+@pytest.mark.parametrize("mode, accepted", [("paragraphs", False), ("flow", True)])
+def test_e2e_text_reflow_mode(e2e_server, page, task_store, monkeypatch, mode, accepted):
+    from textalchemy.convert.docx_writer import write_docx_model
+    from textalchemy.core.document_model import Paragraph, TextRun
+
+    def export(model, output):
+        model.sections[0].blocks = [Paragraph(content=[TextRun(word)]) for word in ["First", "Second"]]
+        return write_docx_model(model, output)
+
+    monkeypatch.setattr("textalchemy.convert.executor._write_docx", export)
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.set_viewport_size({"width": 375, "height": 900})
+    page.set_input_files("#fileInput", {"name": "source.txt", "mimeType": "text/plain", "buffer": b"First Second"})
+    page.select_option("#target", "docx")
+    page.locator(".conversion-loss-budget summary").click()
+    page.select_option("#textPreservation", mode)
+    page.click("#convertBtn")
+    page.wait_for_selector("#resultCard:not([hidden])", timeout=30000)
+    summary = page.locator("#textGateSummary").inner_text()
+    assert ("Последовательность текста сохранена" if accepted else "Не совпал текст") in summary
+    assert page.locator("#downloadBtn").is_visible() is accepted
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    assert page.e2e_errors == []
+
+
 def test_e2e_convert_batch_flow(e2e_server, page, tmp_path, task_store):
     page.goto(f"{e2e_server}/convert")
     _wait_convert_ready(page)

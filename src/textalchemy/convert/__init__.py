@@ -13,6 +13,7 @@ from textalchemy.convert.pdf_to_docx import (
     create_converter,
 )
 from textalchemy.convert.pdf_writer import write_pdf_model
+from textalchemy.convert.pptx_writer import write_pptx_model
 from textalchemy.convert.protocols import (
     ConversionBackend,
     ConversionValue,
@@ -48,6 +49,7 @@ __all__ = [
     "write_docx_model",
     "write_html_model",
     "write_pdf_model",
+    "write_pptx_model",
 ]
 
 

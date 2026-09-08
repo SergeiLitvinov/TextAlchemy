@@ -7,21 +7,31 @@ export const conversionApi = {
         formData.set('file', file);
         return window.api('/api/convert/inspect', {method: 'POST', formData});
     },
-    start(file, targetFormat, mode, minRetention) {
+    start(file, targetFormat, mode, minRetention, maxLossIssues = '', maxLostObjects = '', requireUnchangedText = false, textPreservation = '', maxTextEdits = '') {
         const formData = new FormData();
         formData.set('file', file);
         formData.set('source_format', 'auto');
         formData.set('target_format', targetFormat);
         formData.set('mode', mode);
         formData.set('min_retention', minRetention);
+        if (maxLossIssues !== '' && maxLossIssues != null) formData.set('max_loss_issues', maxLossIssues);
+        if (maxLostObjects !== '' && maxLostObjects != null) formData.set('max_lost_objects', maxLostObjects);
+        formData.set('require_unchanged_text', String(requireUnchangedText));
+        if (textPreservation) formData.set('text_preservation', textPreservation);
+        if (maxTextEdits !== '' && maxTextEdits != null) formData.set('max_text_edits', maxTextEdits);
         return window.api('/api/convert', {method: 'POST', formData});
     },
-    startBatch(files, targetFormat, mode, minRetention) {
+    startBatch(files, targetFormat, mode, minRetention, maxLossIssues = '', maxLostObjects = '', requireUnchangedText = false, textPreservation = '', maxTextEdits = '') {
         const formData = new FormData();
         for (const file of files) formData.append('files', file);
         formData.set('target_format', targetFormat);
         formData.set('mode', mode);
         formData.set('min_retention', minRetention);
+        if (maxLossIssues !== '' && maxLossIssues != null) formData.set('max_loss_issues', maxLossIssues);
+        if (maxLostObjects !== '' && maxLostObjects != null) formData.set('max_lost_objects', maxLostObjects);
+        formData.set('require_unchanged_text', String(requireUnchangedText));
+        if (textPreservation) formData.set('text_preservation', textPreservation);
+        if (maxTextEdits !== '' && maxTextEdits != null) formData.set('max_text_edits', maxTextEdits);
         return window.api('/api/convert/batch', {method: 'POST', formData});
     },
     taskStatus(url) {

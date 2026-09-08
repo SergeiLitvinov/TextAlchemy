@@ -19,7 +19,7 @@ python-pptx, чтобы не потерять контейнеры ``mc:Alternat
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -44,8 +44,6 @@ from textalchemy.core.document_model import (
     Resource,
     ResourceKind,
     Section,
-    TableCell,
-    TableRow,
     TextRun,
     TextStyle,
 )
@@ -226,6 +224,7 @@ class _LevelDefaults:
 
     alignment: str | None = None
     style: TextStyle | None = None
+    paragraph: dict[str, Any] = field(default_factory=dict)
 
 
 _PLACEHOLDER_CATEGORY = {
@@ -290,6 +289,8 @@ def _placeholder_geometry(element, state: _ImporterState) -> Optional[tuple[floa
 
 def _merge_tx_styles(element, context: dict[str, dict[int, _LevelDefaults]]) -> None:
     """Наложить стили уровней из ``p:txStyles`` (title/body/other) на контекст."""
+    from textalchemy.formats.pptx_paragraph import merge_paragraph_settings, paragraph_properties
+
     tx_styles = element.find(_p("txStyles"))
     if tx_styles is None:
         return
@@ -297,11 +298,12 @@ def _merge_tx_styles(element, context: dict[str, dict[int, _LevelDefaults]]) -> 
         style_el = tx_styles.find(_p(tag))
         if style_el is None:
             continue
-        for level in range(1, 6):
+        for level in range(1, 10):
             lvl_el = style_el.find(_a(f"lvl{level}pPr"))
             if lvl_el is None:
                 continue
             defaults = context.setdefault(category, {}).setdefault(level, _LevelDefaults())
+            defaults.paragraph = merge_paragraph_settings(paragraph_properties(lvl_el, _ALIGN_MAP), defaults.paragraph)
             if defaults.alignment is None:
                 align = lvl_el.get("algn")
                 if align:
@@ -511,7 +513,7 @@ def _collect_shape_element(
     if xfrm is None:
         return
     left, top, width, height = _apply_transform(transform, *xfrm[:4])
-    if width <= 0 or height <= 0:
+    if (width <= 0 or height <= 0) and not (tag == "cxnSp" and width >= 0 and height >= 0):
         return
     box = Box(
         x=_emu_to_pt(left),
@@ -525,7 +527,7 @@ def _collect_shape_element(
     if tag == "sp":
         _handle_text_shape(element, slide_part, state, blocks, box, style_context)
     elif tag == "cxnSp":
-        blocks.append(_shape_paragraph_from_element(element, box, slide_part))
+        blocks.append(_shape_paragraph_from_element(element, box, slide_part, state.theme_colors))
     elif tag == "pic":
         _handle_picture(element, slide_part, state, blocks, box)
     elif tag == "graphicFrame":
@@ -533,6 +535,10 @@ def _collect_shape_element(
     if affine is not None:
         for block in blocks[first_block:]:
             _set_pptx_affine(block, affine)
+    from textalchemy.formats.pptx_geometry import remember_shape_identity
+
+    for block in blocks[first_block:]:
+        remember_shape_identity(block, element)
 
 
 def _collect_alternate_content(
@@ -716,6 +722,13 @@ def _group_child_transform(group_element, parent: _Transform) -> _Transform:
 
 
 def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[Any], box: Box, style_context=None) -> None:
+    from textalchemy.formats.pptx_paragraph import (
+        frame_metadata,
+        merge_paragraph_settings,
+        merge_text_styles,
+        paragraph_properties,
+    )
+
     tx_body = element.find(_p("txBody"))
     paragraphs = tx_body.findall(_a("p")) if tx_body is not None else []
     shape_meta = _shape_metadata(element, box, state.theme_colors)
@@ -726,6 +739,10 @@ def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[
     for index, p_el in enumerate(paragraphs):
         meta = _paragraph_metadata(p_el)
         defaults = _level_defaults(style_context, category, int(meta.get("level", 0)))
+        local_style = tx_body.find(f"{_a('lstStyle')}/{_a('lvl' + str(int(meta.get('level', 0)) + 1) + 'pPr')}")
+        inherited_meta = defaults.paragraph if defaults is not None else {}
+        inherited_meta = merge_paragraph_settings(inherited_meta, paragraph_properties(local_style, _ALIGN_MAP))
+        meta = merge_paragraph_settings(inherited_meta, meta)
         if defaults is not None:
             if meta.get("alignment") is None and defaults.alignment:
                 meta["alignment"] = defaults.alignment
@@ -733,11 +750,15 @@ def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[
                 meta["default_font_size_pt"] = defaults.style.font_size.pt
         paras_meta.append(meta)
         inherited = defaults.style if defaults is not None else None
+        local_rpr = local_style.find(_a("defRPr")) if local_style is not None else None
+        inherited = merge_text_styles(inherited, _run_style(local_rpr, state.theme_colors))
         _append_paragraph_runs(p_el, content, slide_part, inherited, state.theme_colors)
         if index < len(paragraphs) - 1:
             content.append(TextRun(text="\n"))
     alignment = paras_meta[0].get("alignment") if paras_meta else None
-    has_visual = shape_meta is not None and (shape_meta.get("fill") not in (None, "none") or shape_meta.get("line"))
+    has_visual = shape_meta is not None and (
+        shape_meta.get("fill") not in (None, "none") or shape_meta.get("line") or shape_meta.get("geometry_xml")
+    )
     if not content and not has_visual:
         return
     properties: dict[str, Any] = {}
@@ -745,6 +766,7 @@ def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[
         properties["pptx"] = {"shape": shape_meta, "paragraphs": paras_meta}
     else:
         properties["pptx"] = {"paragraphs": paras_meta}
+    properties["pptx"]["text_frame"] = frame_metadata(tx_body)
     blocks.append(
         Paragraph(
             content=content,
@@ -756,7 +778,7 @@ def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[
     )
 
 
-def _shape_paragraph_from_element(element, box: Box, slide_part) -> Paragraph:
+def _shape_paragraph_from_element(element, box: Box, slide_part, theme_colors=None) -> Paragraph:
     tx_body = element.find(_p("txBody"))
     content: list[Any] = []
     if tx_body is not None:
@@ -765,7 +787,7 @@ def _shape_paragraph_from_element(element, box: Box, slide_part) -> Paragraph:
             _append_paragraph_runs(p_el, content, slide_part)
             if index < len(paragraphs) - 1:
                 content.append(TextRun(text="\n"))
-    return Paragraph(content=content, box=box, properties={"pptx": {"shape": _shape_metadata(element, box)}})
+    return Paragraph(content=content, box=box, properties={"pptx": {"shape": _shape_metadata(element, box, theme_colors)}})
 
 
 def _element_object_id(element) -> str | None:
@@ -776,6 +798,10 @@ def _element_object_id(element) -> str | None:
 def _append_paragraph_runs(
     p_el, content: list[Any], slide_part, inherited: Optional[TextStyle] = None, theme_colors: dict[str, str] | None = None
 ) -> None:
+    from textalchemy.formats.pptx_paragraph import merge_text_styles
+
+    defaults = p_el.find(f"{_a('pPr')}/{_a('defRPr')}")
+    inherited = merge_text_styles(inherited, _run_style(defaults, theme_colors))
     for child in p_el:
         tag = _local_name(child)
         if tag == "r":
@@ -783,7 +809,7 @@ def _append_paragraph_runs(
             if run is not None and (run.text or run.link):
                 content.append(run)
         elif tag == "br":
-            content.append(TextRun(text="\n"))
+            content.append(TextRun(text="\n", properties={"pptx_break": "line"}))
         elif tag in _OMATH_TAGS:
             formula = _parse_omml(child)
             if formula is not None:
@@ -800,9 +826,11 @@ def _append_paragraph_runs(
 def _parse_run(
     r_el, slide_part, inherited: Optional[TextStyle] = None, theme_colors: dict[str, str] | None = None
 ) -> Optional[TextRun]:
+    from textalchemy.formats.pptx_paragraph import merge_text_styles
+
     text = "".join(t.text or "" for t in r_el.findall(_a("t")))
     r_pr = r_el.find(_a("rPr"))
-    style = _run_style(r_pr, theme_colors) if r_pr is not None else (inherited or TextStyle())
+    style = merge_text_styles(inherited, _run_style(r_pr, theme_colors))
     link = None
     if r_pr is not None:
         link_el = r_pr.find(_a("hlinkClick"))
@@ -889,36 +917,9 @@ def _parse_omml(m_el) -> Optional[Formula]:
 
 
 def _paragraph_metadata(p_el) -> dict[str, Any]:
-    meta: dict[str, Any] = {}
-    p_pr = p_el.find(_a("pPr"))
-    if p_pr is None:
-        return meta
-    align = p_pr.get("algn")
-    if align:
-        meta["alignment"] = _ALIGN_MAP.get(align, align)
-    for attr, target in (("marL", "marL"), ("marR", "marR"), ("indent", "indent")):
-        value = p_pr.get(attr)
-        if value is not None:
-            meta[target] = _emu_to_pt(float(value))
-    level = p_pr.get("lvl")
-    if level:
-        meta["level"] = int(level)
-    spc_bef = p_pr.find(_a("spcBef"))
-    if spc_bef is not None and spc_bef.find(_a("spcPts")) is not None:
-        meta["space_before_pt"] = float(spc_bef.find(_a("spcPts")).get("val", 0)) / 100.0
-    spc_aft = p_pr.find(_a("spcAft"))
-    if spc_aft is not None and spc_aft.find(_a("spcPts")) is not None:
-        meta["space_after_pt"] = float(spc_aft.find(_a("spcPts")).get("val", 0)) / 100.0
-    ln_spc = p_pr.find(_a("lnSpc"))
-    if ln_spc is not None and ln_spc.find(_a("spcPct")) is not None:
-        meta["line_spacing_pct"] = float(ln_spc.find(_a("spcPct")).get("val", 100)) / 100000.0
-    bullet = p_pr.find(_a("buChar"))
-    if bullet is not None:
-        meta["bullet_char"] = bullet.get("char")
-    auto_num = p_pr.find(_a("buAutoNum"))
-    if auto_num is not None:
-        meta["numbered"] = auto_num.get("type")
-    return meta
+    from textalchemy.formats.pptx_paragraph import paragraph_metadata
+
+    return paragraph_metadata(p_el, _ALIGN_MAP)
 
 
 def _shape_metadata(element, box: Box, theme_colors: dict[str, str] | None = None) -> Optional[dict[str, Any]]:
@@ -927,7 +928,9 @@ def _shape_metadata(element, box: Box, theme_colors: dict[str, str] | None = Non
     if tag not in ("sp", "cxnSp"):
         return None
     sp_pr = element.find(_p("spPr"))
-    meta: dict[str, Any] = {"kind": "cxnSp" if tag == "cxnSp" else "sp"}
+    from textalchemy.formats.pptx_geometry import shape_geometry
+
+    meta: dict[str, Any] = {"kind": "cxnSp" if tag == "cxnSp" else "sp", **shape_geometry(element)}
     if sp_pr is not None:
         prst = sp_pr.find(_a("prstGeom"))
         if prst is not None:
@@ -1003,36 +1006,11 @@ def _shape_line(sp_pr, theme_colors: dict[str, str] | None = None) -> Optional[d
 
 
 def _handle_picture(element, slide_part, state: _ImporterState, blocks: list[Any], box: Box) -> None:
-    blip_fill = element.find(_p("blipFill"))
-    blip = blip_fill.find(_a("blip")) if blip_fill is not None else None
-    if blip is None:
-        return
-    c_nv_pr = element.find(_p("nvPicPr"))
-    alt_text = ""
-    if c_nv_pr is not None:
-        c_nv_pr = c_nv_pr.find(_p("cNvPr"))
-        if c_nv_pr is not None:
-            alt_text = c_nv_pr.get("descr", "") or ""
-    r_id = blip.get(f"{{{_R_NS}}}embed") or blip.get(f"{{{_R_NS}}}link")
-    if r_id is None:
-        return
-    part = _related_part(slide_part, r_id)
-    if part is None:
-        return
-    resource_id = state.add_image_resource(
-        media_type=part.content_type or "image/png",
-        data=part.blob,
-        filename=_part_filename(part),
-        object_id=r_id,
-    )
-    blocks.append(
-        Image(
-            resource_id=resource_id,
-            alt_text=alt_text,
-            box=box,
-            provenance=state.origin(object_id=_element_object_id(element)),
-        )
-    )
+    from textalchemy.formats.pptx_picture import read_picture
+
+    picture = read_picture(element, slide_part, state, box)
+    if picture is not None:
+        blocks.append(picture)
 
 
 def _part_filename(part) -> str | None:
@@ -1052,7 +1030,7 @@ def _related_part(slide_part, r_id: str):
 def _handle_graphic_frame(element, slide_part, state: _ImporterState, blocks: list[Any], box: Box) -> None:
     table = element.find(f".//{_a('tbl')}")
     if table is not None:
-        blocks.append(_table_block(table, box))
+        blocks.append(_table_block(table, box, slide_part, state.theme_colors))
         return
     graphic_data = element.find(f".//{_a('graphicData')}")
     if graphic_data is not None:
@@ -1165,7 +1143,15 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
         if len(chart_nodes) > 1:
             data["combo_types"] = [_local_name(node) for node in chart_nodes]
         primary_tag = _local_name(chart_nodes[0])
+        if primary_tag in {"scatterChart", "bubbleChart"} and len(chart_nodes) == 1:
+            if "secondary_value" in axes:
+                axes["x"] = axes.pop("secondary_value")
+            if "value" in axes:
+                axes["y"] = axes.pop("value")
         chart_node = chart_nodes[0]
+        scatter_style = chart_node.find(_c("scatterStyle"))
+        if scatter_style is not None:
+            data["scatter_style"] = scatter_style.get("val")
         data["chart_type"] = _chart_base_type(primary_tag)
         if primary_tag != data["chart_type"]:
             data["chart_3d"] = True
@@ -1199,16 +1185,22 @@ def _read_chart_data(slide_part, r_id: str) -> dict[str, Any]:
             node_value_id = node_value_ids[node_index] if node_index < len(node_value_ids) else None
             secondary = bool(secondary_value_id) and node_value_id == secondary_value_id
             for ser in node.findall(_c("ser")):
+                from textalchemy.formats.pptx_chart_data import cached_values, numeric_series, plot_settings
+
                 tx = ser.find(_c("tx"))
                 name = _pt_values(tx)[0] if tx is not None and _pt_values(tx) else ""
                 cat = ser.find(_c("cat"))
                 if cat is not None:
-                    cats = _pt_values(cat)
+                    cats = [value if value is not None else "" for value in cached_values(cat)]
                     if not categories:
                         categories = cats
                 val = ser.find(_c("val"))
-                values = _pt_values(val) if val is not None else []
+                values = cached_values(val)
                 item: dict[str, Any] = {"name": name, "values": values}
+                item.update(numeric_series(ser))
+                item["plot"], item["plot_index"] = plot_settings(node), node_index
+                if cat is not None and cats != categories:
+                    item["categories"] = cats
                 item["chart_type"] = _chart_base_type(node_tag)
                 if secondary:
                     item["axis"] = "secondary_value"
@@ -1339,6 +1331,9 @@ def _chart_axis_info(axis) -> dict[str, Any] | None:
     if axis is None:
         return None
     info: dict[str, Any] = {}
+    title = _chart_element_title(axis)
+    if title:
+        info["title"] = title
     delete = axis.find(_c("delete"))
     if delete is not None:
         info["hidden"] = _chart_bool(delete.get("val"))
@@ -1362,6 +1357,8 @@ def _chart_axis_info(axis) -> dict[str, Any] | None:
                 info["auto_max"] = _chart_bool(val)
             elif tag == "logBase":
                 info["log_base"] = _chart_float(val)
+            elif tag == "orientation":
+                info["reverse_order"] = val == "maxMin"
     for tag, key in (
         ("majorUnit", "major_unit"),
         ("minorUnit", "minor_unit"),
@@ -1585,27 +1582,10 @@ def _chart_summary(chart_data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _table_block(table_el, box: Box) -> RichTable:
-    rows: list[TableRow] = []
-    for tr in table_el.findall(_a("tr")):
-        cells: list[TableCell] = []
-        for tc in tr.findall(_a("tc")):
-            cell_text = _cell_text(tc)
-            grid_span = int(tc.get("gridSpan", 1) or 1)
-            row_span = int(tc.get("rowSpan", 1) or 1)
-            cell = TableCell(
-                blocks=[Paragraph(content=[TextRun(text=cell_text)])],
-                row_span=row_span,
-                column_span=grid_span,
-            )
-            cells.append(cell)
-        rows.append(TableRow(cells=cells))
-    properties: dict[str, Any] = {}
-    grid = table_el.find(_a("tblGrid"))
-    if grid is not None:
-        widths = [emu_to_points(float(gc.get("w", 0))) for gc in grid.findall(_a("gridCol"))]
-        properties["column_widths_pt"] = widths
-    return RichTable(rows=rows, box=box, properties=properties)
+def _table_block(table_el, box: Box, slide_part=None, theme_colors=None) -> RichTable:
+    from textalchemy.formats.pptx_table import read_table
+
+    return read_table(table_el, box, slide_part, theme_colors, _append_paragraph_runs, _resolve_color_value, _ALIGN_MAP)
 
 
 def _cell_text(tc) -> str:

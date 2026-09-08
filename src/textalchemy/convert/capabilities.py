@@ -34,6 +34,11 @@ def _profile(
 def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
     return (
         ConverterCapabilities(
+            "txt.model", DocFormat.TXT, DocFormat.MODEL, ALL_MODES,
+            _features(text=S.EXACT),
+            description="Plain text lines as editable paragraphs",
+        ),
+        ConverterCapabilities(
             "docx.model",
             DocFormat.DOCX,
             DocFormat.MODEL,
@@ -186,6 +191,18 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             requirements=("python-pptx", "lxml"),
             description="Rich PPTX importer",
             preservation=_profile(content=0.99, semantics=0.94, geometry=0.98, style=0.95, relationships=0.88, editability=0.96),
+        ),
+        ConverterCapabilities(
+            "model.pptx",
+            DocFormat.MODEL,
+            DocFormat.PPTX,
+            frozenset({ConversionMode.EDITABLE, ConversionMode.BALANCED}),
+            _features(text=S.EDITABLE, styles=S.PARTIAL, raster_images=S.EDITABLE,
+                      vector_graphics=S.PARTIAL, formulas=S.PARTIAL, tables=S.EDITABLE,
+                      page_geometry=S.PARTIAL, sections=S.EDITABLE, notes=S.EDITABLE,
+                      running_content=S.UNSUPPORTED, fields=S.UNSUPPORTED),
+            requirements=("python-pptx", "lxml"),
+            description="Editable PPTX exporter; native objects, partial formatting, no source package preservation",
         ),
         ConverterCapabilities(
             "pptx.html",

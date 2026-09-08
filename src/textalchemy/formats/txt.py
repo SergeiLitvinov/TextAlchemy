@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Union
 
+from textalchemy.core.document_model import DocumentModel, Paragraph, Section, TextRun
 from textalchemy.core.types import Block, BlockType, DocFormat, Text
 
 
@@ -22,6 +23,18 @@ def read_txt(path: Union[str, Path]) -> Text:
         plain=text,
         source_format=DocFormat.TXT,
         engine=enc,
+    )
+
+
+def read_txt_model(path: Union[str, Path]) -> DocumentModel:
+    """Импортировать строки TXT как редактируемые абзацы, включая пустые строки."""
+    text = read_txt(path)
+    normalized = text.plain.replace("\r\n", "\n").replace("\r", "\n")
+    paragraphs = [Paragraph(content=[TextRun(line)]) for line in normalized.split("\n")]
+    return DocumentModel(
+        source_format="txt",
+        sections=[Section(blocks=paragraphs)],
+        metadata={"engine": text.engine, "source_name": Path(path).name, "txt": {"line_separator": "\n"}},
     )
 
 
@@ -63,4 +76,4 @@ def read_djvu(path: Union[str, Path]) -> Text:
     )
 
 
-__all__ = ["read_txt", "read_djvu"]
+__all__ = ["read_txt", "read_txt_model", "read_djvu"]

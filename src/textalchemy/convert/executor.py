@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
-from dataclasses import dataclass
+import tempfile
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable
 
@@ -21,6 +23,9 @@ from textalchemy.core.conversion_graph import (
 )
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_model import ConversionMode, DocumentModel
+from textalchemy.core.object_quality_policy import ObjectLossPolicy
+from textalchemy.core.quality_policy import QualityPolicy
+from textalchemy.core.text_quality_policy import TextPreservationPolicy
 from textalchemy.core.types import DocFormat
 
 StepHandler = Callable[[ConversionValue, Path], tuple[ConversionValue, ConversionReport | None]]
@@ -44,6 +49,9 @@ class ConversionRequest:
     mode: ConversionMode = ConversionMode.BALANCED
     features: frozenset[DocumentFeature] = DEFAULT_FEATURES
     max_steps: int = 4
+    quality_policy: QualityPolicy | None = None
+    object_loss_policy: ObjectLossPolicy | None = None
+    text_preservation_policy: TextPreservationPolicy | None = None
 
 
 class ConversionExecutor:
@@ -79,6 +87,35 @@ class ConversionExecutor:
         )
 
     def execute(self, request: ConversionRequest, *, cancelled: CancellationCheck | None = None) -> ConversionReport:
+        """Publish quality-gated output only after the whole route succeeds."""
+        if request.quality_policy is None and request.object_loss_policy is None and request.text_preservation_policy is None:
+            return self._execute(request, cancelled=cancelled)
+        report = ConversionReport(request.output_path)
+        try:
+            request.output_path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix=".textalchemy-", dir=request.output_path.parent) as directory:
+                staged = Path(directory) / request.output_path.name
+                report = self._execute(replace(request, output_path=staged), cancelled=cancelled)
+                report.output_path = request.output_path
+                if report.success and cancelled is not None and cancelled():
+                    return _cancelled_report(report)
+                if report.success and (request.object_loss_policy is not None or request.text_preservation_policy is not None):
+                    from textalchemy.convert.object_quality import check_object_quality
+
+                    check_object_quality(
+                        request.input_path, staged, report, request.object_loss_policy, request.text_preservation_policy,
+                    )
+                    if cancelled is not None and cancelled():
+                        return _cancelled_report(report)
+                if report.success:
+                    if request.output_path.is_dir():
+                        raise ValueError("Для публикации каталога выберите новый путь результата")
+                    os.replace(staged, request.output_path)
+        except Exception as error:  # noqa: BLE001 - retain diagnostics on publication failure
+            report.add(IssueSeverity.ERROR, "publication", str(error))
+        return report
+
+    def _execute(self, request: ConversionRequest, *, cancelled: CancellationCheck | None = None) -> ConversionReport:
         report = ConversionReport(request.output_path)
         is_cancelled = cancelled or (lambda: False)
         if not request.input_path.is_file():
@@ -127,6 +164,8 @@ class ConversionExecutor:
                     from textalchemy.core.io import atomic_copy
 
                     atomic_copy(request.input_path, request.output_path)
+                if request.quality_policy is not None:
+                    request.quality_policy.evaluate(report)
                 return report
             for step in plan.steps:
                 if is_cancelled():
@@ -142,10 +181,13 @@ class ConversionExecutor:
                 if step_report is not None:
                     report.issues.extend(step_report.issues)
                     report.metrics["step_metrics"][step.id] = step_report.metrics
+                    if request.quality_policy is not None and not request.quality_policy.evaluate(report):
+                        return report
                     if not step_report.success:
                         return report
                 if is_cancelled():
-                    request.output_path.unlink(missing_ok=True)
+                    if request.output_path.is_file():
+                        request.output_path.unlink(missing_ok=True)
                     return _cancelled_report(report)
             if request.target is DocFormat.MODEL:
                 if not isinstance(value, DocumentModel):
@@ -157,6 +199,8 @@ class ConversionExecutor:
                 report.add(IssueSeverity.ERROR, "output", f"converter did not create {request.output_path}")
         except Exception as error:  # noqa: BLE001 - backends expose heterogeneous failures
             report.add(IssueSeverity.ERROR, "execution", str(error))
+        if request.quality_policy is not None:
+            request.quality_policy.evaluate(report)
         return report
 
     def _step_available(self, step: ConverterCapabilities) -> bool:
@@ -210,9 +254,11 @@ def _load_initial(request: ConversionRequest) -> Path | DocumentModel:
 
 def _built_in_backends() -> dict[str, ConversionBackend]:
     return {
+        "txt.model": ImporterBackend("txt.model", _read_txt),
         "docx.model": ImporterBackend("docx.model", _read_docx),
         "pptx.model": ImporterBackend("pptx.model", _read_pptx),
         "model.docx": ExporterBackend("model.docx", _write_docx),
+        "model.pptx": ExporterBackend("model.pptx", _write_pptx),
         "model.html": ExporterBackend("model.html", _write_html),
         "model.pdf": ExporterBackend("model.pdf", _write_pdf),
         "pdf.docx.pdf2docx": PathConverterBackend(
@@ -232,6 +278,12 @@ def _built_in_backends() -> dict[str, ConversionBackend]:
     }
 
 
+def _read_txt(source: Path) -> DocumentModel:
+    from textalchemy.formats.txt import read_txt_model
+
+    return read_txt_model(source)
+
+
 def _read_docx(source: Path) -> DocumentModel:
     from textalchemy.formats.docx import read_docx_model
 
@@ -248,6 +300,12 @@ def _write_docx(model: DocumentModel, output: Path) -> ConversionReport:
     from textalchemy.convert.docx_writer import write_docx_model
 
     return write_docx_model(model, output)
+
+
+def _write_pptx(model: DocumentModel, output: Path) -> ConversionReport:
+    from textalchemy.convert.pptx_writer import write_pptx_model
+
+    return write_pptx_model(model, output)
 
 
 def _write_html(model: DocumentModel, output: Path) -> ConversionReport:
