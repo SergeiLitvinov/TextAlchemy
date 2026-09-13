@@ -1,0 +1,64 @@
+site_name: TextAlchemy — документация
+site_description: Руководство, справочники и план проекта
+docs_dir: .textalchemy/docs-source
+site_dir: .textalchemy/docs-site
+theme:
+  name: mkdocs
+  locale: ru
+  highlightjs: false
+plugins:
+  - search:
+      lang: [ru, en]
+extra_css:
+  - docs/assets/documentation.css
+extra_javascript:
+  - docs/assets/documentation.js
+markdown_extensions:
+  - tables
+  - fenced_code
+  - toc:
+      slugify: !!python/name:markdown.extensions.toc.slugify_unicode
+hooks:
+  - tools/documentation/hook.py
+watch:
+  - docs
+  - src/textalchemy
+  - TODO.md
+  - README.md
+  - AGENTS.md
+  - CODING_STANDARDS.md
+validation:
+  nav:
+    omitted_files: warn
+  links:
+    not_found: warn
+    anchors: warn
+    absolute_links: warn
+    unrecognized_links: warn
+nav:
+  - Проект: README.md
+  - Руководство:
+      - Начать работу: docs/guide/index.md
+      - Подробности форматов: docs/guide/formats.md
+      - Web и пакеты: docs/guide/web-details.md
+  - План по вехам: TODO.md
+  - Справочники:
+      - Команды CLI: docs/reference/cli.md
+      - Операции конвейера: docs/reference/operations.md
+  - Разработка:
+      - Система документации: docs/development/documentation.md
+      - Устройство проекта: AGENTS.md
+      - Стандарты: CODING_STANDARDS.md
+      - Корпус: tests/corpus/README.md
+      - Происхождение Office-файлов: tests/corpus/office/README.md
+  - Архив и приёмка:
+      - История изменений: docs/history/changes.md
+      - Приёмка PPTX: docs/history/pptx-acceptance.md
+      - Приёмка HTML: docs/history/html-acceptance.md
+      - Аудит документации: docs/history/documentation-audit.md
+      - Аудит старого TODO: docs/history/todo-audit.md
+      - Старые ID: docs/history/legacy-ids.md
+      - Карта миграции: docs/history/todo-milestone-map.md
+      - Старый TODO: docs/history/todo-2026-09-13.md
+      - Короткий TODO: docs/history/todo-before-milestones-2026-09-13.md
+  - Карта документации: docs/README.md

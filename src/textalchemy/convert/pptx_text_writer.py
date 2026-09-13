@@ -49,6 +49,13 @@ def write_text(frame, block, report, location, *, append=False):
                 run.text = text
                 style = item.style
                 run.font.name = style.font_family
+                if style.font_family and style.font_family.startswith(("+mj-", "+mn-")):
+                    report.add(
+                        IssueSeverity.LOSS,
+                        "fonts",
+                        "Ссылка на шрифт темы не разрешена; гарнитура зависит от темы результата.",
+                        location,
+                    )
                 run.font.size = Pt(style.font_size.pt) if style.font_size else None
                 run.font.bold, run.font.italic = style.bold, style.italic
                 run.font.underline = style.underline
@@ -66,15 +73,28 @@ def write_text(frame, block, report, location, *, append=False):
 def write_formula(paragraph, formula, report, location):
     from lxml import etree
 
-    if formula.format is FormulaFormat.OMML:
+    value = formula.value
+    if formula.format is FormulaFormat.MATHML:
+        from textalchemy.convert.mathml_to_omml import mathml_to_omml
+
         try:
-            root = etree.fromstring(formula.value.encode(), etree.XMLParser(resolve_entities=False, no_network=True))
+            value = mathml_to_omml(value)
+        except ValueError as error:
+            paragraph.add_run().text = formula.fallback_text or formula.value
+            report.add(IssueSeverity.LOSS, "formulas", f"MathML сохранён как текст: {error}.", location)
+            return
+    if formula.format in {FormulaFormat.OMML, FormulaFormat.MATHML}:
+        try:
+            root = etree.fromstring(value.encode(), etree.XMLParser(resolve_entities=False, no_network=True))
             ns = "http://schemas.openxmlformats.org/officeDocument/2006/math"
             math = root if root.tag == f"{{{ns}}}oMath" else root.find(f".//{{{ns}}}oMath")
             if math is not None:
-                wrapper = etree.Element("{http://schemas.microsoft.com/office/drawing/2010/main}m", nsmap={
-                    "a14": "http://schemas.microsoft.com/office/drawing/2010/main",
-                })
+                wrapper = etree.Element(
+                    "{http://schemas.microsoft.com/office/drawing/2010/main}m",
+                    nsmap={
+                        "a14": "http://schemas.microsoft.com/office/drawing/2010/main",
+                    },
+                )
                 wrapper.append(math)
                 paragraph._p.append(wrapper)
                 return

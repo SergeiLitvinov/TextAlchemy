@@ -23,3 +23,16 @@ clean:
 
 web:
 	uv run textalchemy web
+
+.PHONY: docs docs-check docs-generate docs-serve
+docs:
+	uv run python -m tools.docs build
+
+docs-check:
+	uv run python -m tools.docs check
+
+docs-generate:
+	uv run python -m tools.docs generate
+
+docs-serve:
+	uv run python -m tools.docs serve

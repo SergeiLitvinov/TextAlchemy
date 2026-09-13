@@ -150,6 +150,7 @@
         <p id="batchFilterEmpty" class="field-help" hidden>Нет файлов, соответствующих фильтрам.</p>
         <ul class="batch-progress-list" id="batchProgressList"></ul>
         <button type="button" id="batchArchiveBtn" hidden>Скачать готовые результаты ZIP</button>
+        <button type="button" id="batchCancelBtn" hidden>Отменить оставшиеся файлы</button>
         <p class="field-help">Фильтры меняют только список на экране. ZIP содержит все готовые результаты пакета и список статусов файлов; доступен после завершения пакета. Ошибочные файлы не включаются. Лимит результатов — 512 МБ.</p>
     </div>
 
@@ -181,6 +182,12 @@
         <div id="issuesSection" hidden>
             <h3>Что требует внимания</h3>
             <ul class="issue-list" id="issueList"></ul>
+            <section class="inspection-panel" id="issueInspector" tabindex="-1" aria-labelledby="issueLocationTitle" hidden>
+                <p class="eyebrow">Инспектор HTML</p>
+                <h4 id="issueLocationTitle">Фрагмент документа</h4>
+                <div id="issueFragment"></div>
+                <p class="field-help">Фрагмент после импорта HTML. Оформление и расположение на странице здесь не показаны.</p>
+            </section>
         </div>
         <div id="comparisonSection" hidden>
             <h3>Сохранность структуры</h3>

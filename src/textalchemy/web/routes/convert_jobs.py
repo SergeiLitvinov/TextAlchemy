@@ -16,6 +16,7 @@ from textalchemy.core.text_quality_policy import resolve_text_policy
 from textalchemy.core.types import DocFormat
 from textalchemy.web.app import app
 from textalchemy.web.routes import convert as facade
+from textalchemy.web.services.batch_actions import cancel_batch
 from textalchemy.web.services.batch_archive import build_batch_archive
 from textalchemy.web.services.batch_options import parse_batch_options
 
@@ -236,7 +237,7 @@ def api_convert_job_archive(job_id: str):
 
 
 @app.post("/api/convert/jobs/{job_id}/rerun")
-async def api_convert_job_rerun(job_id: str):
+async def api_convert_job_rerun(job_id: str, failed_only: bool = Form(False)):
     job = facade.tasks_store.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -248,10 +249,12 @@ async def api_convert_job_rerun(job_id: str):
     submissions = []
     for item in job.get("files", []):
         task_id = item["task_id"]
+        task = facade.tasks_store.get(task_id) or {}
+        if failed_only and task.get("status") not in {"error", "interrupted", "cancelled"}:
+            continue
         source_path = facade.tasks_store.source_path(task_id)
         if source_path is None:
             continue
-        task = facade.tasks_store.get(task_id) or {}
         if task.get("status") in {"queued", "running", "cancelling"}:
             continue
         source, target = DocFormat(item["source_format"]), DocFormat(item["target_format"])
@@ -276,7 +279,7 @@ async def api_convert_job_rerun(job_id: str):
                 "max_text_edits": task.get("max_text_edits", job.get("max_text_edits")),
                 "source_format": source.value,
                 "target_format": target.value,
-                "mode": conversion_mode.value,
+                "mode": file_mode.value,
             },
         )
         submissions.append(task_id)
@@ -288,4 +291,12 @@ async def api_convert_job_rerun(job_id: str):
         except RuntimeError as error:
             task = facade.tasks_store.get(task_id) or {}
             facade._register_task(task_id, {**task, "status": "queued", "error": f"Ожидает перезапуска очереди: {error}"})
-    return {"success": True, "job_id": job_id, "launched": launched}
+    return {"success": True, "job_id": job_id, "launched": launched, "failed_only": failed_only}
+
+
+@app.post("/api/convert/jobs/{job_id}/cancel")
+def api_convert_job_cancel(job_id: str):
+    try:
+        return cancel_batch(facade.tasks_store, job_id, cancel_task=facade._task_service().cancel)
+    except LookupError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error

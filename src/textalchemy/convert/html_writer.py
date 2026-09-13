@@ -199,7 +199,9 @@ class _HtmlRenderer:
         )
 
     def _blocks(self, blocks: list[Block], location: str) -> str:
-        return "".join(self._block(block, f"{location}[{index}]") for index, block in enumerate(blocks))
+        from textalchemy.convert.html_lists import render_blocks
+
+        return render_blocks(blocks, lambda block, index: self._block(block, f"{location}[{index}]"))
 
     def _block(self, block: Block, location: str) -> str:
         if isinstance(block, Paragraph):
@@ -250,6 +252,16 @@ class _HtmlRenderer:
         if isinstance(line_spacing, (int, float)):
             styles.append(f"line-height:{line_spacing:g}")
         chart_svg = _chart_svg(chart) if isinstance(chart, dict) else None
+        if isinstance(chart, dict):
+            for series in chart.get("series", []):
+                trends = series.get("trendline", [])
+                for trend in trends if isinstance(trends, list) else [trends]:
+                    reason = _html_trendline_loss(trend) if isinstance(trend, dict) else None
+                    if reason:
+                        self.report.add(
+                            IssueSeverity.LOSS, "chart-trendline",
+                            reason, location,
+                        )
         if isinstance(chart, dict) and chart_svg is None:
             self.report.add(
                 IssueSeverity.LOSS,
@@ -769,8 +781,8 @@ def _numeric_chart_series(raw_series: Any) -> list[dict[str, Any]]:
                     "chart_type": item.get("chart_type"),
                     "axis": item.get("axis"),
                     "data_points": item.get("data_points") if isinstance(item.get("data_points"), dict) else None,
-                    "trendline": item.get("trendline") if isinstance(item.get("trendline"), dict) else None,
-                    "error_bars": item.get("error_bars") if isinstance(item.get("error_bars"), dict) else None,
+                    "trendline": item.get("trendline") if isinstance(item.get("trendline"), (dict, list)) else None,
+                    "error_bars": item.get("error_bars") if isinstance(item.get("error_bars"), (dict, list)) else None,
                 }
             )
     return result
@@ -1425,9 +1437,18 @@ def _error_bar_parts(
 ) -> list[str]:
     """Планки погрешностей точки данных (``c:errBars``) в виде линий с колпачками."""
     error = item.get("error_bars")
+    if isinstance(error, list):
+        matches = [settings for settings in error if isinstance(settings, dict) and settings.get("direction", "y") == direction]
+        error = matches[0] if len(matches) == 1 else None
     if not isinstance(error, dict):
         return []
+    if error.get("direction", direction) != direction:
+        return []
     plus, minus = _error_bar_offsets(item, error, index, value)
+    if error.get("bar_type") == "plus":
+        minus = None
+    elif error.get("bar_type") == "minus":
+        plus = None
     if plus is None and minus is None:
         return []
     span = maximum - minimum
@@ -1442,7 +1463,9 @@ def _error_bar_parts(
             f'<line x1="{min(x_plus, x_minus):g}" y1="{y:g}" x2="{max(x_plus, x_minus):g}" y2="{y:g}" '
             f'stroke="{color}" stroke-width="1.5"/>'
         )
-        for end_x in (x_plus, x_minus):
+        for end_x, amount in ((x_plus, plus), (x_minus, minus)):
+            if amount is None:
+                continue
             parts.append(
                 f'<line x1="{end_x:g}" y1="{y - 6:g}" x2="{end_x:g}" y2="{y + 6:g}" stroke="{color}" stroke-width="1.5"/>'
             )
@@ -1450,7 +1473,9 @@ def _error_bar_parts(
         y_plus = y - height * plus / span if plus is not None else y
         y_minus = y + height * minus / span if minus is not None else y
         parts.append(f'<line x1="{x:g}" y1="{y_plus:g}" x2="{x:g}" y2="{y_minus:g}" stroke="{color}" stroke-width="1.5"/>')
-        for end_y in (y_plus, y_minus):
+        for end_y, amount in ((y_plus, plus), (y_minus, minus)):
+            if amount is None:
+                continue
             parts.append(
                 f'<line x1="{x - 6:g}" y1="{end_y:g}" x2="{x + 6:g}" y2="{end_y:g}" stroke="{color}" stroke-width="1.5"/>'
             )
@@ -1470,7 +1495,8 @@ def _error_bar_offsets(
         amount = abs(value) * percent / 100.0
         return amount, amount
     if value_type == "stdDev":
-        deviation = _standard_deviation(item["values"])
+        multiplier = float(error.get("value", 1.0))
+        deviation = multiplier * _standard_deviation(item["values"])
         return deviation, deviation
     if value_type == "stdErr":
         deviation = _standard_deviation(item["values"]) / math.sqrt(max(len(item["values"]), 1))
@@ -1485,25 +1511,33 @@ def _error_bar_offsets(
 
 def _error_series_value(raw: Any, index: int) -> float | None:
     """Значение планки из числовой серии (``c:yVal``/``c:plus``/``c:minus``)."""
-    if not isinstance(raw, list):
+    if not isinstance(raw, list) or not 0 <= index < len(raw):
         return None
     try:
-        values = [float(item) for item in raw]
+        value = float(raw[index])
     except (TypeError, ValueError):
         return None
-    if index < len(values):
-        return values[index]
-    return None
+    return value if math.isfinite(value) and value >= 0 else None
 
 
 def _standard_deviation(values: list[float]) -> float:
-    """Выборочное стандартное отклонение по всей серии."""
+    """Стандартное отклонение всей серии с делителем N (не выборочное N−1)."""
     numbers = [float(v) for v in values if isinstance(v, (int, float))]
     if not numbers:
         return 0.0
     mean = sum(numbers) / len(numbers)
     variance = sum((value - mean) ** 2 for value in numbers) / len(numbers)
     return math.sqrt(variance)
+
+
+def _html_trendline_loss(trend: dict[str, Any]) -> str | None:
+    """Общая граница поддержки для SVG-рендера и отчёта HTML."""
+    trend_type = trend.get("type") or "linear"
+    if trend_type not in {"linear", "movingAvg", "exp", "poly"}:
+        return f"Тренд типа {trend_type!r} не отображён в HTML: тип не поддерживается."
+    if any(key in trend for key in ("forward", "backward", "intercept")):
+        return "Тренд с прогнозом или заданным пересечением не отображён в HTML."
+    return None
 
 
 def _trendline_parts(
@@ -1518,7 +1552,13 @@ def _trendline_parts(
 ) -> list[str]:
     """Линия тренда серии (``c:trendline``): linear, movingAvg, exp или poly."""
     trend = item.get("trendline")
+    if isinstance(trend, list):
+        return [part for settings in trend if isinstance(settings, dict) for part in _trendline_parts(
+            {**item, "trendline": settings}, categories, left=left, top=top, width=width, height=height, axis_style=axis_style
+        )]
     if not isinstance(trend, dict):
+        return []
+    if _html_trendline_loss(trend):
         return []
     points = item["values"][: len(categories)]
     if len(points) < 2:
@@ -1835,7 +1875,20 @@ def _safe_mathml(value: str) -> str:
             local_name = etree.QName(attribute).localname.lower()
             if local_name.startswith("on") or local_name in {"href", "src", "style"}:
                 del element.attrib[attribute]
-    return etree.tostring(root, encoding="unicode")
+    # HTML parsing recognizes unprefixed <math>; XML namespace prefixes alone do
+    # not enter the browser's MathML parsing mode. Rebuild with a default namespace.
+    def browser_math(element, *, top=False):
+        node = etree.Element(
+            f"{{{_MATHML_NAMESPACE}}}{etree.QName(element).localname}",
+            nsmap={None: _MATHML_NAMESPACE} if top else None,
+        )
+        node.attrib.update(element.attrib)
+        node.text, node.tail = element.text, element.tail
+        for child in element:
+            node.append(browser_math(child))
+        return node
+
+    return etree.tostring(browser_math(root, top=True), encoding="unicode")
 
 
 __all__ = ["write_html_model"]

@@ -261,6 +261,7 @@ def _built_in_backends() -> dict[str, ConversionBackend]:
     return {
         "txt.model": ImporterBackend("txt.model", _read_txt),
         "epub.model": ImporterBackend("epub.model", _read_epub),
+        "html.model": _import_html,
         "docx.model": ImporterBackend("docx.model", _read_docx),
         "pptx.model": ImporterBackend("pptx.model", _read_pptx),
         "model.docx": ExporterBackend("model.docx", _write_docx),
@@ -289,6 +290,19 @@ def _read_txt(source: Path) -> DocumentModel:
     from textalchemy.formats.txt import read_txt_model
 
     return read_txt_model(source)
+
+
+def _import_html(source: ConversionValue, output: Path) -> tuple[DocumentModel, ConversionReport]:
+    from textalchemy.formats.html import read_html_model
+
+    if not isinstance(source, Path):
+        raise TypeError("HTML importer requires a path")
+    model = read_html_model(source)
+    report = ConversionReport(output)
+    report.metrics["html_locations"] = model.metadata["html"]["locations"]
+    for item in model.metadata["html"]["warnings"]:
+        report.add(IssueSeverity.LOSS, item["feature"], item["message"], item["location"])
+    return model, report
 
 
 def _read_epub(source: Path) -> DocumentModel:

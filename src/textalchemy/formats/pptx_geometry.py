@@ -9,7 +9,13 @@ P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 def shape_geometry(element):
     from lxml import etree
 
-    result = {}
+    result = {"has_style": element.find(P + "style") is not None}
+    effect = element.find(P + "style/" + A + "effectRef")
+    if effect is not None:
+        result["effect_ref"] = effect.get("idx")
+    nonvisual = element.find(P + "nvSpPr/" + P + "cNvSpPr")
+    if nonvisual is not None:
+        result["text_box"] = nonvisual.get("txBox", "0") in ("1", "true")
     properties = element.find(P + "spPr")
     if properties is not None:
         for tag in ("prstGeom", "custGeom"):

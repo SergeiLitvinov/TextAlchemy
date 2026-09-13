@@ -15,6 +15,8 @@ def write_shape(slide, meta, geometry, report, location):
     if meta.get("kind") == "cxnSp":
         x, y, width, height = geometry
         shape = slide.shapes.add_connector(MSO_CONNECTOR_TYPE.STRAIGHT, x, y, x + width, y + height)
+    elif meta.get("text_box"):
+        shape = slide.shapes.add_textbox(*geometry)
     elif shape_type is not None:
         shape = slide.shapes.add_shape(shape_type, *geometry)
     elif meta.get("geometry_xml"):
@@ -23,6 +25,16 @@ def write_shape(slide, meta, geometry, report, location):
         shape = slide.shapes.add_textbox(*geometry)
         if preset:
             report.add(IssueSeverity.LOSS, "vector_graphics", "Неизвестная фигура заменена текстовым блоком.", location)
+    if meta.get("has_style") is False:
+        # add_shape supplies theme effects even when the source had no style reference.
+        style = shape._element.find("{http://schemas.openxmlformats.org/presentationml/2006/main}style")
+        if style is not None:
+            shape._element.remove(style)
+    elif meta.get("effect_ref") == "0":
+        # An explicit zero is no theme effect, not the preset shape's shadow.
+        effect = shape._element.find("{http://schemas.openxmlformats.org/presentationml/2006/main}style/" + A + "effectRef")
+        if effect is not None:
+            effect.set("idx", "0")
     if meta.get("geometry_xml"):
         _restore_geometry(shape, meta["geometry_xml"], report, location)
     if meta.get("fill") == "none" and shape.has_text_frame:

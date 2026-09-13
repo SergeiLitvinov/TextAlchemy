@@ -42,6 +42,14 @@ def add_paragraph(
     )
     if not preserves_style_numbering:
         apply_numbering(paragraph._p.get_or_add_pPr(), source.properties)
+    if "html_list_id" in source.properties:
+        from textalchemy.convert.docx_html_lists import apply_html_list
+
+        apply_html_list(paragraph, source.properties)
+    if document.source_format == "html" and source.properties.get("anchor_id"):
+        from textalchemy.convert.docx_html_links import add_bookmark
+
+        add_bookmark(paragraph, source.properties["anchor_id"])
     return paragraph
 
 
@@ -73,7 +81,13 @@ def write_paragraph_content(
             else:
                 run = paragraph.add_run(item.text)
                 apply_text_style(run, item.style)
-                if item.link:
+                if item.link and item.link.startswith("#") and document.source_format == "html":
+                    from urllib.parse import unquote
+
+                    from textalchemy.convert.docx_html_links import bookmark_name
+
+                    _wrap_internal_hyperlink(paragraph, run, bookmark_name(unquote(item.link[1:])))
+                elif item.link:
                     _wrap_hyperlink(paragraph, run, item.link)
                 elif item.properties.get("hyperlink_anchor"):
                     _wrap_internal_hyperlink(paragraph, run, str(item.properties["hyperlink_anchor"]))
@@ -88,6 +102,18 @@ def write_paragraph_content(
 def write_formula(paragraph: Any, formula: Formula, report: ConversionReport, location: str) -> None:
     """Записать OMML или диагностированный текстовый fallback."""
 
+    if formula.format is FormulaFormat.MATHML:
+        from textalchemy.convert.mathml_to_omml import mathml_to_omml
+
+        try:
+            from docx.oxml import parse_xml
+
+            paragraph._p.append(parse_xml(mathml_to_omml(formula.value)))
+            return
+        except ValueError as error:
+            report.add(IssueSeverity.LOSS, "formula", f"MathML fallback: {error}", location)
+            paragraph.add_run(formula.fallback_text or formula.value)
+            return
     if formula.format is FormulaFormat.OMML:
         from docx.oxml import parse_xml
 

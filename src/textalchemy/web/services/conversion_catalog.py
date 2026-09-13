@@ -24,6 +24,7 @@ DEFAULT_TARGETS = {
     DocFormat.MODEL: DocFormat.DOCX,
     DocFormat.TXT: DocFormat.DOCX,
     DocFormat.EPUB: DocFormat.HTML,
+    DocFormat.HTML: DocFormat.DOCX,
 }
 OUTPUT_SUFFIXES = {
     DocFormat.TXT: ".txt",
@@ -54,6 +55,7 @@ FORMAT_LABELS = {
     DocFormat.TXT: "Текст (TXT)",
 }
 SOURCE_EXTENSIONS = {
+    DocFormat.HTML: (".html", ".htm"),
     DocFormat.EPUB: (".epub",),
     DocFormat.PDF: (".pdf",),
     DocFormat.DOCX: (".docx",),

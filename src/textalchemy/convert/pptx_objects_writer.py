@@ -43,7 +43,11 @@ def write_table(slide, block, geometry, report, location):
                     report.add(IssueSeverity.LOSS, "tables", "Нетекстовый блок внутри ячейки не перенесён.", location)
             configure_cell(target, cell.properties, report, cell_location)
     if block.properties:
-        report.add(IssueSeverity.LOSS, "styles", "Тема таблицы не восстановлена; явное оформление ячеек сохранено.", location)
+        report.add(
+            IssueSeverity.LOSS, "styles",
+            "Тема таблицы не восстановлена: унаследованные цвет и начертание текста, заливки и границы могут отличаться; "
+            "явное оформление ячеек сохранено.", location,
+        )
 
 
 def write_chart(slide, data, geometry, report, location):

@@ -11,6 +11,7 @@ headless Chromium через Playwright и прогоняют axe-core для WC
 Если браузер не установлен, тесты пропускаются, чтобы не ломать обычный
 ``pytest`` на машинах без playwright.
 """
+
 from __future__ import annotations
 
 import socket
@@ -175,10 +176,12 @@ def test_e2e_conversion_catalog_guidance_and_batch_forecast(e2e_server, page):
     assert page.locator('#mode option[value="faithful"]').is_disabled()
     page.locator("#target").select_option("docx")
     assert page.locator("#routeGuidance").is_hidden()
-    page.locator("#fileInput").set_input_files([
-        {"name": "first.txt", "mimeType": "text/plain", "buffer": b"First"},
-        {"name": "second.txt", "mimeType": "text/plain", "buffer": b"Second"},
-    ])
+    page.locator("#fileInput").set_input_files(
+        [
+            {"name": "first.txt", "mimeType": "text/plain", "buffer": b"First"},
+            {"name": "second.txt", "mimeType": "text/plain", "buffer": b"Second"},
+        ]
+    )
     page.locator("#target").select_option("pptx")
     assert "Для каждого файла" in page.locator("#route-help").text_content()
     assert "%" not in page.locator("#route-help").text_content()
@@ -312,6 +315,53 @@ def test_e2e_pipeline_visual_expert_roundtrip(e2e_server, page):
     assert page.e2e_errors == []
 
 
+@pytest.mark.parametrize("width", [375, 1280])
+def test_e2e_html_warning_navigation(e2e_server, page, tmp_path, task_store, width):
+    pytest.importorskip("bs4")
+    pytest.importorskip("tinycss2")
+    pytest.importorskip("docx")
+    from playwright.sync_api import expect
+
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    source = Path(__file__).parent / "corpus/html-warnings.html"
+    page.set_input_files("#fileInput", str(source))
+    page.select_option("#target", "docx")
+    page.click("#convertBtn")
+    expect(page.locator("#resultTitle")).to_have_text("Документ готов", timeout=60000)
+    css = page.locator("#issueList li").filter(has_text="background-color").get_by_role("button")
+    css.click()
+    inspector = page.locator("#issueInspector")
+    expect(inspector).to_be_visible()
+    expect(inspector).to_be_focused()
+    expect(page.locator("#issueFragment")).to_contain_text("Абзац с неподдержанным фоном.")
+    css_location = inspector.get_attribute("data-location")
+    image = page.locator("#issueList li").filter(has_text="Изображение не загружено").get_by_role("button")
+    image.click()
+    expect(page.locator("#issueFragment")).to_contain_text("Результат измерения:")
+    expect(page.locator("#issueFragment")).to_contain_text("missing-chart.png")
+    assert inspector.get_attribute("data-location") != css_location
+    expect(css).to_have_attribute("aria-pressed", "false")
+    expect(image).to_have_attribute("aria-pressed", "true")
+    page.screenshot(path=str(tmp_path / f"html-inspector-{width}.png"), full_page=True)
+    general = page.locator("#issueList").get_by_role("button", name="Весь документ", exact=True)
+    general.focus()
+    page.keyboard.press("Enter")
+    expect(inspector).to_have_attribute("data-location", "html:document")
+    expect(page.locator("#issueLocationTitle")).to_have_text("Весь документ")
+    expect(inspector).to_be_focused()
+    assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    # Another conversion replaces both the warning list and its selected fragment.
+    page.set_input_files("#fileInput", str(Path(__file__).parent / "corpus/scientific-html.html"))
+    page.select_option("#target", "model")
+    page.click("#convertBtn")
+    expect(page.locator("#resultCard")).to_be_visible(timeout=60000)
+    expect(page.locator("#issuesSection")).to_be_hidden()
+    expect(inspector).to_be_hidden()
+    assert page.e2e_errors == []
+
+
 def test_e2e_convert_single_pdf_to_docx(e2e_server, page, tmp_path, task_store):
     pdf = _make_pdf(tmp_path / "report.pdf")
     page.goto(f"{e2e_server}/convert")
@@ -363,7 +413,7 @@ def test_e2e_quality_budget(e2e_server, page, task_store, monkeypatch, budget, r
     page.locator(".conversion-loss-budget summary").click()
     page.select_option("#maxLossIssues", budget)
     with page.expect_response(
-        lambda response: response.url.endswith('/api/convert') and response.request.method == 'POST'
+        lambda response: response.url.endswith("/api/convert") and response.request.method == "POST"
     ) as response:
         page.click("#convertBtn")
     created = response.value.json()
@@ -389,9 +439,14 @@ def test_e2e_download_editable_pptx(e2e_server, page, tmp_path, task_store):
 
     page.goto(f"{e2e_server}/convert")
     _wait_convert_ready(page)
-    page.set_input_files("#fileInput", {
-        "name": "slide.txt", "mimeType": "text/plain", "buffer": "Редактируемый слайд".encode(),
-    })
+    page.set_input_files(
+        "#fileInput",
+        {
+            "name": "slide.txt",
+            "mimeType": "text/plain",
+            "buffer": "Редактируемый слайд".encode(),
+        },
+    )
     page.select_option("#target", "pptx")
     page.click("#convertBtn")
     page.wait_for_selector("#resultCard:not([hidden])", timeout=30000)
@@ -408,16 +463,19 @@ def test_e2e_download_editable_pptx(e2e_server, page, tmp_path, task_store):
 def test_e2e_batch_passes_quality_budget_to_each_file(e2e_server, page, task_store):
     page.goto(f"{e2e_server}/convert")
     _wait_convert_ready(page)
-    page.set_input_files("#fileInput", [
-        {"name": "first.txt", "mimeType": "text/plain", "buffer": b"First"},
-        {"name": "second.txt", "mimeType": "text/plain", "buffer": b"Second"},
-    ])
+    page.set_input_files(
+        "#fileInput",
+        [
+            {"name": "first.txt", "mimeType": "text/plain", "buffer": b"First"},
+            {"name": "second.txt", "mimeType": "text/plain", "buffer": b"Second"},
+        ],
+    )
     page.select_option("#target", "model")
     page.locator(".conversion-loss-budget summary").click()
     page.select_option("#maxLossIssues", "0")
     page.select_option("#maxLostObjects", "0")
     page.select_option("#textPreservation", "paragraphs")
-    with page.expect_response(lambda response: response.url.endswith('/api/convert/batch')) as response:
+    with page.expect_response(lambda response: response.url.endswith("/api/convert/batch")) as response:
         page.click("#batchConvertBtn")
     created = response.value.json()
     page.wait_for_function("document.getElementById('batchProgressState').textContent === 'Готово'", timeout=30000)
@@ -508,9 +566,7 @@ def test_e2e_convert_batch_flow(e2e_server, page, tmp_path, task_store):
 
     pdfs = [_make_pdf(tmp_path / "a.pdf", "Batch A"), _make_pdf(tmp_path / "b.pdf", "Batch B")]
     page.set_input_files("#fileInput", [str(path) for path in pdfs])
-    page.wait_for_function(
-        "document.getElementById('batchFileBlock') && !document.getElementById('batchFileBlock').hidden"
-    )
+    page.wait_for_function("document.getElementById('batchFileBlock') && !document.getElementById('batchFileBlock').hidden")
     assert "2 файлов" in page.locator("#batchFileSummary").text_content()
 
     page.click("#batchConvertBtn")
@@ -587,9 +643,7 @@ def test_e2e_pages_have_no_horizontal_overflow(e2e_server, page, width):
     for path in PAGES:
         page.goto(f"{e2e_server}{path}")
         page.wait_for_load_state("networkidle")
-        overflow = page.evaluate(
-            "document.documentElement.scrollWidth - document.documentElement.clientWidth"
-        )
+        overflow = page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
         assert overflow <= 0, f"{path} @{width}px: horizontal overflow {overflow}px"
 
 
@@ -601,13 +655,8 @@ def test_e2e_axe_accessibility_no_serious_violations(e2e_server, page):
         page.goto(f"{e2e_server}{path}")
         page.wait_for_load_state("networkidle")
         results = axe.run(page)
-        serious = [
-            v for v in results["violations"] if v.get("impact") in ("serious", "critical")
-        ]
-        assert not serious, (
-            f"{path}: axe serious/critical: "
-            + repr([(v["id"], v["impact"], v["help"]) for v in serious])
-        )
+        serious = [v for v in results["violations"] if v.get("impact") in ("serious", "critical")]
+        assert not serious, f"{path}: axe serious/critical: " + repr([(v["id"], v["impact"], v["help"]) for v in serious])
 
 
 def test_e2e_convert_controls_have_accessible_names(e2e_server, page, tmp_path, task_store):
@@ -621,9 +670,7 @@ def test_e2e_convert_controls_have_accessible_names(e2e_server, page, tmp_path, 
 
     # Контролы конвертации появляются только после выбора файла.
     page.set_input_files("#fileInput", str(pdf))
-    page.wait_for_function(
-        "!document.getElementById('conversionSetup').hidden"
-    )
+    page.wait_for_function("!document.getElementById('conversionSetup').hidden")
     assert page.get_by_role("combobox", name="Формат результата").count() == 1
     assert page.get_by_role("combobox", name="Приоритет").count() == 1
     assert page.get_by_role("button", name="Начать конвертацию").count() == 1
@@ -673,10 +720,12 @@ def test_e2e_individual_batch_formats(e2e_server, page, task_store):
     page.set_viewport_size({"width": 375, "height": 812})
     page.goto(f"{e2e_server}/convert")
     _wait_convert_ready(page)
-    page.locator("#fileInput").set_input_files([
-        {"name": "same.txt", "mimeType": "text/plain", "buffer": b"First"},
-        {"name": "same.txt", "mimeType": "text/plain", "buffer": b"Second"},
-    ])
+    page.locator("#fileInput").set_input_files(
+        [
+            {"name": "same.txt", "mimeType": "text/plain", "buffer": b"First"},
+            {"name": "same.txt", "mimeType": "text/plain", "buffer": b"Second"},
+        ]
+    )
     page.locator("#batchIndividualOptions > summary").click()
     page.select_option("#batchTarget0", "model")
     page.select_option("#batchMode0", "editable")
@@ -711,12 +760,79 @@ def test_e2e_batch_without_common_target(e2e_server, page):
     page.route("**/api/convert/capabilities", lambda route: route.fulfill(json=catalog))
     page.goto(f"{e2e_server}/convert")
     _wait_convert_ready(page)
-    page.locator("#fileInput").set_input_files([
-        {"name": "text.txt", "mimeType": "text/plain", "buffer": b"Text"},
-        {"name": "model.json", "mimeType": "application/json", "buffer": b"{}"},
-    ])
+    page.locator("#fileInput").set_input_files(
+        [
+            {"name": "text.txt", "mimeType": "text/plain", "buffer": b"Text"},
+            {"name": "model.json", "mimeType": "application/json", "buffer": b"{}"},
+        ]
+    )
     assert page.locator("#batchIndividualOptions").get_attribute("open") is not None
     assert page.locator("#batchTarget0").input_value() == "model"
     assert page.locator("#batchTarget1").input_value() == "docx"
     assert page.locator("#batchConvertBtn").is_visible()
+    assert page.e2e_errors == []
+
+
+def test_e2e_retry_only_failed_files(e2e_server, page, task_store):
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.locator("#fileInput").set_input_files(
+        [
+            {"name": "good.txt", "mimeType": "text/plain", "buffer": b"Good"},
+            {"name": "retry.txt", "mimeType": "text/plain", "buffer": b"Retry"},
+        ]
+    )
+    page.select_option("#target", "model")
+    with page.expect_response(lambda response: response.url.endswith("/api/convert/batch")) as response:
+        page.locator("#batchConvertBtn").click()
+    created = response.value.json()
+    page.wait_for_function("document.getElementById('batchProgressState').textContent === 'Готово'")
+    good_id, retry_id = [item["task_id"] for item in created["tasks"]]
+    good = task_store.get(good_id)
+    task_store.set(retry_id, {**task_store.get(retry_id), "status": "error", "error": "Временная ошибка"})
+    page.locator("#historyRefresh").click()
+    page.wait_for_function("document.querySelector('#historyList .job-state').textContent.includes('ошибок')")
+    page.locator("#historyList details > summary").first.click()
+    with page.expect_response(lambda response: response.url.endswith("/rerun")) as response:
+        page.get_by_role("button", name="Повторить неудачные", exact=True).click()
+    assert response.value.json()["launched"] == [retry_id]
+    assert response.value.json()["failed_only"] is True
+    page.wait_for_function("document.getElementById('batchProgressState').textContent === 'Готово'")
+    assert task_store.get(good_id) == good
+    assert task_store.get(retry_id)["status"] == "done"
+    assert page.e2e_errors == []
+
+
+@pytest.mark.parametrize("surface", ["panel", "history"])
+def test_e2e_cancel_remaining_batch_files(e2e_server, page, task_store, surface):
+    task_store.set("cancel-pending", {"status": "queued"})
+    task_store.set("cancel-ready", {"status": "done"})
+    ready = task_store.get("cancel-ready")
+    task_store.set_job(
+        "cancel-batch",
+        {
+            "job_id": "cancel-batch",
+            "files": [
+                {"task_id": "cancel-pending", "name": "pending.txt"},
+                {"task_id": "cancel-ready", "name": "ready.txt"},
+            ],
+        },
+    )
+    page.set_viewport_size({"width": 375, "height": 812})
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    if surface == "panel":
+        page.locator('[data-open-job="cancel-batch"]').click()
+        button = page.locator("#batchCancelBtn")
+    else:
+        button = page.locator('[data-cancel-job="cancel-batch"]')
+    with page.expect_response(lambda response: response.url.endswith("/cancel")) as response:
+        button.click()
+    assert response.value.json()["requested"] == [{"task_id": "cancel-pending", "status": "cancelled"}]
+    page.wait_for_function("document.getElementById('batchProgressState').textContent === 'Готово'")
+    assert page.locator("#batchCancelBtn").is_hidden()
+    assert page.locator("#batchArchiveBtn").is_visible()
+    assert task_store.get("cancel-ready") == ready
+    assert page.locator("#batchProgressList .cancelled").count() > 0
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     assert page.e2e_errors == []

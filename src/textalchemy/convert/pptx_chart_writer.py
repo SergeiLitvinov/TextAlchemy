@@ -7,6 +7,7 @@ from textalchemy.convert.pptx_combo_writer import compose_combo, install_combo, 
 from textalchemy.convert.pptx_label_writer import configure_labels
 from textalchemy.convert.pptx_plot_writer import configure_plots
 from textalchemy.convert.pptx_point_writer import configure_points
+from textalchemy.convert.pptx_statistics_writer import configure_statistics
 from textalchemy.convert.pptx_text_writer import set_color
 from textalchemy.core.diagnostics import IssueSeverity
 
@@ -102,6 +103,7 @@ def write_chart(slide, data, geometry, report, location):
         chart.has_title = True
         chart.chart_title.text_frame.text = data["title"]
     for source, target in zip(data["series"], chart.series):
+        configure_statistics(source=source, target=target, options=data, report=report, location=location)
         configure_points(
             source=source, target=target, kind=source.get("chart_type", data.get("chart_type")), report=report, location=location
         )
@@ -117,5 +119,9 @@ def write_chart(slide, data, geometry, report, location):
                 set_color(target.format.line.color, source.get("color_value", source["color"]), report, location)
     if data.get("chart_3d"):
         report.add(IssueSeverity.LOSS, "charts", "Объёмная диаграмма преобразована в плоскую.", location)
-    report.add(IssueSeverity.LOSS, "styles", "Диаграмма редактируема; сложное оформление и настройки осей упрощены.", location)
+    report.add(
+        IssueSeverity.LOSS, "styles",
+        "Диаграмма редактируема; оформление упрощено: цвета точек из темы, шрифты заголовков, "
+        "сетка и размещение осей могут отличаться.", location,
+    )
     return True

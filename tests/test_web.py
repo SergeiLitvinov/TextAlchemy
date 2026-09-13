@@ -208,6 +208,8 @@ def test_api_operations_includes_param_schema():
     assert op["input_param"] == "path"
     assert "params" in op
     assert op["params"]["path"]["required"] is True
+    assert ops["extract.html_model"]["input_type"] == "Document"
+    assert ops["extract.html_model"]["output_type"] == "DocumentModel"
 
 
 def test_api_pipeline_parse_normalizes_spec():

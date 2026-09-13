@@ -7,6 +7,11 @@ from textalchemy.core.types import DocFormat
 
 def route_guidance(source: DocFormat, target: DocFormat) -> list[str]:
     notes = []
+    if source is DocFormat.HTML:
+        notes.append(
+            "HTML: сохраняются статический текст, списки, таблицы и встроенные изображения и формулы. "
+            "Внешние файлы и скрипты не загружаются; сложная вёрстка и печатные стили не воспроизводятся."
+        )
     if source is DocFormat.EPUB:
         notes.append(
             "EPUB: сохраняются главы, ссылки, изображения и базовое оформление. "

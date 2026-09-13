@@ -67,6 +67,10 @@ def extract_text(*, doc: Document) -> Text:
         from textalchemy.formats.txt import read_djvu
 
         return read_djvu(doc.path)
+    if doc.format == DocFormat.HTML:
+        from textalchemy.formats.html import read_html
+
+        return read_html(doc.path)
     if doc.format == DocFormat.EPUB:
         from textalchemy.formats.epub import read_epub
 
@@ -78,7 +82,20 @@ def extract_text(*, doc: Document) -> Text:
     )
 
 
-__all__ = ["extract_text", "extract_pdf_model", "extract_pptx_model", "extract_epub_model"]
+__all__ = ["extract_text", "extract_pdf_model", "extract_pptx_model", "extract_epub_model", "extract_html_model"]
+
+
+@operation(
+    "extract.html_model", input_type="Document", output_type="DocumentModel", input_param="doc",
+    description="Статический HTML → DocumentModel; ограничения в metadata.html.warnings.",
+    tags=["extract", "html", "document-model"],
+)
+def extract_html_model(*, doc: Document) -> DocumentModel:
+    from textalchemy.formats.html import read_html_model
+
+    if doc.format is not DocFormat.HTML:
+        raise ValueError("extract.html_model requires an HTML document")
+    return read_html_model(doc.path)
 
 
 @operation(

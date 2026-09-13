@@ -1,0 +1,9 @@
+{
+  "fields": {
+    "title": {"type": "string", "required": true},
+    "show_body": {"type": "boolean", "default": true},
+    "body": {"type": "string", "required": false, "default": ""},
+    "items": {"type": "array", "required": true}
+  },
+  "allow_extra": false
+}

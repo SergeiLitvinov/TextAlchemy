@@ -162,6 +162,14 @@ def convert_math_elem(elem, parent):
         cls = _classify_text(text)
         m = _el(cls)
         m.text = text
+        if rpr is not None:
+            math_style = rpr.find("{%s}sty" % M_NS)
+            if math_style is not None:
+                variant = {"p": "normal", "i": "italic", "b": "bold", "bi": "bold-italic"}.get(
+                    math_style.get("{%s}val" % M_NS)
+                )
+                if variant:
+                    m.set("mathvariant", variant)
         if style:
             m.set("style", style)
         parent.append(m)
@@ -210,18 +218,50 @@ def convert_math_elem(elem, parent):
         deg = elem.find("{%s}deg" % M_NS)
         if e is None:
             return
-        node = _el("msqrt")
-        if deg is not None:
-            node.tag = "mroot"
-            convert_math_elem(deg, node)
+        hidden = elem.find("{%s}radPr/{%s}degHide" % (M_NS, M_NS))
+        has_degree = deg is not None and len(deg) > 0 and not (
+            hidden is not None and hidden.get("{%s}val" % M_NS, "1") in ("1", "true", "on")
+        )
+        node = _el("mroot" if has_degree else "msqrt")
         convert_math_elem(e, node)
+        if has_degree:
+            convert_math_elem(deg, node)
+        parent.append(node)
+    elif tag == "d":
+        node = _el("mrow")
+        props = elem.find("{%s}dPr" % M_NS)
+        def delimiter(name, default):
+            prop = props.find("{%s}%s" % (M_NS, name)) if props is not None else None
+            return prop.get("{%s}val" % M_NS, default) if prop is not None else default
+        opening = _el("mo", stretchy="true", fence="true")
+        opening.text = delimiter("begChr", "(")
+        node.append(opening)
+        for index, argument in enumerate(elem.findall("{%s}e" % M_NS)):
+            if index:
+                separator = _el("mo", separator="true")
+                separator.text = delimiter("sepChr", "|")
+                node.append(separator)
+            convert_math_elem(argument, node)
+        closing = _el("mo", stretchy="true", fence="true")
+        closing.text = delimiter("endChr", ")")
+        node.append(closing)
+        parent.append(node)
+    elif tag == "m":
+        node = _el("mtable")
+        for row in elem.findall("{%s}mr" % M_NS):
+            target = _el("mtr")
+            for cell in row.findall("{%s}e" % M_NS):
+                content = _el("mtd")
+                convert_math_elem(cell, content)
+                target.append(content)
+            node.append(target)
         parent.append(node)
     elif tag == "limUpp":
         e = elem.find("{%s}e" % M_NS)
         lim = elem.find("{%s}lim" % M_NS)
         if e is None:
             return
-        node = _el("munder")
+        node = _el("mover", accent="false")
         convert_math_elem(e, node)
         if lim is not None:
             convert_math_elem(lim, node)
@@ -231,23 +271,38 @@ def convert_math_elem(elem, parent):
         lim = elem.find("{%s}lim" % M_NS)
         if e is None:
             return
-        node = _el("mover")
+        node = _el("munder", accentunder="false")
         convert_math_elem(e, node)
         if lim is not None:
             convert_math_elem(lim, node)
         parent.append(node)
-    elif tag == "groupChr":
+    elif tag == "acc":
+        base = elem.find("{%s}e" % M_NS)
+        if base is None:
+            return
+        character = elem.find("{%s}accPr/{%s}chr" % (M_NS, M_NS))
+        node = _el("mover", accent="true")
+        convert_math_elem(base, node)
+        accent = _el("mo")
+        accent.text = character.get("{%s}val" % M_NS, "\u0302") if character is not None else "\u0302"
+        node.append(accent)
+        parent.append(node)
+    elif tag in {"groupChr", "bar"}:
         e = elem.find("{%s}e" % M_NS)
-        chr_el = elem.find("{%s}chr" % M_NS)
         if e is None:
             return
-        node = _el("mover")
+        props = elem.find("{%s}%sPr" % (M_NS, tag))
+        def property_value(name, default):
+            prop = props.find("{%s}%s" % (M_NS, name)) if props is not None else None
+            if prop is None:
+                prop = elem.find("{%s}%s" % (M_NS, name))
+            return prop.get("{%s}val" % M_NS, default) if prop is not None else default
+        above = property_value("pos", "bot") == "top"
+        node = _el("mover" if above else "munder", **{"accent" if above else "accentunder": "true"})
         convert_math_elem(e, node)
-        if chr_el is not None and chr_el.get("{%s}val" % M_NS):
-            ch = chr_el.get("{%s}val" % M_NS)
-            ch_node = _el("mo", stretchy="true")
-            ch_node.text = ch
-            node.append(ch_node)
+        ch_node = _el("mo", stretchy="true")
+        ch_node.text = property_value("chr", "⏟") if tag == "groupChr" else ("‾" if above else "_")
+        node.append(ch_node)
         parent.append(node)
     elif tag == "nary":
         e = elem.find("{%s}e" % M_NS)

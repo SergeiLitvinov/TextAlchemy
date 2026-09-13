@@ -47,11 +47,16 @@ export const conversionApi = {
     job(jobId) {
         return window.api('/api/convert/jobs/' + encodeURIComponent(jobId));
     },
-    rerunJob(jobId) {
-        return window.api('/api/convert/jobs/' + encodeURIComponent(jobId) + '/rerun', {method: 'POST'});
+    rerunJob(jobId, failedOnly = false) {
+        const formData = new FormData();
+        formData.set('failed_only', String(failedOnly));
+        return window.api('/api/convert/jobs/' + encodeURIComponent(jobId) + '/rerun', {method: 'POST', formData});
     },
     deleteJob(jobId) {
         return window.api('/api/convert/jobs/' + encodeURIComponent(jobId), {method: 'DELETE'});
+    },
+    cancelJob(jobId) {
+        return window.api('/api/convert/jobs/' + encodeURIComponent(jobId) + '/cancel', {method: 'POST'});
     },
     previewMeta(taskId) {
         return window.api(`/api/convert/preview/${encodeURIComponent(taskId)}/meta`);

@@ -7,6 +7,29 @@ on:
     branches: [main, master]
 
 jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install documentation and example dependencies
+        run: uv sync --frozen --extra docs --extra dev --extra html --extra docx --extra pdf
+      - name: Check documentation tooling
+        run: uv run ruff check tools tests/test_documentation.py
+      - name: Test documentation failure cases
+        run: uv run pytest tests/test_documentation.py -q
+      - name: Validate and build documentation
+        run: uv run python -m tools.docs check
+      - name: Save documentation site
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-site
+          path: .textalchemy/docs-site
+          include-hidden-files: true
+
   minimal-install:
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,15 @@
+/* Keep wide reference tables readable without stretching the whole page. */
+[role="main"] {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+[role="main"] table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+[role="main"] pre {
+    overflow-wrap: normal;
+}

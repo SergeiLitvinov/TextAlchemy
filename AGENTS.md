@@ -26,7 +26,8 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
 - `src/textalchemy/convert/` — conversion subsystem:
   - `capabilities.py` / `executor.py` — built-in `ConverterCapabilities` + `ConversionExecutor` that plans a route through `DocumentModel` and executes it (no temp file); `protocols.py`, `backends.py`, `base.py` (`BaseConverter`/`ConversionReport`).
   - `pdf_to_docx.py` — PDF → DOCX (`pdf2docx`, `pymupdf`, `libreoffice`, engine fallback).
-  - `docx_writer.py` + `docx_*_writer.py` — `DocumentModel` → DOCX; `html_writer.py` — → self-contained HTML; `pdf_writer.py` — → PDF (reportlab); `docx_to_latex.py` — DOCX → LaTeX.
+  - `docx_writer.py` + `docx_*_writer.py` — `DocumentModel` → DOCX; `html_writer.py` — → self-contained HTML; `pdf_writer.py` — → PDF (PyMuPDF Story); `docx_to_latex.py` — DOCX → LaTeX.
+  - Static HTML importer: `formats/html.py` facade, `html_model.py`, `html_css.py`, `html_resources.py`, `html_diagnostics.py`; `extract.html_model` operation and `html.model` route. Diagnostics keep stable block references through JSON; Web shows linked fragments. Dependencies live in the `html` extra.
   - `pptx_to_html/` — PPTX → self-contained HTML viewer (MathML via MathJax). Public API: `PptxToHtmlConverter`, `convert` (see `converter.py:84`). Shipped assets in `pptx_to_html/assets/{css,js}/` are copied to output by default.
 - `src/textalchemy/recognize/` — OCR subsystem:
   - `ocr.py` — `OcrEngine` поддерживает три бэкенда: Tesseract, EasyOCR, PaddleOCR. Автоопределение доступного. Поддержка `handwriting` (рукописный текст) и `use_gpu`. Методы `recognize_pdf()` и `recognize_pdf_geometry()`/`recognize_with_geometry()` (координаты блоков для OCR-merge с текстовым слоем PDF).
@@ -60,6 +61,8 @@ Always run via `uv` so the lockfile-resolved env is used.
 Equivalent `make` targets exist in the `Makefile` (`make install|test|lint|format|coverage|web`).
 
 ## CI
+
+Documentation lives in [guide](docs/guide/index.md), [generated reference](docs/reference/cli.md), and [history](docs/history/changes.md); `TODO.md` is the only active milestone plan. Update the relevant guide chapter and milestone when behavior changes. Do not hand-edit `docs/reference/`: run `uv run python -m tools.docs generate` after CLI or operation changes, then `uv run python -m tools.docs check` (extra `docs` plus the example dependencies). Local preview: `uv run python -m tools.docs serve`. See [documentation workflow](docs/development/documentation.md). CI checks reference drift, links, task migration and runnable examples, then stores the built site as an artifact.
 
 `.github/workflows/ci.yml` runs on Python 3.11/3.12/3.13: `uv sync --all-extras` → `uv run ruff check` → `uv run pytest tests/ --cov=textalchemy --cov-report=xml` (uploads to codecov). Required order: install → lint → test.
 
@@ -137,6 +140,6 @@ Run `textalchemy run --list` to see all registered operations.
 - `MANIFEST.in` is required for sdist builds: the package ships non-Python assets under `src/textalchemy/**/{assets,templates,static,lua-filters}/`.
 - No typecheck or pre-commit is wired into local commands beyond `ruff`; pre-commit is configured (`.pre-commit-config.yaml`) but optional.
 - On Windows, `__main__.py` reconfigures stdout/stderr to UTF-8 (so `→` in op descriptions doesn't blow up `charmap`). Don't remove this.
-- `pipeline/runner.py` eagerly imports the other pipeline modules at top to ensure `@operation` decorators fire on first use. If a test imports only `runner`, the other ops still get registered — but the import has a side effect: pytest's test discovery may load `tests/conftest.py` between this and the test, which is fine.
+- `pipeline/__init__.py` owns `register_builtin_operations()`: it imports built-in modules and restores decorated operation specs idempotently. Package import currently calls it as well; CLI/Web entry points call it explicitly. Registration is not owned by eager module imports in `runner.py`. Tests should still use `isolated()` when changing the registry.
 - Operation params containing `{...}` are passed through `str.format(**ctx)`. If you have literal `{` in a value, escape as `{{`.
 - The registry is a module-global dict; `reset()` clears everything including the auto-imported `pipeline.*` ops. Use `isolated()` in tests, not `reset()`.

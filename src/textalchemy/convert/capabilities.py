@@ -34,6 +34,14 @@ def _profile(
 def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
     return (
         ConverterCapabilities(
+            "html.model", DocFormat.HTML, DocFormat.MODEL,
+            frozenset({ConversionMode.BALANCED, ConversionMode.EDITABLE}),
+            _features(text=S.EDITABLE, styles=S.PARTIAL, tables=S.EDITABLE, formulas=S.PARTIAL,
+                      raster_images=S.PARTIAL, vector_graphics=S.PARTIAL, sections=S.PARTIAL),
+            requirements=("beautifulsoup4", "tinycss2"),
+            description="Static HTML, basic CSS, tables, lists, embedded SVG and MathML; no external loads",
+        ),
+        ConverterCapabilities(
             "model.txt",
             DocFormat.MODEL,
             DocFormat.TXT,

@@ -5,6 +5,7 @@ import {createBatchFilter} from './convert/batch-filter.js';
 import {createBatchOptions} from './convert/batch-options.js';
 import {renderCatalog, renderGuidance, unavailableModeHelp} from './convert/catalog.js';
 import {createHistoryController} from './convert/history.js';
+import {renderIssues} from './convert/issues.js';
 import {createPreviewController} from './convert/preview.js';
 import {createConversionView} from './convert/view.js';
 import {renderObjectGate, renderQualityGate, renderTextGate} from './convert/quality.js';
@@ -171,9 +172,7 @@ function renderReport(data, failed = false, taskId = state.activeTaskId) {
     renderQualityGate($, report);
     renderObjectGate($, report);
     renderTextGate($, report);
-    $('issuesSection').hidden = !issues.length;
-    $('issueList').innerHTML = issues.map((issue) =>
-        `<li class="issue-${window.esc(issue.severity)}"><strong>${window.esc(issue.feature)}</strong><span>${window.esc(issue.message)}</span></li>`).join('');
+    renderIssues($, report);
     view.comparison(data.comparison, data.inspection_error);
     preview.init(failed ? null : taskId);
     $('downloadBtn').hidden = failed;
@@ -208,12 +207,16 @@ async function pollTask(url) {
 async function pollJob(jobId, version = ++batchPollVersion) {
     if (version !== batchPollVersion) return;
     $('batchArchiveBtn').hidden = true;
+    $('batchCancelBtn').hidden = true;
     try {
         const data = await conversionApi.job(jobId);
         if (version !== batchPollVersion) return;
         batchFilter.update(jobId, data.tasks);
+        $('batchCancelBtn').hidden = !data.tasks.some((task) => ['queued', 'running'].includes(task.status));
+        $('batchCancelBtn').onclick = () => history.cancel(jobId, $('batchCancelBtn'));
         if (data.tasks.some((task) => ['queued', 'running', 'cancelling'].includes(task.status))) {
-            $('batchProgressState').textContent = 'Конвертируем…';
+            $('batchProgressState').textContent = data.tasks.some((task) => task.status === 'cancelling')
+                ? 'Отменяем…' : 'Конвертируем…';
             setTimeout(() => pollJob(jobId, version), 900);
         } else {
             $('batchProgressState').textContent = 'Готово';

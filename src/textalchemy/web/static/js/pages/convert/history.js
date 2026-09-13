@@ -3,9 +3,24 @@
 import {conversionApi, downloadResult} from './api.js';
 
 const labels = {queued: 'В очереди…', running: 'Конвертация…', done: 'Готово', error: 'Ошибка', interrupted: 'Прервана', expired: 'Истёк срок'};
+labels.cancelled = 'Отменена';
+labels.cancelling = 'Отмена…';
 const modeLabels = {balanced: 'Разумный баланс', faithful: 'Максимальное сходство', editable: 'Удобное редактирование'};
 
 export function createHistoryController($, {openPreview, pollJob}) {
+    async function cancel(jobId, button) {
+        button.disabled = true;
+        try {
+            const data = await conversionApi.cancelJob(jobId);
+            window.toast(data.requested.length
+                ? `Запрошена отмена файлов: ${data.requested.length}. Готовые результаты доступны для скачивания.`
+                : 'Ожидающих или выполняющихся файлов уже нет.', 'info');
+            $('batchProgressCard').hidden = false;
+            pollJob(jobId);
+            load();
+        } catch (_) { window.toast('Не удалось отменить пакет. Обновите статусы и повторите попытку.', 'error'); }
+        finally { button.disabled = false; }
+    }
     async function load() {
         try {
             const data = await conversionApi.jobs();
@@ -38,6 +53,10 @@ export function createHistoryController($, {openPreview, pollJob}) {
     }
 
     function detailMarkup(job) {
+        const cancelButton = job.tasks.some((task) => ['queued', 'running'].includes(task.status))
+            ? `<button type="button" data-cancel-job="${window.esc(job.job_id)}">Отменить оставшиеся файлы</button>` : '';
+        const retryFailed = job.tasks.some((task) => ['error', 'interrupted', 'cancelled'].includes(task.status))
+            ? `<button type="button" data-retry-failed="${window.esc(job.job_id)}">Повторить неудачные</button>` : '';
         const ready = job.tasks.some((task) => task.status === 'done') &&
             !job.tasks.some((task) => ['queued', 'running', 'cancelling'].includes(task.status));
         const archive = ready ? `<button type="button" data-download-url="/api/convert/jobs/${encodeURIComponent(job.job_id)}/archive" data-filename="converted-batch.zip">Скачать готовые результаты ZIP</button>` : '';
@@ -50,7 +69,7 @@ export function createHistoryController($, {openPreview, pollJob}) {
             return `<li class="batch-progress-item ${window.esc(task.status)}"><span class="file-name">${window.esc(task.name)}</span>` +
                 `<span class="job-state ${window.esc(task.status)}">${window.esc(labels[task.status] || task.status)}</span>${settings}${download}${preview}${error}</li>`;
         }).join('');
-        return `<ul class="batch-progress-list">${rows || '<li class="field-help">Задач нет</li>'}</ul><div class="row-actions">` + archive +
+        return `<ul class="batch-progress-list">${rows || '<li class="field-help">Задач нет</li>'}</ul><div class="row-actions">` + archive + retryFailed + cancelButton +
             `<button type="button" data-open-job="${window.esc(job.job_id)}">Открыть пакет</button>` +
             `<button type="button" data-rerun-job="${window.esc(job.job_id)}">Перезапустить</button>` +
             `<button type="button" data-delete-job="${window.esc(job.job_id)}">Удалить</button></div>`;
@@ -61,10 +80,13 @@ export function createHistoryController($, {openPreview, pollJob}) {
         catch (_) { container.innerHTML = '<p class="field-help">Не удалось загрузить задачу.</p>'; }
     }
 
-    async function rerun(jobId) {
+    async function rerun(jobId, failedOnly = false) {
         try {
-            const data = await conversionApi.rerunJob(jobId);
-            window.toast(data.launched.length ? 'Задача перезапущена' : 'Нечего перезапускать', 'success');
+            const data = await conversionApi.rerunJob(jobId, failedOnly);
+            const message = data.launched.length
+                ? (failedOnly ? `Повторно запущено файлов: ${data.launched.length}. Готовые результаты сохранены.` : 'Задача перезапущена')
+                : 'Нет файлов для повторного запуска: исходники могли истечь или маршрут недоступен.';
+            window.toast(message, data.launched.length ? 'success' : 'info');
             load();
             if (data.launched?.length) {
                 $('batchProgressCard').hidden = false;
@@ -93,10 +115,14 @@ export function createHistoryController($, {openPreview, pollJob}) {
             return;
         }
         const rerunButton = event.target.closest('[data-rerun-job]');
+        const retryFailed = event.target.closest('[data-retry-failed]');
+        if (retryFailed) return void rerun(retryFailed.dataset.retryFailed, true);
         if (rerunButton) return void rerun(rerunButton.dataset.rerunJob);
         const deleteButton = event.target.closest('[data-delete-job]');
+        const cancelButton = event.target.closest('[data-cancel-job]');
+        if (cancelButton) return void cancel(cancelButton.dataset.cancelJob, cancelButton);
         if (deleteButton) remove(deleteButton.dataset.deleteJob);
     });
 
-    return {load};
+    return {load, cancel};
 }

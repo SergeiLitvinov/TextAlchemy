@@ -242,6 +242,10 @@ select, input[type="text"], input[type="number"], input[type="search"] { margin-
 .issue-list { list-style: none; margin: 0.75rem 0 1.25rem; }
 .issue-list li { display: grid; grid-template-columns: minmax(100px, 180px) 1fr; gap: 1rem; padding: 0.65rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
 .issue-list span { color: var(--text-muted); }
+.issue-list button { grid-column: 1 / -1; justify-self: start; text-align: left; }
+#issueInspector { border-left: 4px solid var(--border); overflow-wrap: anywhere; }
+#issueInspector:focus { outline: 2px solid currentColor; outline-offset: 2px; }
+#issueFragment p { white-space: pre-wrap; margin: 0.5rem 0; }
 .btn-secondary { color: var(--text); background: transparent; border: 1px solid var(--border); }
 .btn-secondary:hover { color: white; }
 

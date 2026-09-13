@@ -201,9 +201,7 @@ class _ImporterState:
             events=[ProvenanceEvent("import.pptx", "parsed OOXML slide element")],
         )
 
-    def add_image_resource(
-        self, media_type: str, data: bytes, filename: str | None, *, object_id: str | None = None
-    ) -> str:
+    def add_image_resource(self, media_type: str, data: bytes, filename: str | None, *, object_id: str | None = None) -> str:
         resource_id = f"slide{self.slide_index}_img{len(self.model.resources) + 1}"
         self.model.add_resource(
             Resource(
@@ -275,12 +273,11 @@ def _walk_layout_placeholder(
 
 def _placeholder_geometry(element, state: _ImporterState) -> Optional[tuple[float, float, float, float, float, bool, bool]]:
     """Вернуть xfrm placeholder из slide → layout → master (в EMU)."""
-    ph = _placeholder_info(element)
-    if ph is None:
-        return None
-    for sp_tree in (state.layout_element, state.master_element):
-        if sp_tree is None:
-            continue
+    from textalchemy.formats.pptx_placeholder import placeholder_chain
+
+    chain = placeholder_chain(element, state.layout_element, state.master_element)
+    for parent, sp_tree in zip(reversed(chain), (state.layout_element, state.master_element)):
+        ph = _placeholder_info(parent)
         result = _walk_layout_placeholder(sp_tree, _Transform(), ph[0], ph[1])
         if result is not None:
             return result
@@ -349,7 +346,7 @@ def _slide_style_context(slide) -> dict[str, dict[int, _LevelDefaults]]:
 def _level_defaults(style_context, category: str | None, level: int) -> Optional[_LevelDefaults]:
     if category is None:
         return None
-    return (style_context.get(category) or {}).get(max(1, min(5, level + 1)))
+    return ((style_context or {}).get(category) or {}).get(max(1, min(9, level + 1)))
 
 
 def read_pptx(path: Union[str, Path], *, include_tables: bool = True) -> Text:
@@ -445,6 +442,9 @@ def read_pptx_model(
         sp_tree = _slide_sp_tree(slide)
         if sp_tree is not None:
             _collect_sp_tree(sp_tree, slide.part, state, blocks, _Transform(), style_context)
+        from textalchemy.formats.pptx_theme_fonts import materialize_theme_fonts, slide_theme_fonts
+
+        materialize_theme_fonts(blocks, slide_theme_fonts(slide))
         section = Section(blocks=blocks, page=page, provenance=state.origin(object_id=f"slide-{slide_index}"))
         background_color = _background_color(slide, state.theme_colors)
         background = background_color.to_hex() if background_color is not None else None
@@ -722,26 +722,38 @@ def _group_child_transform(group_element, parent: _Transform) -> _Transform:
 
 
 def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[Any], box: Box, style_context=None) -> None:
-    from textalchemy.formats.pptx_paragraph import (
-        frame_metadata,
-        merge_paragraph_settings,
-        merge_text_styles,
-        paragraph_properties,
-    )
+    from textalchemy.formats.pptx_paragraph import merge_paragraph_settings, merge_text_styles
+    from textalchemy.formats.pptx_placeholder import inherited_frame, inherited_paragraph, placeholder_chain
 
     tx_body = element.find(_p("txBody"))
     paragraphs = tx_body.findall(_a("p")) if tx_body is not None else []
     shape_meta = _shape_metadata(element, box, state.theme_colors)
     ph = _placeholder_info(element)
     category = _placeholder_category(ph[0]) if ph else None
+    chain = placeholder_chain(element, state.layout_element, state.master_element)
+    if chain:
+        category = _placeholder_category(_placeholder_info(chain[0])[0])
     content: list[Any] = []
     paras_meta: list[dict[str, Any]] = []
     for index, p_el in enumerate(paragraphs):
         meta = _paragraph_metadata(p_el)
         defaults = _level_defaults(style_context, category, int(meta.get("level", 0)))
-        local_style = tx_body.find(f"{_a('lstStyle')}/{_a('lvl' + str(int(meta.get('level', 0)) + 1) + 'pPr')}")
-        inherited_meta = defaults.paragraph if defaults is not None else {}
-        inherited_meta = merge_paragraph_settings(inherited_meta, paragraph_properties(local_style, _ALIGN_MAP))
+        base_style = defaults.style if defaults else None
+        font_ref = element.find(f"{_p('style')}/{_a('fontRef')}")
+        if font_ref is not None:
+            color, _ = _resolve_color_value(font_ref, state.theme_colors)
+            if color is not None:
+                base_style = merge_text_styles(base_style, TextStyle(color=color))
+        inherited_meta, inherited = inherited_paragraph(
+            chain,
+            tx_body,
+            int(meta.get("level", 0)),
+            defaults.paragraph if defaults else {},
+            base_style,
+            parse_style=_run_style,
+            alignments=_ALIGN_MAP,
+            colors=state.theme_colors,
+        )
         meta = merge_paragraph_settings(inherited_meta, meta)
         if defaults is not None:
             if meta.get("alignment") is None and defaults.alignment:
@@ -749,9 +761,8 @@ def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[
             if defaults.style is not None and defaults.style.font_size:
                 meta["default_font_size_pt"] = defaults.style.font_size.pt
         paras_meta.append(meta)
-        inherited = defaults.style if defaults is not None else None
-        local_rpr = local_style.find(_a("defRPr")) if local_style is not None else None
-        inherited = merge_text_styles(inherited, _run_style(local_rpr, state.theme_colors))
+        if inherited is not None and inherited.font_size:
+            meta["default_font_size_pt"] = inherited.font_size.pt
         _append_paragraph_runs(p_el, content, slide_part, inherited, state.theme_colors)
         if index < len(paragraphs) - 1:
             content.append(TextRun(text="\n"))
@@ -766,7 +777,7 @@ def _handle_text_shape(element, slide_part, state: _ImporterState, blocks: list[
         properties["pptx"] = {"shape": shape_meta, "paragraphs": paras_meta}
     else:
         properties["pptx"] = {"paragraphs": paras_meta}
-    properties["pptx"]["text_frame"] = frame_metadata(tx_body)
+    properties["pptx"]["text_frame"] = inherited_frame(chain, element)
     blocks.append(
         Paragraph(
             content=content,
@@ -1445,12 +1456,17 @@ def _chart_element_title(element) -> str | None:
     return text or None
 
 
-def _read_trendline(series, theme_colors: dict[str, str] | None = None) -> dict[str, Any] | None:
+def _read_trendline(series, theme_colors: dict[str, str] | None = None) -> dict[str, Any] | list[dict[str, Any]] | None:
+    trends = [_read_one_trendline(trend, theme_colors) for trend in series.findall(_c("trendline"))]
+    return trends[0] if len(trends) == 1 else trends or None
+
+
+def _read_one_trendline(trend, theme_colors: dict[str, str] | None = None) -> dict[str, Any]:
     """Прочитать линию тренда серии (тип, порядок, период, видимость формулы/R²)."""
-    trend = series.find(_c("trendline"))
-    if trend is None:
-        return None
     info: dict[str, Any] = {}
+    name = trend.find(_c("name"))
+    if name is not None:
+        info["name"] = name.text or ""
     trend_type = trend.find(_c("trendlineType"))
     if trend_type is not None and trend_type.get("val"):
         info["type"] = trend_type.get("val")
@@ -1465,6 +1481,14 @@ def _read_trendline(series, theme_colors: dict[str, str] | None = None) -> dict[
         element = trend.find(_c(tag))
         if element is not None:
             info[key] = _chart_bool(element.get("val"))
+    for key in ("forward", "backward", "intercept"):
+        element = trend.find(_c(key))
+        if element is not None:
+            value = element.get("val")
+            try:
+                info[key] = float(value)
+            except (ValueError, TypeError):
+                info[key] = value
     color = _chart_series_color_value(trend, theme_colors)
     if color:
         info["color"] = color.to_hex()
@@ -1472,11 +1496,15 @@ def _read_trendline(series, theme_colors: dict[str, str] | None = None) -> dict[
     return info
 
 
-def _read_error_bars(series, theme_colors: dict[str, str] | None = None) -> dict[str, Any] | None:
+def _read_error_bars(series, theme_colors: dict[str, str] | None = None) -> dict[str, Any] | list[dict[str, Any]] | None:
+    errors = [_read_error_bar(error, theme_colors) for error in series.findall(_c("errBars"))]
+    return errors[0] if len(errors) == 1 else errors or None
+
+
+def _read_error_bar(error, theme_colors: dict[str, str] | None = None) -> dict[str, Any]:
     """Прочитать планки погрешностей серии (тип, направление, величина)."""
-    error = series.find(_c("errBars"))
-    if error is None:
-        return None
+    from textalchemy.formats.pptx_numeric_cache import indexed_numbers
+
     info: dict[str, Any] = {}
     for tag, key in (("errDir", "direction"), ("errBarType", "bar_type"), ("errValType", "value_type")):
         element = error.find(_c(tag))
@@ -1486,9 +1514,9 @@ def _read_error_bars(series, theme_colors: dict[str, str] | None = None) -> dict
     if fixed is not None and fixed.get("val"):
         info["value"] = _chart_float(fixed.get("val"))
     for tag, key in (("yVal", "y_val"), ("plus", "plus"), ("minus", "minus")):
-        values = _pt_values(error.find(_c(tag))) if error.find(_c(tag)) is not None else []
-        if values:
-            info[key] = values
+        node = error.find(_c(tag))
+        if node is not None:
+            info[key] = indexed_numbers(node) if tag in {"plus", "minus"} else _pt_values(node)
     num_fmt = error.find(_c("numFmt"))
     if num_fmt is not None and num_fmt.get("formatCode"):
         info["num_format"] = num_fmt.get("formatCode")
@@ -1533,6 +1561,8 @@ def _chart_series_color_value(series, theme_colors: dict[str, str] | None = None
     if shape_properties is None:
         return None
     solid = shape_properties.find(_a("solidFill"))
+    if solid is None:
+        solid = shape_properties.find(f"{_a('ln')}/{_a('solidFill')}")
     if solid is None:
         return None
     return _resolve_color_value(solid, theme_colors)[0]
