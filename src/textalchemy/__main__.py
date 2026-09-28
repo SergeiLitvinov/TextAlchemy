@@ -44,7 +44,7 @@ def _setup_parser():
                         version=f"TextAlchemy {VERSION}")
     parser.add_argument("-v", "--debug", action="store_true",
                         help="Подробное логирование (DEBUG)")
-    parser.add_argument("-c", "--config", help="Путь к конфигурационному файлу JSON")
+    parser.add_argument("-c", "--config", help="Не поддерживается CLI; используйте параметры команды или run")
 
     sub = parser.add_subparsers(dest="command", help="Команды")
 
@@ -204,7 +204,7 @@ def _setup_parser():
     p.add_argument("-o", "--output", default="bibliography.bib")
     p.add_argument("--json", action="store_true", help="Вывод в JSON")
 
-    p = sub.add_parser("init", help="Создать конфигурационный файл")
+    p = sub.add_parser("init", help="Создать шаблон Config для Python API (не настройки CLI)")
     p.add_argument("-o", "--output", default="config.json")
 
     p = sub.add_parser("web", help="Запуск веб-интерфейса")
@@ -233,6 +233,14 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     debug = bool(getattr(args, "debug", False))
     configure_logging(debug=debug)
+
+    if args.config is not None:
+        print(
+            "Error: -c/--config не поддерживается CLI. Уберите флаг и задайте параметры команды явно "
+            "или используйте 'textalchemy run' с файлом конвейера. Команда не выполнена.",
+            file=sys.stderr,
+        )
+        return 1
 
     if not args.command:
         parser.print_help()

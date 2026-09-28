@@ -114,6 +114,7 @@ function selectFile(file) {
     $('sourceInspection').hidden = false;
     $('sourceBadge').textContent = source.label;
     $('sourceFilename').textContent = file.name;
+    $('pdfPreparation').hidden = source.format !== 'pdf';
     $('conversionSetup').hidden = false;
     $('resultCard').hidden = true;
     view.status('');
@@ -130,6 +131,7 @@ function selectBatch(files) {
     const sharedTargets = batchTargets(sources);
     const commonTargets = sharedTargets.length ? sharedTargets : sources[0].targets;
     Object.assign(state, {batchFiles: files, batchTargets: commonTargets, pendingFile: null, selectedSource: null});
+    $('pdfPreparation').hidden = true;
     $('conversionSetup').hidden = false;
     $('resultCard').hidden = true;
     $('singleFileBlock').hidden = true;
@@ -154,6 +156,19 @@ function handleFiles(files) {
     if (files.length === 1) selectFile(files[0]);
     else if (files.length > 1) selectBatch(files);
 }
+
+$('preparePdfBtn').addEventListener('click', async () => {
+    const file = state.pendingFile;
+    if (!file || state.selectedSource?.format !== 'pdf') return;
+    window.setLoading($('preparePdfBtn'), true);
+    try {
+        const form = new FormData(); form.append('file', file);
+        const draft = await window.api('/api/pdf-order', {method: 'POST', formData: form});
+        if (state.pendingFile === file) location.assign('/pdf-order?draft=' + encodeURIComponent(draft.draft_id));
+    } catch (error) {
+        view.status('Не удалось подготовить структуру: ' + error.message + ' Обычная конвертация остаётся доступна.', 'error');
+    } finally { window.setLoading($('preparePdfBtn'), false); }
+});
 
 function renderReport(data, failed = false, taskId = state.activeTaskId) {
     const report = data.report || {issues: [], metrics: {}};

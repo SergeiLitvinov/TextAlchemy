@@ -24,11 +24,11 @@ export function createPipelineState() {
         state.finalOutput = 'tex';
     }
 
-    function knownNames() {
+    function knownNames(before = state.steps.length) {
         const names = new Set();
         try { Object.keys(JSON.parse(state.contextJson || '{}')).forEach((name) => names.add(name)); }
         catch (_) { /* invalid context is reported when building the specification */ }
-        state.steps.forEach((step) => { if (step.output) names.add(step.output); });
+        state.steps.slice(0, before).forEach((step) => { if (step.output) names.add(step.output); });
         return [...names];
     }
 
@@ -43,13 +43,20 @@ export function createPipelineState() {
     }
 
     function addStep(operationId, values = {}) {
-        const input = values.input || '';
+        const operation = state.operationMap.get(operationId);
+        const previous = state.steps.at(-1);
+        const previousOperation = state.operationMap.get(previous?.op);
+        const compatible = operation?.input_type && operation.input_type === previousOperation?.output_type;
+        const input = values.input ?? (compatible ? previous.output : '') ?? '';
+        let number = state.steps.length + 1;
+        while (knownNames().includes(`result_${number}`)) number++;
         state.steps.push({
             op: operationId,
-            output: values.output || '',
+            output: values.output || `result_${number}`,
             input,
             params: defaultsFor(operationId, input, values.params || {}),
         });
+        if (state.finalOutput === previous?.output) state.finalOutput = state.steps.at(-1).output;
     }
 
     function removeStep(index) { state.steps.splice(index, 1); }

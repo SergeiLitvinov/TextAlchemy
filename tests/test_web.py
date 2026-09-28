@@ -210,6 +210,26 @@ def test_api_operations_includes_param_schema():
     assert op["params"]["path"]["required"] is True
     assert ops["extract.html_model"]["input_type"] == "Document"
     assert ops["extract.html_model"]["output_type"] == "DocumentModel"
+    for renderer in ("bibtex", "gost", "markdown", "json"):
+        operation = ops[f"render.{renderer}"]
+        assert operation["input_param"] == "items"
+        assert operation["params"]["items"]["required"] is True
+
+
+@pytest.mark.parametrize("renderer", ["bibtex", "gost", "markdown", "json"])
+def test_api_pipeline_bibliography_linked_input(renderer):
+    spec = {
+        "bib": [{"index": 1, "authors": ["Иванов"], "title": "Исследование", "year": 2020}],
+        "steps": [{"op": f"render.{renderer}", "input": "bib", "output": "rendered"}],
+        "output": "rendered",
+    }
+    response = client.post("/api/pipeline/run", data={"spec": json.dumps(spec)})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert payload["result"]["ok"] is True, payload["result"]["error"]
+    assert "Исследование" in payload["result"]["final"]
+    assert "Иванов" in payload["result"]["final"]
 
 
 def test_api_pipeline_parse_normalizes_spec():
@@ -273,6 +293,17 @@ def test_api_pipeline_validate_ok():
     data = resp.json()
     assert data["success"] is True
     assert data["errors"] == []
+
+
+def test_api_pipeline_validate_rejects_self_reference():
+    spec = {'steps': [{'op': 'extract.text', 'input': 'text', 'output': 'text'}]}
+    data = client.post('/api/pipeline/validate', data={'spec': json.dumps(spec)}).json()
+    assert data['success'] is False
+    assert data['errors'][0]['step'] == 0
+    # Replacing a value already supplied in the initial context is valid.
+    spec['text'] = 'initial'
+    data = client.post('/api/pipeline/validate', data={'spec': json.dumps(spec)}).json()
+    assert data['success'] is True
 
 
 def test_api_pipeline_run_reports_step_failure():
@@ -1514,7 +1545,7 @@ def test_api_recognize_success(tmp_path, monkeypatch):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_api_recognize_stub_when_backend_unavailable(tmp_path, monkeypatch):
+def test_api_recognize_error_when_backend_unavailable(tmp_path, monkeypatch):
     from textalchemy.core.artifacts import ArtifactWorkspace
 
     monkeypatch.setattr(
@@ -1541,9 +1572,9 @@ def test_api_recognize_stub_when_backend_unavailable(tmp_path, monkeypatch):
         files={"file": ("page.png", b"png-bytes", "image/png")},
     )
     body = resp.json()
-    assert body["success"] is True
-    assert "[STUB]" in body["text"]
-    assert body["backend"] is None
+    assert body["success"] is False
+    assert "OCR-движок недоступен" in body["error"]
+    assert "draft_id" not in body
 
 
 def test_api_recognize_error(tmp_path, monkeypatch):
@@ -1621,8 +1652,8 @@ def test_api_recognize_pdf_scenario_fast(tmp_path, monkeypatch):
     assert body["scenario"] == "fast"
 
 
-def test_api_recognize_pdf_scan_stub_when_no_backend(tmp_path, monkeypatch):
-    """scan scenario without OCR backend degrades to a STUB message."""
+def test_api_recognize_pdf_scan_error_when_no_backend(tmp_path, monkeypatch):
+    """Missing OCR cannot produce a successful editable document."""
     import fitz
 
     from textalchemy.core.artifacts import ArtifactWorkspace
@@ -1656,8 +1687,9 @@ def test_api_recognize_pdf_scan_stub_when_no_backend(tmp_path, monkeypatch):
             data={"scenario": "scan"},
         )
     body = resp.json()
-    assert body["success"] is True
-    assert "[STUB]" in body["text"]
+    assert body["success"] is False
+    assert "OCR-движок недоступен" in body["error"]
+    assert "draft_id" not in body
 
 
 def test_api_recognize_pdf_unknown_scenario(tmp_path, monkeypatch):

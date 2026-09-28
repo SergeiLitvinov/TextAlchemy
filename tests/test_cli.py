@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 
@@ -18,6 +19,40 @@ def test_cli_version(capsys):
         main(["--version"])
     assert exc.value.code == 0
     assert __version__ in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("config_exists", [False, True])
+@pytest.mark.parametrize("command", ["init", "match"])
+def test_cli_config_rejected_before_side_effects(tmp_path, monkeypatch, capsys, config_exists, command):
+    monkeypatch.chdir(tmp_path)
+    config = tmp_path / "settings.json"
+    if config_exists:
+        config.write_text(json.dumps({"matching": {"threshold": 0.99}, "output": "from-config"}), encoding="utf-8")
+    output = tmp_path / "result"
+    if command == "init":
+        arguments = ["init", "-o", str(output)]
+    else:
+        source = tmp_path / "source"
+        source.mkdir()
+        (source / "Ferroresonance_in_Power_Grids_2020.txt").write_text(
+            "Иванов И.И. Ferroresonance in Power Grids 2020", encoding="utf-8",
+        )
+        bib = tmp_path / "bibliography.txt"
+        bib.write_text("1. Иванов И.И. Ferroresonance in Power Grids. 2020.\n", encoding="utf-8")
+        arguments = ["match", "-s", str(source), "-b", str(bib), "-o", str(output), "-t", "0.30", "--json"]
+    assert main(["--config", str(config), *arguments]) == 1
+    captured = capsys.readouterr()
+    assert "--config" in captured.err
+    assert "не поддерживается" in captured.err
+    assert not output.exists()
+    assert not (tmp_path / "from-config").exists()
+    assert not (tmp_path / "matching_report.json").exists()
+    assert captured.out == ""
+
+
+def test_cli_short_config_without_command_is_rejected(capsys):
+    assert main(["-c", "missing.json"]) == 1
+    assert "не поддерживается" in capsys.readouterr().err
 
 
 def test_cli_help_extract():
@@ -83,13 +118,14 @@ def test_cli_help_recognize():
 # ── init ───────────────────────────────────────────
 
 
-def test_cli_init(tmp_path):
+def test_cli_init(tmp_path, capsys):
     out = tmp_path / "test_config.json"
     ret = main(["init", "-o", str(out)])
     assert ret == 0
     assert out.exists()
     cfg = json.loads(out.read_text(encoding="utf-8"))
     assert "mode" in cfg
+    assert "CLI не применяет" in capsys.readouterr().out
 
 
 # ── extract ────────────────────────────────────────
@@ -230,6 +266,49 @@ def test_cli_match_json_report(tmp_path, monkeypatch):
     bib.write_text("1. Author A. Title.", encoding="utf-8")
     ret = main(["match", "-s", str(src), "-b", str(bib), "--json"])
     assert ret == 0
+    report = json.loads((tmp_path / "matching_report.json").read_text(encoding="utf-8"))
+    assert report == {"matched": [], "unmatched": []}
+
+
+@pytest.mark.parametrize("relative_output", [False, True])
+@pytest.mark.parametrize("copy_fails", [False, True])
+def test_cli_match_json_reports_actual_copy(tmp_path, monkeypatch, relative_output, copy_fails):
+    monkeypatch.chdir(tmp_path)
+    source = tmp_path / "источники"
+    source.mkdir()
+    original = source / "Ferroresonance_in_Power_Grids_2020.TXT"
+    original.write_text("Иванов И.И. Ferroresonance in Power Grids 2020", encoding="utf-8")
+    (source / "unrelated.txt").write_text("completely unrelated", encoding="utf-8")
+    bib = tmp_path / "bibliography.txt"
+    bib.write_text("1. Иванов И.И. Ferroresonance in Power Grids. Электричество. 2020. с. 10-20.\n", encoding="utf-8")
+    output = Path("результат") if relative_output else tmp_path / "результат"
+    if copy_fails:
+        import shutil
+
+        def fail_copy(source, target):
+            raise OSError("Copy unavailable")
+
+        monkeypatch.setattr(shutil, "copy2", fail_copy)
+
+    assert main(["match", "-s", str(source), "-b", str(bib), "-o", str(output), "--json"]) == 0
+    report = json.loads((tmp_path / "matching_report.json").read_text(encoding="utf-8"))
+    assert report["unmatched"] == ["unrelated.txt"]
+    assert len(report["matched"]) == 1
+    entry = report["matched"][0]
+    assert entry["original"] == original.name
+    assert entry["score"] >= 0.3
+    assert entry["signals"]
+    assert original.exists()
+    copied = list(output.iterdir())
+    if copy_fails:
+        assert entry["new"] is None
+        assert copied == []
+    else:
+        assert len(copied) == 1
+        assert entry["new"] == str(copied[0])
+        assert copied[0].name != original.name
+        assert copied[0].suffix == ".txt"
+        assert copied[0].read_bytes() == original.read_bytes()
 
 
 def test_cli_match_no_files(tmp_path, monkeypatch):

@@ -38,8 +38,7 @@ def operations():
             "## Несоответствия контрактов",
             "",
             "У следующих операций вход реестра отсутствует в сигнатуре: " + ", ".join(f"`{op}`" for op in mismatches) + ".",
-            "Для библиографических `render.*` используйте `params: {items: $bib}` без поля `input`. "
-            "Исправление отслеживается в [M0.3](../../TODO.md#m0).",
+            "Проверьте `input_param` регистрации и имя аргумента функции перед связыванием шагов через `input`.",
             "",
         ]
     lines += ["", "## Параметры", "", "Все вызовы используют именованные параметры. Значения без `=` обязательны.", ""]
@@ -65,7 +64,7 @@ def cli():
         "",
         "Сформирован из парсера команд. Префикс: `uv run textalchemy`. "
         "[Сценарии и ограничения](../guide/index.md#справочник-команд). "
-        "Наличие аргумента в парсере не подтверждает его реализацию; известные дефекты — [M0](../../TODO.md#m0).",
+        "Наличие аргумента в парсере не подтверждает его поддержку; статус CLI — [M0](../../TODO.md#m0).",
         "",
     ]
     for name, current in [("Глобальные параметры", parser), *sorted(sub.choices.items())]:
@@ -88,7 +87,10 @@ def cli():
 
 
 def pages():
-    return {"docs/reference/operations.md": operations(), "docs/reference/cli.md": cli()}
+    from tools.documentation.navigator import code_pages, user_guide
+
+    return {"docs/reference/operations.md": operations(), "docs/reference/cli.md": cli(),
+            "docs/reference/user-guide.md": user_guide(ROOT, NOTICE), **code_pages(ROOT, NOTICE)}
 
 
 def sync(*, check=False):

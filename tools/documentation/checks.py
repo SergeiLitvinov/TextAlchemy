@@ -54,6 +54,11 @@ def check_examples(guide, directory):
 
     from textalchemy.pipeline.runner import run_pipeline
 
+    bibliography = json.loads(run(["run", ROOT / "docs/examples/bibliography-to-json.yaml", "--json"]))
+    entries = json.loads(bibliography["final"])
+    if len(entries) != 1 or entries[0]["title"] != "Исследование электрических сетей" or entries[0]["year"] != 2020:
+        raise ValueError("Библиографический конвейер изменил данные примера")
+
     spec = yaml.safe_load((ROOT / "docs/examples/text-to-docx.yaml").read_text(encoding="utf-8"))
     for step in spec["steps"]:
         params = step.get("params", {})
@@ -110,4 +115,7 @@ def check():
         if not directory.is_relative_to(parent.resolve()):
             raise ValueError("Unexpected examples workspace")
         check_examples(guide, directory)
-    print(f"Checked {count} command examples, {mapped} migrated tasks, pipeline and DOCX/HTML/PDF generation", flush=True)
+    print(
+        f"Checked {count} command examples, {mapped} migrated tasks, bibliography/text pipelines and DOCX/HTML/PDF generation",
+        flush=True,
+    )

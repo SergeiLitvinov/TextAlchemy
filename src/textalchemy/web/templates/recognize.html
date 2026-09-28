@@ -11,6 +11,7 @@
     <div class="privacy-pill"><span aria-hidden="true">●</span> Изображения не покидают компьютер</div>
 </section>
 
+<p class="card"><strong>В PDF уже есть текст?</strong> <a href="/pdf-order">Подготовить структуру перед конвертацией</a><br><span class="field-help">Уточните порядок чтения, заголовки и таблицы для будущего DOCX. Исходный PDF не изменяется.</span></p>
 <div class="ocr-layout">
     <section class="card ocr-setup" aria-labelledby="ocr-source-title">
         <div class="card-head"><div><p class="eyebrow">Источник</p><h3 id="ocr-source-title">Что находится в файле?</h3></div></div>
@@ -67,12 +68,33 @@
             <div><p class="eyebrow">Результат</p><h3 id="ocr-result-title">Распознанный текст</h3></div>
             <button type="button" class="btn-secondary" id="copyBtn" disabled>Копировать</button>
         </div>
-        <div class="ocr-empty" id="resultEmpty"><span aria-hidden="true">≡</span><strong>Текст появится здесь</strong><small>После обработки его можно будет проверить, исправить и скопировать.</small></div>
+        <div class="ocr-empty" id="resultEmpty"><span aria-hidden="true">≡</span><strong>Текст появится здесь</strong><small>После обработки его можно проверить, исправить, сохранить и скачать.</small></div>
         <textarea id="result" hidden aria-label="Распознанный текст" placeholder="Распознанный текст появится здесь..."></textarea>
+        <fieldset class="ocr-paragraph-order">
+            <legend>Порядок абзацев</legend>
+            <p class="field-help" id="paragraphHelp">Поставьте курсор в абзац или выделите несколько абзацев, затем переместите их. Каждая новая строка — отдельный абзац, включая пустые строки. После перемещения сохраните правки.</p>
+            <div class="ocr-edit-actions">
+                <button type="button" id="paragraphUp" class="btn-secondary" aria-describedby="paragraphHelp" disabled>Переместить выше</button>
+                <button type="button" id="paragraphDown" class="btn-secondary" aria-describedby="paragraphHelp" disabled>Переместить ниже</button>
+            </div>
+            <p id="paragraphPosition" role="status" aria-live="polite"></p>
+        </fieldset>
+        <p class="field-help">Редактор сохраняет текст и абзацы. Расположение областей, изображения и таблицы скана не восстанавливаются. Сохранённый текст доступен по адресу этой страницы в течение часа после сохранения.</p>
+        <p id="editStatus" role="status" aria-live="polite"></p>
+        <div class="ocr-edit-actions">
+            <button type="button" id="saveTextBtn" disabled>Сохранить правки</button>
+            <button type="button" id="reloadTextBtn" class="btn-secondary" disabled>Загрузить сохранённое</button>
+            <label for="ocrExportFormat">Формат скачивания</label>
+            <select id="ocrExportFormat" disabled>
+                <option value="txt">Текст TXT</option><option value="docx">Документ DOCX</option>
+                <option value="pdf">Документ PDF</option><option value="model">JSON-модель</option>
+            </select>
+            <button type="button" id="exportTextBtn" disabled>Сохранить и скачать</button>
+        </div>
     </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/pages/recognize.js?v={{ asset_version }}" defer></script>
+<script src="/static/js/pages/recognize.js?v={{ asset_version }}" type="module"></script>
 {% endblock %}

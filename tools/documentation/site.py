@@ -1,5 +1,6 @@
 """Assemble only documented files into a disposable MkDocs source tree."""
 
+import html
 import json
 import os
 import re
@@ -12,6 +13,21 @@ from tools.documentation.generated import ROOT
 
 STAGE = ROOT / ".textalchemy/docs-source"
 SNAPSHOTS = {"todo-2026-09-13.md", "todo-before-milestones-2026-09-13.md"}
+
+
+def source_page(path, relative):
+    """Readable local source with stable line anchors, without running embedded markup."""
+    title = html.escape(relative)
+    lines = path.read_text(encoding='utf-8-sig').splitlines()
+    content = '\n'.join(f'<span id="L{index}"><a href="#L{index}">{index:4}</a> {html.escape(line)}</span>'
+                        for index, line in enumerate(lines, 1))
+    return (f'<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" '
+            f'content="width=device-width, initial-scale=1"><title>{title}</title>'
+            '<style>body{margin:2rem;font-family:system-ui;background:#fafafa;color:#202020}'
+            'pre{overflow:auto;line-height:1.55}a{color:#576777;text-decoration:none}'
+            'span:target{background:#fff0ad}h1{font-size:1.1rem;overflow-wrap:anywhere}</style>'
+            f'<h1>{title}</h1><p>Снимок исходника при сборке документации. Номера строк — прямые ссылки.</p>'
+            f'<pre><code>{content}</code></pre></html>').encode('utf-8')
 
 
 def write_changed(path, data):
@@ -83,7 +99,11 @@ def rewrite_links(content, name, contents, assets):
         else:
             parts = ("dot-" + part[1:] if part.startswith(".") else part for part in Path(relative).parts)
             destination = "files/" + "/".join(parts)
-            assets[destination] = target.read_bytes()
+            if target.suffix in {'.py', '.js', '.html', '.css'}:
+                destination += '.html'
+                assets[destination] = source_page(target, relative)
+            else:
+                assets[destination] = target.read_bytes()
         new = Path(os.path.relpath(destination, Path(name).parent)).as_posix()
         return "](" + new + ("#" + fragment if fragment else "") + ")"
 

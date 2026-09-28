@@ -18,6 +18,8 @@ uv run textalchemy web
 | Что нужно | Документ |
 |---|---|
 | Начать работу и понять возможности | [Руководство пользователя](docs/guide/index.md) |
+| Выбрать действие в руководстве | [Автоматическое содержание](docs/reference/user-guide.md) |
+| Найти реализацию и связанные тесты | [Навигатор по коду](docs/reference/code.md), [Web-маршруты](docs/reference/web-routes.md) |
 | Запустить готовый конвейер | [Пример TXT → DOCX](docs/examples/text-to-docx.yaml), [операции](docs/reference/operations.md) |
 | Найти команду и её параметры | [Автоматический справочник CLI](docs/reference/cli.md) |
 | Узнать ограничения форматов | [Каталог справочников и приёмок](docs/README.md) |

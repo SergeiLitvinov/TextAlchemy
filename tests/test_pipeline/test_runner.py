@@ -16,6 +16,40 @@ from textalchemy.pipeline import render as _render_op  # noqa: F401
 from textalchemy.pipeline.runner import load_pipeline, run_pipeline
 
 
+@pytest.mark.parametrize("renderer", ["bibtex", "gost", "markdown", "json"])
+@pytest.mark.parametrize("binding", ["input: bib", "params: {items: $bib}"])
+def test_bibliography_render_chained_input(tmp_path, renderer, binding):
+    pipeline = tmp_path / "bibliography.yaml"
+    pipeline.write_text(
+        "steps:\n"
+        "  - op: bibliography.smart_parse\n"
+        "    params:\n"
+        "      text: |\n"
+        "        1. Иванов И.И. Quantum Computing. 2020.\n"
+        "        2. Smith J. Power Grids. 2019.\n"
+        "    output: bib\n"
+        f"  - op: render.{renderer}\n"
+        f"    {binding}\n"
+        "    output: bibliography\n"
+        "output: bibliography\n",
+        encoding="utf-8",
+    )
+    result = run_pipeline(pipeline)
+    assert result.ok, result.error
+    assert all(step.error is None for step in result.steps)
+    for expected in ("Иванов", "Quantum Computing", "Power Grids", "2020", "2019"):
+        assert expected in result.final
+    if renderer == "bibtex":
+        assert result.final.count("@misc{") == 2
+    elif renderer == "markdown":
+        assert result.final.count("**") == 4
+    elif renderer == "json":
+        entries = json.loads(result.final)
+        assert len(entries) == 2
+        assert [entry["year"] for entry in entries] == [2020, 2019]
+    assert json.loads(json.dumps(result.to_dict(), ensure_ascii=False))["final"] == result.final
+
+
 def test_load_yaml(tmp_path):
     p = tmp_path / "pipe.yaml"
     p.write_text(

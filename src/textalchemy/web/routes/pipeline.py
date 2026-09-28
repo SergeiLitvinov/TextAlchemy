@@ -6,14 +6,15 @@ import json
 from typing import Any
 
 import yaml
-from fastapi import Form, HTTPException
-from fastapi.responses import Response
+from fastapi import File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse, Response
 
 from textalchemy.core.registry import get
 from textalchemy.pipeline import register_builtin_operations
 from textalchemy.pipeline.render import render_bibtex, render_gost, render_json, render_markdown
-from textalchemy.pipeline.runner import run_pipeline
 from textalchemy.web.app import app, db
+from textalchemy.web.services.pipeline_files import execute_web_pipeline, pipeline_result, store_input
+from textalchemy.web.workspace import create_web_workspace, save_upload
 
 _STEP_KEYS = ("steps", "output")
 
@@ -71,10 +72,10 @@ def _validate_spec(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str
         if output in outputs:
             errors.append({"step": index, "message": f"дублируется имя вывода {output!r}"})
         outputs.add(output)
-        known.add(output)
         input_name = step.get("input")
         if input_name and input_name not in known:
             errors.append({"step": index, "message": f"вход {input_name!r} не определён"})
+        known.add(output)
     final_output = spec.get("output")
     if final_output and final_output not in known:
         errors.append({"step": None, "message": f"итоговый output {final_output!r} не определён"})
@@ -84,14 +85,32 @@ def _validate_spec(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str
 
 
 @app.post("/api/pipeline/run")
-async def api_pipeline_run(spec: str = Form(...)):
+def api_pipeline_run(spec: str = Form(...)):
     register_builtin_operations()
     try:
         pipeline_def = _parse_spec(spec)
     except ValueError as error:
         return {"success": False, "error": str(error)}
-    result = run_pipeline(pipeline_def)
-    return {"success": True, "result": result.to_dict()}
+    try:
+        return execute_web_pipeline(pipeline_def)
+    except (ValueError, KeyError, TypeError, OSError) as error:
+        return {'success': False, 'error': str(error)}
+
+
+@app.post('/api/pipeline/files')
+async def api_pipeline_upload(file: UploadFile = File(...)):
+    with create_web_workspace() as workspace:
+        path = await save_upload(workspace, file, fallback='input.txt')
+        return store_input(path)
+
+
+@app.get('/api/pipeline/results/{task_id}')
+def api_pipeline_download(task_id: str):
+    try:
+        path = pipeline_result(task_id)
+    except LookupError as error:
+        raise HTTPException(404, str(error)) from error
+    return FileResponse(path, filename=path.name)
 
 
 @app.post("/api/pipeline/parse")

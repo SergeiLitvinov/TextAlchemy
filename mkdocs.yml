@@ -23,6 +23,7 @@ hooks:
 watch:
   - docs
   - src/textalchemy
+  - tests
   - TODO.md
   - README.md
   - AGENTS.md
@@ -38,14 +39,17 @@ validation:
 nav:
   - Проект: README.md
   - Руководство:
+      - Выбрать задачу: docs/reference/user-guide.md
       - Начать работу: docs/guide/index.md
       - Подробности форматов: docs/guide/formats.md
-      - Web и пакеты: docs/guide/web-details.md
+      - Контракты Web/API: docs/guide/web-details.md
   - План по вехам: TODO.md
   - Справочники:
       - Команды CLI: docs/reference/cli.md
       - Операции конвейера: docs/reference/operations.md
   - Разработка:
+      - Навигатор по коду: docs/reference/code.md
+      - Web-маршруты: docs/reference/web-routes.md
       - Система документации: docs/development/documentation.md
       - Устройство проекта: AGENTS.md
       - Стандарты: CODING_STANDARDS.md

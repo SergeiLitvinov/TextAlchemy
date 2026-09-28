@@ -6,7 +6,7 @@
     <div>
         <p class="eyebrow">Автоматизация</p>
         <h2>Соберите сценарий обработки</h2>
-        <p class="lead">Соедините готовые действия в последовательность. TextAlchemy проверит совместимость входов и выходов до запуска.</p>
+        <p class="lead">Выберите действия, свяжите их с результатами предыдущих шагов и проверьте связи перед запуском.</p>
     </div>
     <div class="segmented" role="tablist" aria-label="Режим редактирования">
         <button type="button" id="modeVisualBtn" class="seg-btn active" role="tab" aria-selected="true">Конструктор</button>
@@ -35,7 +35,7 @@
                 <h3 id="steps-title">Последовательность шагов</h3>
             </div>
             <div class="btn-group">
-                <button type="button" id="addStepBtn" class="btn-secondary">+ Пустой шаг</button>
+                <button type="button" id="addStepBtn" class="btn-secondary">+ Добавить действие</button>
                 <button type="button" id="validateBtn" class="btn-secondary">Проверить</button>
                 <button type="button" id="runBtn" class="btn-primary">Запустить <span aria-hidden="true">→</span></button>
             </div>
@@ -61,10 +61,6 @@
         </details>
 
         <div id="status" class="status-bar" hidden></div>
-        <section id="pipeline-result" class="card pipeline-output" hidden aria-labelledby="pipeline-result-title">
-            <div class="card-head"><h3 id="pipeline-result-title">Результат выполнения</h3></div>
-            <pre id="result-output"></pre>
-        </section>
     </section>
 </div>
 
@@ -79,6 +75,15 @@
     <p class="section-copy">Поддерживаются форматы YAML и JSON. Изменения синхронизируются с визуальным конструктором при переносе.</p>
     <textarea id="specText" rows="20" spellcheck="false" aria-label="Спецификация сценария"></textarea>
     <div id="statusExpert" class="status-bar" hidden></div>
+</section>
+<section id="pipeline-result" class="card pipeline-output" hidden aria-labelledby="pipeline-result-title">
+    <div class="card-head"><h3 id="pipeline-result-title" tabindex="-1">Результат выполнения</h3></div>
+    <p id="resultSummary" role="status"></p>
+    <ol id="resultSteps" class="pipeline-result-steps"></ol>
+    <p id="resultValueNote" class="field-help"></p>
+    <pre id="resultValue" hidden></pre>
+    <div id="resultDownloads" class="row-actions" role="group" aria-label="Файлы результата"></div>
+    <details class="workspace-disclosure"><summary>Подробный отчёт (JSON)</summary><pre id="result-output"></pre></details>
 </section>
 {% endblock %}
 

@@ -231,6 +231,7 @@ def render_docx(*, text: Text, output_path: Union[str, Path]) -> Path:
     "render.bibtex",
     input_type="list[BibItem]",
     output_type="str",
+    input_param="items",
     description="BibItem[] → BibTeX (.bib).",
     tags=["render"],
 )
@@ -264,6 +265,7 @@ def render_bibtex(*, items: Sequence[Any]) -> str:
     "render.gost",
     input_type="list[BibItem]",
     output_type="str",
+    input_param="items",
     description="BibItem[] → ГОСТ Р 7.0.100.",
     tags=["render"],
 )
@@ -282,6 +284,7 @@ def render_gost(*, items: Sequence[Any]) -> str:
     "render.markdown",
     input_type="list[BibItem]",
     output_type="str",
+    input_param="items",
     description="BibItem[] → Markdown список.",
     tags=["render"],
 )
@@ -342,6 +345,7 @@ def render_txt_model(*, document: DocumentModel, output_path: Union[str, Path]) 
     "render.json",
     input_type="list[BibItem]",
     output_type="str",
+    input_param="items",
     description="BibItem[] → JSON.",
     tags=["render"],
 )

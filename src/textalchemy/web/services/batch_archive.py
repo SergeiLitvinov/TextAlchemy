@@ -8,17 +8,26 @@ from typing import BinaryIO
 from zipfile import ZIP_STORED, ZipFile
 
 from textalchemy.core.artifacts import safe_artifact_filename
+from textalchemy.web.services.batch_actions import parse_retry_selection
 from textalchemy.web.tasks import TaskStore
 
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
 ACTIVE_STATES = {"queued", "running", "cancelling"}
 
 
-def build_batch_archive(store: TaskStore, job_id: str, *, max_bytes: int = MAX_ARCHIVE_BYTES) -> BinaryIO:
+def build_batch_archive(store: TaskStore, job_id: str, *, max_bytes: int = MAX_ARCHIVE_BYTES,
+                        task_ids: str | None = None) -> BinaryIO:
     job = store.get_job(job_id)
     if job is None:
         raise LookupError("Пакет не найден или срок хранения истёк")
-    entries = [(item, store.get(item["task_id"])) for item in job.get("files", [])]
+    selected = parse_retry_selection(task_ids, job)
+    entries = [(item, store.get(item["task_id"])) for item in job.get("files", [])
+               if selected is None or item['task_id'] in selected]
+    if selected is not None and any(not task or task.get('status') != 'done' for _, task in entries):
+        raise ValueError('Выбранные результаты изменились или ещё не готовы. Обновите пакет.')
+    if selected is not None and any(not task.get('artifact') or
+            store.result_path(item['task_id'], task['artifact']) is None for item, task in entries):
+        raise ValueError('Один из выбранных результатов уже недоступен. Обновите пакет.')
     if any(task and task.get("status") in ACTIVE_STATES for _, task in entries):
         raise ValueError("Дождитесь завершения всех файлов пакета")
     stream = SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")

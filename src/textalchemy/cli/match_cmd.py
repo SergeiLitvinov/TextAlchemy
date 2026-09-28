@@ -50,7 +50,7 @@ def cmd_match(args: argparse.Namespace) -> int:
             "matched": [
                 {
                     "original": m.document.path.name,
-                    "new": (output_dir / m.document.path.name if output_dir else m.document.path.name),
+                    "new": str(m.copied_path) if m.copied_path is not None else None,
                     "score": round(m.score, 2),
                     "signals": [
                         {"name": s.name, "score": s.score, "weight": s.weight}

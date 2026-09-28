@@ -4,43 +4,20 @@ TextAlchemy — Python toolkit for scientific/educational document processing. S
 
 ## Layout
 
-- `src/textalchemy/__main__.py` — CLI entry: `_setup_parser()` + `main()` dispatch (`argparse` + `match`). Handlers live in `src/textalchemy/cli/` (15 modules: `bibliography_cmd.py`, `bibtex_cmd.py`, `completion_cmd.py`, `convert_cmd.py`, `convert_file_cmd.py`, `extract_cmd.py`, `generate_cmd.py`, `init_cmd.py`, `inspect_cmd.py`, `match_cmd.py`, `plan_cmd.py`, `recognize_cmd.py`, `run_cmd.py`, `template_cmd.py`, `web_cmd.py`).
-- `src/textalchemy/core/` — base types (`Document`, `Text`, `Match`, `Signal`, `BibItem`) and the operation registry (`@operation`).
-  - `document_model.py` — rich intermediate model (`DocumentModel`, sections/paragraphs/tables/images/formulas, typed `*Properties`), `conversion_graph.py` — capability model + route planner, `document_codec.py` — versioned JSON serialization, `document_adapters.py`, `properties.py`, `diagnostics.py` (`ConversionReport`), `inspection.py` (structure/quality report for `textalchemy inspect`), `database.py`, `io.py`, `hashing.py`, `latex.py`, `config.py`, `exceptions.py`.
-- `src/textalchemy/formats/` — atomic format readers: `pdf` (chain `pdfplumber → pypdf → pymupdf`), `docx` (split into `docx_text/style/table/section/drawing/notes` + `docx.py` facade), `pptx` (`pptx.py` — `read_pptx` flat text + `read_pptx_model` DocumentModel importer: slides→sections, shapes→blocks with EMU→pt geometry, groups/transforms, runs/styles/hyperlinks, OMML formulas, images, tables, charts, notes, background; placeholder geometry/styles inherited slide → layout → master via `p:txStyles`; shape metadata in `properties["pptx"]["shape"]`), `txt`/`djvu`, `epub`.
-  - PDF geometry/semantics: `pdf_geometry.py` (reading order, blocks, tables, images), `pdf_layout.py`, `pdf_classify.py`, `pdf_images.py` (raster + vector extraction), `pdf_ocr_merge.py` (text layer + OCR fusion), `pdf_ocr_types.py`, `pdf_semantic.py`, `pdf_ocr_merge.py`.
-- `src/textalchemy/ooxml/` — shared OPC `PackageGraph` and relationship handling for DOCX/PPTX round-trips.
-- `src/textalchemy/pipeline/` — pipeline stages as `@operation`s:
-  - `ingest.py` — `ingest.file`: path → `Document`.
-  - `extract.py` — `extract.text`: `Document` → `Text` (universal reader); `extract.pdf_model`: PDF → `DocumentModel` (geometry, tables, images, vectors, optional OCR merge); `extract.pptx_model`: PPTX → `DocumentModel` (slides, shapes, tables, images, charts, OMML).
-  - `emails_op.py` — `extract.emails`, `render.emails.{docx,txt,debug}`.
-  - `signals.py` — author/title/year/doi/isbn signals with configurable weights.
-  - `match.py` — `match.bibliography`: `Text`+`Document`+`BibItem[]` → `Match`.
-  - `match_files.py` — `match.files`: directory + BibItem[] → `Match[]` (batch; copies matched files to `output_dir`).
-  - `bibliography.py` — `bibliography.parse` (path → BibItem[]), `bibliography.smart_parse` (text → BibItem[]).
-  - `name.py` — `name.from_match`: `Match` → filename.
-  - `render.py` — `render.latex`, `render.latex.pandoc`, `render.docx`, `render.docx_model` (DocumentModel → DOCX), `render.bibtex`, `render.gost`, `render.markdown`, `render.json`.
-  - `render_html.py` — `render.html.pptx`: `Document` (.pptx) → `ConversionResult` (HTML viewer).
-  - `template.py` — `template.render`: fill `DocumentModel` with data (variables, conditions, loops).
-  - `runner.py` — YAML/TOML/JSON pipeline runner.
-- `src/textalchemy/convert/` — conversion subsystem:
-  - `capabilities.py` / `executor.py` — built-in `ConverterCapabilities` + `ConversionExecutor` that plans a route through `DocumentModel` and executes it (no temp file); `protocols.py`, `backends.py`, `base.py` (`BaseConverter`/`ConversionReport`).
-  - `pdf_to_docx.py` — PDF → DOCX (`pdf2docx`, `pymupdf`, `libreoffice`, engine fallback).
-  - `docx_writer.py` + `docx_*_writer.py` — `DocumentModel` → DOCX; `html_writer.py` — → self-contained HTML; `pdf_writer.py` — → PDF (PyMuPDF Story); `docx_to_latex.py` — DOCX → LaTeX.
-  - Static HTML importer: `formats/html.py` facade, `html_model.py`, `html_css.py`, `html_resources.py`, `html_diagnostics.py`; `extract.html_model` operation and `html.model` route. Diagnostics keep stable block references through JSON; Web shows linked fragments. Dependencies live in the `html` extra.
-  - `pptx_to_html/` — PPTX → self-contained HTML viewer (MathML via MathJax). Public API: `PptxToHtmlConverter`, `convert` (see `converter.py:84`). Shipped assets in `pptx_to_html/assets/{css,js}/` are copied to output by default.
-- `src/textalchemy/recognize/` — OCR subsystem:
-  - `ocr.py` — `OcrEngine` поддерживает три бэкенда: Tesseract, EasyOCR, PaddleOCR. Автоопределение доступного. Поддержка `handwriting` (рукописный текст) и `use_gpu`. Методы `recognize_pdf()` и `recognize_pdf_geometry()`/`recognize_with_geometry()` (координаты блоков для OCR-merge с текстовым слоем PDF).
-  - `classifier.py` — `DocumentClassifier` по ключевым словам (статья/диссертация/монография и т.д.).
-  - `layout.py` — `LayoutAnalyzer` базовый анализ областей на изображении (текст/таблица/колонтитул).
-- `src/textalchemy/{extract,organize,generate,quality,web}/` — other subsystems:
-  - `extract/` — legacy: docx → text/LaTeX, emails, `fix_encoding.py`.
-  - `organize/` — legacy: bibliography parser, matching, GOST, filename, bibtex.
-  - `generate/` — template engine: `template.py` (DSL), `template_schema.py` (data schema), `model_template.py` (DocumentModel-driven DOCX/HTML/PDF generation).
-  - `quality/` — visual metrics and perceptual regression.
-  - `web/` — FastAPI app (`app.py`), route handlers in `web/routes/` (pages, bibliography, convert, extract, generate, matching, pipeline, recognize), Jinja2 templates + static assets.
-- `tests/` — pytest. Subpackages mirror the source: `test_core/`, `test_formats/`, `test_pipeline/`, `test_convert/`, `test_generate/`, `test_organize/`, `test_recognize/`, `test_extract/`, `test_quality/`. Flat: `test_cli.py`, `test_web.py`, `test_database.py`, `test_ooxml_package.py`, `test_template_cli.py`.
-- `tests/corpus/` — reproducible scientific DOCX/PDF/PPTX corpus and structural golden data.
+The generated [code navigator](docs/reference/code.md) is the source of truth for module paths, public definitions, internal imports and direct test imports. [Web routes](docs/reference/web-routes.md) maps request paths to handlers. Regenerate these instead of maintaining a second file inventory here.
+
+Start with these stable entry points:
+
+| Work | Entry point |
+|---|---|
+| CLI parsing and dispatch | `src/textalchemy/__main__.py`, handlers under `src/textalchemy/cli/` |
+| Document types and operations | `src/textalchemy/core/`, `src/textalchemy/pipeline/` |
+| Format import/export | `src/textalchemy/formats/`, `src/textalchemy/convert/` |
+| Template generation | `src/textalchemy/generate/` |
+| Web behavior | `src/textalchemy/web/routes/`, `services/`, `static/js/pages/` |
+| Reproducible fixtures | [Corpus](tests/corpus/README.md), [Office provenance](tests/corpus/office/README.md) |
+
+The sections below define contributor contracts and workflows; implementation inventory belongs to the navigator, user behavior to the guide, and future work to TODO.md.
 
 ## Commands
 
@@ -48,7 +25,7 @@ Always run via `uv` so the lockfile-resolved env is used.
 
 - Install (full): `uv sync --all-extras`
 - Minimal install: `uv sync` (core: yaml, platformdirs, pypdf, jinja2, tqdm). Heavy deps live in extras — `pdf` (pymupdf, pdf2docx), `docx` (python-docx), `pptx` (python-pptx, lxml, Pillow), `epub` (ebooklib, bs4), `web` (fastapi, uvicorn, python-multipart, sqlalchemy), `ocr` (pytesseract, easyocr, paddleocr, paddlepaddle). Readers/converters lazy-import their backends and never force them at `import textalchemy`.
-- Lint: `uv run ruff check` (config: line-length 130, rules E/F/I/N/W, `pyproject.toml`)
+- Lint: `uv run ruff check` (configuration is defined in `pyproject.toml`)
 - Format: `uv run ruff check --fix && uv run ruff format`
 - Test: `uv run pytest tests/ -v --tb=short` (or `--cov=textalchemy` for coverage). Coverage threshold `--cov-fail-under=80` is enforced whenever `--cov` is active (see `pyproject.toml`).
 - Single test: `uv run pytest tests/test_pipeline/test_runner.py::test_run_chained_ingest_extract -v`
@@ -63,6 +40,8 @@ Equivalent `make` targets exist in the `Makefile` (`make install|test|lint|forma
 ## CI
 
 Documentation lives in [guide](docs/guide/index.md), [generated reference](docs/reference/cli.md), and [history](docs/history/changes.md); `TODO.md` is the only active milestone plan. Update the relevant guide chapter and milestone when behavior changes. Do not hand-edit `docs/reference/`: run `uv run python -m tools.docs generate` after CLI or operation changes, then `uv run python -m tools.docs check` (extra `docs` plus the example dependencies). Local preview: `uv run python -m tools.docs serve`. See [documentation workflow](docs/development/documentation.md). CI checks reference drift, links, task migration and runnable examples, then stores the built site as an artifact.
+
+Generated documentation also includes [user-guide navigation](docs/reference/user-guide.md), [code navigator](docs/reference/code.md) and [Web routes](docs/reference/web-routes.md). Regenerate after Python source, Web file inventory, test imports or guide headings change. The navigator uses static AST inspection; test links are not coverage claims. Use `uv run python -m tools.clean` to preview reproducible cache cleanup, and add `--apply` to remove only that allowlist; never clean the entire `.textalchemy` data directory.
 
 `.github/workflows/ci.yml` runs on Python 3.11/3.12/3.13: `uv sync --all-extras` → `uv run ruff check` → `uv run pytest tests/ --cov=textalchemy --cov-report=xml` (uploads to codecov). Required order: install → lint → test.
 

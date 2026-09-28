@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import File, Form, HTTPException, UploadFile
+from fastapi import File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
@@ -16,7 +16,7 @@ from textalchemy.core.text_quality_policy import resolve_text_policy
 from textalchemy.core.types import DocFormat
 from textalchemy.web.app import app
 from textalchemy.web.routes import convert as facade
-from textalchemy.web.services.batch_actions import cancel_batch
+from textalchemy.web.services.batch_actions import cancel_batch, parse_retry_selection
 from textalchemy.web.services.batch_archive import build_batch_archive
 from textalchemy.web.services.batch_options import parse_batch_options
 
@@ -207,9 +207,9 @@ async def api_convert_job_delete(job_id: str):
 
 
 @app.get("/api/convert/jobs/{job_id}/archive")
-def api_convert_job_archive(job_id: str):
+def api_convert_job_archive(job_id: str, task_ids: str | None = None):
     try:
-        stream = build_batch_archive(facade.tasks_store, job_id)
+        stream = build_batch_archive(facade.tasks_store, job_id, task_ids=task_ids)
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except ValueError as error:
@@ -237,36 +237,51 @@ def api_convert_job_archive(job_id: str):
 
 
 @app.post("/api/convert/jobs/{job_id}/rerun")
-async def api_convert_job_rerun(job_id: str, failed_only: bool = Form(False)):
+async def api_convert_job_rerun(
+    job_id: str, request: Request, failed_only: bool = Form(False), task_ids: str | None = Form(None),
+):
+    if task_ids is None and "task_ids" in await request.form():
+        raise HTTPException(status_code=400, detail="Выберите хотя бы один файл пакета")
     job = facade.tasks_store.get_job(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    try:
+        selected = parse_retry_selection(task_ids, job)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    failed_only = failed_only or selected is not None
     try:
         conversion_mode = ConversionMode(job["mode"])
     except (KeyError, ValueError):
         conversion_mode = ConversionMode.BALANCED
     executor = ConversionExecutor()
     submissions = []
+    skipped = []
     for item in job.get("files", []):
         task_id = item["task_id"]
+        if selected is not None and task_id not in selected:
+            continue
         task = facade.tasks_store.get(task_id) or {}
         if failed_only and task.get("status") not in {"error", "interrupted", "cancelled"}:
+            skipped.append({"task_id": task_id, "name": item["name"], "reason": "Статус изменился или задача истекла"})
             continue
         source_path = facade.tasks_store.source_path(task_id)
         if source_path is None:
+            skipped.append({"task_id": task_id, "name": item["name"], "reason": "Исходный файл недоступен"})
             continue
         if task.get("status") in {"queued", "running", "cancelling"}:
+            skipped.append({"task_id": task_id, "name": item["name"], "reason": "Файл уже обрабатывается"})
             continue
         source, target = DocFormat(item["source_format"]), DocFormat(item["target_format"])
         file_mode = ConversionMode(task.get("mode", item.get("mode", conversion_mode.value)))
         plan = executor.plan(source, target, mode=file_mode)
         if plan is None or not facade._web_plan_supported(plan):
+            skipped.append({"task_id": task_id, "name": item["name"], "reason": "Маршрут недоступен"})
             continue
-        facade.tasks_store.clear_result(task_id)
-        facade._register_task(
+        prepared = facade.tasks_store.prepare_retry(
             task_id,
-            {
-                **task,
+            expected=task,
+            updates={
                 "status": "queued",
                 "queue_kind": "convert",
                 "error": None,
@@ -282,6 +297,9 @@ async def api_convert_job_rerun(job_id: str, failed_only: bool = Form(False)):
                 "mode": file_mode.value,
             },
         )
+        if not prepared:
+            skipped.append({"task_id": task_id, "name": item["name"], "reason": "Состояние изменилось; обновите пакет"})
+            continue
         submissions.append(task_id)
     launched = []
     for task_id in submissions:
@@ -291,12 +309,19 @@ async def api_convert_job_rerun(job_id: str, failed_only: bool = Form(False)):
         except RuntimeError as error:
             task = facade.tasks_store.get(task_id) or {}
             facade._register_task(task_id, {**task, "status": "queued", "error": f"Ожидает перезапуска очереди: {error}"})
-    return {"success": True, "job_id": job_id, "launched": launched, "failed_only": failed_only}
+    return {
+        "success": True, "job_id": job_id, "launched": launched, "failed_only": failed_only,
+        "queued": submissions, "skipped": skipped,
+    }
 
 
 @app.post("/api/convert/jobs/{job_id}/cancel")
-def api_convert_job_cancel(job_id: str):
+async def api_convert_job_cancel(job_id: str, request: Request, task_ids: str | None = Form(None)):
+    if task_ids is None and 'task_ids' in await request.form():
+        raise HTTPException(400, 'Выберите хотя бы один файл пакета')
     try:
-        return cancel_batch(facade.tasks_store, job_id, cancel_task=facade._task_service().cancel)
+        return cancel_batch(facade.tasks_store, job_id, cancel_task=facade._task_service().cancel, task_ids=task_ids)
     except LookupError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error

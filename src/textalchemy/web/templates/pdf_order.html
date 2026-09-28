@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% set active = 'convert' %}
+{% block title %}TextAlchemy — подготовка PDF к конвертации{% endblock %}
+{% block content %}
+<section class="page-heading"><div><p class="eyebrow">Конвертация · подготовка структуры</p><h2>Подготовка PDF к конвертации</h2>
+<p>Уточните порядок чтения, заголовки и границы таблиц для создаваемого документа. Исходный PDF остаётся без изменений. Полное редактирование PDF здесь не поддерживается.</p>
+<a href="/convert">К обычной конвертации</a></div></section>
+<section class="card">
+<label for="orderFile">PDF с текстовым слоем</label><input id="orderFile" type="file" accept=".pdf,application/pdf">
+<details class="workspace-disclosure"><summary>Какие PDF подходят и как хранятся правки</summary><p>Сканы без текстового слоя здесь не распознаются. Колонтитулы остаются на своих местах. Модель сохраняет свойства и ресурсы; DOCX перестраивает вёрстку и может упрощать сложные объекты.</p>
+<p>Правки хранятся один час после сохранения. Адрес страницы позволяет вернуться к сохранённому порядку.</p>
+<p>Панель границ доступна для таблиц с прямоугольной сеткой и известными координатами ячеек. Объединённые ячейки пока не поддерживаются.</p>
+</details><p id="orderStatus" role="status" aria-live="polite"></p>
+<div id="orderEditor" hidden>
+<label for="orderPage">Страница</label><select id="orderPage"></select>
+<div class="pdf-order-layout">
+<div><p>Выберите фрагмент на странице или в списке. Клавиша Tab переходит между областями.</p><div class="pdf-order-source"><img id="orderImage" alt="Исходная страница PDF"><div id="orderHotspots" role="group" aria-label="Области исходной страницы"></div><div id="orderRegion" hidden aria-hidden="true"></div></div></div>
+<div><label for="orderBlocks">Блоки в порядке чтения</label><select id="orderBlocks" size="10"></select>
+<p id="orderEmpty" hidden>На странице нет доступных блоков. Для скана воспользуйтесь распознаванием текста.</p>
+<div class="ocr-edit-actions"><button id="orderUp" type="button">Выше</button><button id="orderDown" type="button">Ниже</button></div>
+<div id="textProperties"><h3>Свойства текста</h3><label for="blockClassification">Тип выбранного текста</label>
+<select id="blockClassification" aria-describedby="classificationHelp" disabled>
+<option value="auto" disabled>Исходная классификация PDF</option>
+<option value="paragraph">Обычный абзац</option><option value="heading1">Заголовок 1</option>
+<option value="heading2">Заголовок 2</option><option value="heading3">Заголовок 3</option>
+</select>
+<p id="classificationHelp">Доступно для текстовых абзацев. Выбор задаёт стиль заголовка в DOCX; исходное изображение и оформление фрагментов текста не меняются. Сохраните правки перед уходом.</p>
+</div>
+<fieldset id="tableBounds" hidden>
+<legend>Границы таблицы по строкам и столбцам</legend>
+<p>Выберите диапазон исходной таблицы. Это обрезка по границам ячеек, без разделения или объединения. Просмотр ниже показывает будущий результат; изменения применятся после сохранения.</p>
+<div class="form-grid">
+<label>Первая строка<input id="tableFirstRow" type="number" min="1" step="1"></label>
+<label>Последняя строка<input id="tableLastRow" type="number" min="1" step="1"></label>
+<label>Первый столбец<input id="tableFirstColumn" type="number" min="1" step="1"></label>
+<label>Последний столбец<input id="tableLastColumn" type="number" min="1" step="1"></label>
+</div>
+<button id="tableReset" type="button">Вся исходная таблица</button>
+<p id="tableMessage" role="status" aria-live="polite"></p>
+<div class="table-bounds-preview"><table aria-label="Таблица после изменения границ"><tbody id="tablePreview"></tbody></table></div>
+</fieldset>
+</div></div>
+<div class="editor-actionbar"><p id="orderDirty" role="status"></p><div class="ocr-edit-actions">
+<button id="orderSave" type="button">Сохранить правки</button><button id="orderReload" type="button">Загрузить сохранённое</button>
+<label for="orderFormat">Формат</label><select id="orderFormat"><option value="docx">Документ DOCX</option><option value="model">JSON-модель (для автоматизации)</option></select>
+<button id="orderExport" type="button">Сохранить и скачать</button>
+<button id="orderCheck" type="button">Сохранить и проверить DOCX</button>
+</div></div></div></section>
+<section id="pdfDiagnostics" class="card" hidden aria-labelledby="pdfIssueTitle">
+<h3 id="pdfIssueTitle">Замечания к экспорту DOCX</h3><p id="pdfIssueSummary" role="status"></p>
+<p>Переход показывает блок исходного PDF, в котором возникла проблема. Вложенный объект отмечается рамкой содержащего его блока. Сообщения без точной ссылки не привязываются к странице.</p>
+<ul id="pdfIssueList"></ul>
+</section>
+{% endblock %}
+{% block scripts %}<script src="/static/js/pages/pdf-order.js?v={{ asset_version }}" type="module"></script>{% endblock %}

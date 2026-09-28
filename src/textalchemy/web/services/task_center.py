@@ -23,7 +23,8 @@ class TaskCenterService:
         self._rerun_task = rerun_task
 
     def snapshot(self, *, limit: int = 12) -> dict[str, Any]:
-        tasks = [self._public_task(task) for task in self._store.list_tasks(limit=limit)]
+        visible = [task for task in self._store.list_tasks(limit=None) if task.get('queue_kind') != 'pipeline-input']
+        tasks = [self._public_task(task) for task in visible[:limit]]
         counts: dict[str, int] = {}
         for task in tasks:
             status = str(task["status"])
@@ -45,7 +46,7 @@ class TaskCenterService:
     def clear_finished(self) -> int:
         removed = 0
         for task in self._store.list_tasks(limit=None):
-            if task.get("status") in _ACTIVE:
+            if task.get("status") in _ACTIVE or task.get('queue_kind') == 'pipeline-input':
                 continue
             self._store.delete(str(task["task_id"]))
             removed += 1
@@ -65,6 +66,8 @@ class TaskCenterService:
     def _public_task(task: dict[str, Any]) -> dict[str, Any]:
         timestamp = task.get("_ts")
         age_seconds = max(0, round(time.time() - timestamp)) if isinstance(timestamp, (int, float)) else None
+        prefix = {'generate-preview': '/api/generate/results/', 'pipeline-result': '/api/pipeline/results/'}.get(
+            task.get('queue_kind'), '/api/convert/result/')
         return {
             "task_id": task.get("task_id"),
             "status": task.get("status", "unknown"),
@@ -75,7 +78,7 @@ class TaskCenterService:
             "error": task.get("error"),
             "age_seconds": age_seconds,
             "result_url": (
-                f"/api/convert/result/{task['task_id']}"
+                prefix + task['task_id']
                 if task.get("status") == "done" and task.get("artifact") and task.get("task_id")
                 else None
             ),

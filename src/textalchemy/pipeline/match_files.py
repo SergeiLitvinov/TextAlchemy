@@ -65,7 +65,8 @@ def match_files(
     Если ``output_dir`` задан и ``copy=True`` — копировать файл с новым именем
     (через ``pipeline.name.name_from_match``).
 
-    Возвращает список Match (matched и unmatched — оба).
+    Возвращает список Match (matched и unmatched — оба). Поле copied_path
+    содержит путь успешной копии; без копирования или при его ошибке — None.
     """
     from textalchemy.pipeline.match import match_bibliography
     from textalchemy.pipeline.name import name_from_match
@@ -110,6 +111,7 @@ def match_files(
                 target = Path(output_dir) / new_name
                 try:
                     shutil.copy2(f, target)
+                    m.copied_path = target
                 except Exception as e:  # noqa: BLE001
                     logger.warning("copy failed %s -> %s: %s", f, target, e)
 

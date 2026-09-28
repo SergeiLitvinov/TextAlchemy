@@ -671,7 +671,9 @@ def _build_bibliography(data: dict[str, Any]) -> list[Paragraph]:
 
     items: list[Any] = []
     for item in raw:
-        if isinstance(item, BibItem):
+        if isinstance(item, str):
+            items.append(item)
+        elif isinstance(item, BibItem):
             items.append(item)
         elif isinstance(item, dict):
             items.append(BibItem.from_dict(item))
@@ -689,6 +691,8 @@ def _build_bibliography(data: dict[str, Any]) -> list[Paragraph]:
 
 
 def _format_reference(item: Any) -> str:
+    if isinstance(item, str):
+        return item.strip()
     try:
         from textalchemy.organize.gost import GostFormatter
 

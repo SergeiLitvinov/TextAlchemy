@@ -1,19 +1,67 @@
 "use strict";
+const [{createGeneratorDraft}, {createGeneratorDatasets}, {createTemplateVariables}, {createTemplateConditions}, {createTemplateLoops}, {createGeneratorWorkspace}, {createListEditor}, {createGeneratedPreview}, {createTemplateSource}, {createRichEditor}] = await Promise.all([
+    './generator-draft.js',
+    './generator-datasets.js',
+    './template-variables.js',
+    './template-conditions.js',
+    './template-loops.js',
+    './generator-workspace.js',
+    './generator-list.js',
+    './generator-preview.js',
+    './template-source.js',
+    './template-rich.js'
+].map(path => import(path + new URL(import.meta.url).search)));
 
 const $ = (id) => document.getElementById(id);
 const TYPE_LABELS = {
     string: 'текст', integer: 'целое число', number: 'число', boolean: 'да/нет',
-    array: 'список (JSON)', object: 'объект (JSON)', image: 'изображение', formula: 'формула (LaTeX)', any: 'любой'
+    array: 'список', object: 'объект (JSON)', image: 'изображение', formula: 'формула (LaTeX или MathML)', any: 'любой'
 };
 const FIELD_LABELS = {
     author: 'Автор', body: 'Основной текст', title: 'Заголовок', abstract: 'Аннотация',
-    date: 'Дата', organization: 'Организация', bibliography: 'Список литературы',
+    date: 'Дата', organization: 'Организация', bibliography: 'Список литературы', items: 'Список значений',
 };
 const SCHEMA_SOURCE_LABELS = {
     derived: 'поля определены автоматически', sidecar: 'проверяемая схема шаблона',
 };
 let currentSchema = null;
 let previewState = null;
+let schemaRequest = 0;
+let loadedTemplate = '';
+const draft = createGeneratorDraft($);
+const workspace = createGeneratorWorkspace($);
+const imageReads = new Set();
+const listEditors = new Map();
+const generatedPreview = createGeneratedPreview($, () => imageReads.size || workspace.isEditing() ? null : collectParams(true), renderErrors);
+const sourceEditor = createTemplateSource($, useTemplateCopy, () => $('editMode').click());
+const richEditor = createRichEditor($, useTemplateCopy);
+async function useTemplateCopy(name) {
+    $('template').appendChild(new Option('Изменённый шаблон — ' + name.slice(-8), name));
+    if (!draft.canSwitch()) return;
+    $('template').value = name;
+    const loading = loadTemplate(name);
+    workspace.finish();
+    await loading;
+}
+const variables = createTemplateVariables($, useTemplateCopy);
+const conditions = createTemplateConditions($, useTemplateCopy);
+const loops = createTemplateLoops($, useTemplateCopy);
+const rowLoops = createTemplateLoops($, useTemplateCopy, true);
+const datasets = createGeneratorDatasets($, () => {
+    if (imageReads.size) throw new Error('Дождитесь чтения изображений.');
+    return draft.snapshot();
+}, snapshot => {
+    const restored = draft.begin(loadedTemplate, currentSchema, snapshot);
+    listEditors.forEach(editor => editor.refresh());
+    if (restored) { clearFieldErrors(); saveDraft(); }
+    return restored;
+});
+
+function saveDraft() {
+    generatedPreview.invalidate();
+    draft.save();
+    if (imageReads.size) draft.pendingImage();
+}
 
 function setStatus(msg, type) {
     const el = $('status');
@@ -28,6 +76,8 @@ function fieldErrorId(name) {
 }
 
 function fieldLabel(name) {
+    const field = currentSchema?.fields.find(item => item.name === name);
+    if (name.startsWith('field_') && field?.description) return field.description;
     if (FIELD_LABELS[name]) return FIELD_LABELS[name];
     const readable = name.replace(/[_-]+/g, ' ').trim();
     return readable ? readable.charAt(0).toUpperCase() + readable.slice(1) : name;
@@ -47,7 +97,7 @@ function buildField(field) {
     label.textContent = fieldLabel(name) + (required ? ' *' : '');
     const hint = document.createElement('span');
     hint.className = 'field-help';
-    hint.textContent = ' — ' + (field.description || TYPE_LABELS[type] || type);
+    hint.textContent = ' — ' + ((!name.startsWith('field_') && field.description) || TYPE_LABELS[type] || type);
     label.appendChild(hint);
     wrap.appendChild(label);
 
@@ -81,6 +131,11 @@ function buildField(field) {
         input.rows = 2;
         input.placeholder = 'E = mc^2';
         if (def !== '' && def !== undefined && def !== null) input.value = def;
+    } else if (type === 'string' && ['body', 'abstract'].includes(name)) {
+        input = document.createElement('textarea');
+        input.id = 'field-' + name;
+        input.rows = name === 'body' ? 6 : 3;
+        if (def !== '' && def !== undefined && def !== null) input.value = def;
     } else {
         input = document.createElement('input');
         input.type = 'text';
@@ -94,11 +149,12 @@ function buildField(field) {
     error.style.color = '#991b1b';
     error.style.display = 'none';
     wrap.appendChild(input);
+    if (type === 'array') listEditors.set(name, createListEditor(input, fieldLabel(name)));
     wrap.appendChild(error);
     return wrap;
 }
 
-function collectParams() {
+function collectParams(preview = false) {
     const params = {};
     if (!currentSchema) return params;
     for (const field of currentSchema.fields) {
@@ -106,6 +162,9 @@ function collectParams() {
         const input = $('field-' + name);
         if (!input) continue;
         const type = field.type || 'any';
+        if (preview && type !== 'boolean' && !(type === 'image' ? input.dataset.imageData : input.value.trim())) {
+            params[name] = ''; continue;
+        }
         let value;
         if (type === 'boolean') {
             value = input.checked;
@@ -117,7 +176,7 @@ function collectParams() {
             try {
                 value = JSON.parse(input.value);
             } catch (err) {
-                toast('Поле «' + name + '»: некорректный JSON', 'error');
+                if (!preview) toast('Поле «' + name + '»: некорректный JSON', 'error');
                 showFieldError(name, 'некорректный JSON: ' + err.message);
                 return null;
             }
@@ -161,37 +220,67 @@ async function loadTemplates() {
         for (const t of templates) {
             const opt = document.createElement('option');
             opt.value = t.name;
-            opt.textContent = t.name + (t.description ? ' — ' + t.description : '');
+            opt.textContent = t.description || t.name;
             sel.appendChild(opt);
         }
         if (templates.length) {
-            sel.value = templates[0].name;
-            loadTemplate(templates[0].name);
+            sel.value = draft.initial(templates.map(template => template.name));
+            await loadTemplate(sel.value);
         }
     } catch (_) { /* toast уже показан */ }
 }
 
 async function loadTemplate(name) {
+    generatedPreview.reset();
+    const request = ++schemaRequest;
+    draft.pause();
+    datasets.bind(null);
+    variables.bind(null);
+    conditions.bind(null);
+    loops.bind(null);
+    rowLoops.bind(null);
+    sourceEditor.bind(null);
+    richEditor.bind(null);
+    imageReads.clear();
+    listEditors.clear();
+    $('genBtn').disabled = true;
     currentSchema = null;
     previewState = null;
     $('fieldsContainer').innerHTML = '';
-    $('previewSection').hidden = true;
+    $('previewPaging').hidden = true;
+    $('previewCanvas').textContent = 'Загружаем страницы шаблона…';
     $('templateDesc').textContent = '';
     try {
         const data = await api('/api/generate/templates/' + encodeURIComponent(name) + '/schema');
+        if (request !== schemaRequest) return;
         currentSchema = data.schema;
+        loadedTemplate = name;
         $('templateDesc').textContent = data.description + ' · ' + (SCHEMA_SOURCE_LABELS[data.source] || data.source);
         const container = $('fieldsContainer');
-        for (const field of currentSchema.fields) {
+        const first = ['title', 'author', 'abstract', 'body'];
+        const rank = field => first.includes(field.name) ? first.indexOf(field.name) : first.length;
+        for (const field of [...currentSchema.fields].sort((a, b) => rank(a) - rank(b))) {
             const wrap = buildField(field);
             container.appendChild(wrap);
             const input = wrap.querySelector('input[type="file"]');
             if (input) {
                 input.addEventListener('change', (e) => {
+                    generatedPreview.invalidate();
+                    input.parentElement.querySelector('[data-restored-image]')?.remove();
                     const file = e.target.files && e.target.files[0];
-                    if (!file) { input.dataset.imageData = ''; return; }
+                    if (!file) {
+                        imageReads.delete(input); input.dataset.imageData = '';
+                        $('genBtn').disabled = imageReads.size > 0; saveDraft(); return;
+                    }
+                    imageReads.add(input);
+                    draft.pendingImage(); $('genBtn').disabled = true;
                     const reader = new FileReader();
-                    reader.onload = () => { input.dataset.imageData = reader.result; };
+                    reader.onload = () => {
+                        if (request !== schemaRequest || input.files[0] !== file) return;
+                        imageReads.delete(input); input.dataset.imageData = reader.result;
+                        $('genBtn').disabled = imageReads.size > 0; saveDraft();
+                    };
+                    reader.onerror = () => { if (request === schemaRequest) draft.imageError(); };
                     reader.readAsDataURL(file);
                 });
             }
@@ -202,18 +291,35 @@ async function loadTemplate(name) {
             empty.textContent = 'У шаблона нет параметров.';
             container.appendChild(empty);
         }
-        await loadPreviewMeta(name);
+        draft.begin(name, currentSchema);
+        listEditors.forEach(editor => editor.refresh());
+        datasets.bind(name);
+        variables.bind(name);
+        conditions.bind(name);
+        loops.bind(name);
+        rowLoops.bind(name);
+        sourceEditor.bind(name);
+        richEditor.bind(name);
+        $('genBtn').disabled = false;
+        generatedPreview.ready();
+        await loadPreviewMeta(name, request);
     } catch (_) { /* toast уже показан */ }
 }
 
-async function loadPreviewMeta(name) {
+async function loadPreviewMeta(name, request) {
     try {
         const meta = await api('/api/generate/templates/' + encodeURIComponent(name) + '/preview/meta');
-        if (!meta.available || meta.pages < 1) return;
+        if (request !== schemaRequest) return;
+        if (!meta.available || meta.pages < 1) {
+            $('previewCanvas').textContent = 'Просмотр страниц недоступен. Вы можете заполнить поля и скачать документ.';
+            return;
+        }
         previewState = { name, pages: meta.pages, page: 1 };
-        $('previewSection').hidden = false;
+        $('previewPaging').hidden = !$('filledPreview').hidden;
         renderPreview();
-    } catch (_) { /* preview необязателен */ }
+    } catch (_) {
+        if (request === schemaRequest) $('previewCanvas').textContent = 'Не удалось загрузить страницы. Заполнение и скачивание доступны.';
+    }
 }
 
 function renderPreview() {
@@ -238,6 +344,7 @@ $('formatGroup').addEventListener('click', (e) => {
     if (!btn || btn.disabled) return;
     $('formatGroup').querySelectorAll('.format-option').forEach((b) => b.classList.toggle('active', b === btn));
     updateFormatButtons();
+    saveDraft();
 });
 
 $('previewPrev').addEventListener('click', () => {
@@ -253,6 +360,7 @@ $('previewCanvas').addEventListener('keydown', (e) => {
 
 $('generate-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (workspace.isEditing()) return;
     clearFieldErrors();
     const template = $('template').value;
     if (!template) { toast('Выберите шаблон', 'error'); return; }
@@ -295,6 +403,20 @@ $('generate-form').addEventListener('submit', async (e) => {
 });
 
 $('template').addEventListener('change', () => {
+    if (!draft.canSwitch()) { $('template').value = loadedTemplate; return; }
     if ($('template').value) loadTemplate($('template').value);
+});
+$('fieldsContainer').addEventListener('input', event => { if (event.target.type !== 'file') saveDraft(); });
+$('output').addEventListener('input', () => saveDraft());
+$('restoreDraft').addEventListener('click', () => {
+    if (draft.restore()) {
+        listEditors.forEach(editor => editor.refresh());
+        clearFieldErrors(); generatedPreview.invalidate();
+    }
+});
+$('fillMode').addEventListener('click', () => generatedPreview.invalidate());
+$('editMode').addEventListener('click', () => generatedPreview.invalidate());
+$('clearDraft').addEventListener('click', () => {
+    if (draft.forget()) loadTemplate(loadedTemplate);
 });
 loadTemplates();

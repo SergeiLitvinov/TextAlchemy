@@ -1,0 +1,15 @@
+<details name="template-tools" class="workspace-disclosure">
+    <summary>Изображение, формула, источники или ссылка</summary>
+    <p>Выберите обычный абзац основного документа. Его содержимое заменится выбранным объектом. Метка сохраняет текст абзаца и позволяет ссылаться на него.</p>
+    <button id="richInspect" type="button">Показать места вставки</button>
+    <label for="richBlock">Абзац</label><select id="richBlock"></select>
+    <label for="richKind">Что вставить</label><select id="richKind">
+        <option value="image">Поле изображения</option><option value="formula">Поле формулы</option>
+        <option value="bibliography">Список источников</option><option value="id">Метка для ссылки</option><option value="ref">Ссылка на метку</option>
+    </select>
+    <label for="richField">Имя поля или метки</label><input id="richField" value="illustration" maxlength="64">
+    <p>Для ссылки укажите имя ранее созданной метки, например sec:conclusion. Имя поля — латиницей без пробелов. Список источников использует поле bibliography; источники можно добавлять текстовыми строками.</p>
+    <button id="richSave" type="button" disabled>Сохранить копию со вставкой</button>
+    <p>Формула принимает LaTeX или MathML. Поддержанный MathML создаёт редактируемую формулу Word; LaTeX может выводиться текстом. Проверьте заполненный результат перед скачиванием.</p>
+    <p id="richStatus" role="status"></p>
+</details>

@@ -1,9 +1,12 @@
 "use strict";
 
+import {createOcrEditor} from './recognize/editor.js';
+
 const $ = (id) => document.getElementById(id);
 const dropZone = $('dropZone');
 const fileInput = $('fileInput');
 const resultArea = $('result');
+const editor = createOcrEditor($, setStatus);
 
 function setStatus(message, type) {
     const element = $('status');
@@ -48,6 +51,8 @@ fileInput.addEventListener('change', () => {
 });
 
 async function handleFile(file) {
+    if (!editor.canReplace()) return;
+    editor.setBusy(true);
     setStatus(`Обрабатываем «${file.name}»…`, 'info');
     dropZone.classList.add('is-processing');
     const form = new FormData();
@@ -58,17 +63,16 @@ async function handleFile(file) {
     form.append('scenario', $('scenario').value);
     try {
         const data = await api('/api/recognize', {method: 'POST', formData: form});
-        resultArea.value = data.text || '(текст не распознан)';
-        resultArea.hidden = false;
-        $('resultEmpty').hidden = true;
-        $('copyBtn').disabled = false;
+        if (!data.success) throw new Error(data.error || 'Не удалось распознать файл.');
+        editor.accept(data);
         const confidence = data.confidence ? ` · уверенность ${(data.confidence * 100).toFixed(1)}%` : '';
         setStatus(`Обработка завершена${confidence}`, 'success');
         toast('Текст готов к проверке', 'success');
-    } catch (_) {
-        setStatus('Не удалось распознать файл. Проверьте формат и настройки.', 'error');
+    } catch (error) {
+        setStatus(error.message || 'Не удалось распознать файл. Проверьте формат и настройки.', 'error');
     } finally {
         dropZone.classList.remove('is-processing');
+        editor.setBusy(false);
     }
 }
 

@@ -5,10 +5,12 @@ import {createStepEditor} from './pipeline/editor.js';
 import {createOperationPalette} from './pipeline/palette.js';
 import {specificationJson} from './pipeline/spec.js';
 import {createPipelineState} from './pipeline/state.js';
+import {renderPipelineResult} from './pipeline/results.js';
 
 const $ = (id) => document.getElementById(id);
 const model = createPipelineState();
 let expertDirty = false;
+let running = false;
 
 function status(message, type = 'info', element = $('status')) {
     if (!element) return;
@@ -36,6 +38,8 @@ function setMode(mode) {
 }
 
 async function syncToExpert() {
+    $('specText').readOnly = true;
+    $('expertRunBtn').disabled = true;
     try {
         const json = specificationJson(model.state);
         const response = await pipelineApi.toYaml(json);
@@ -44,6 +48,9 @@ async function syncToExpert() {
         expertDirty = false;
     } catch (error) {
         window.toast(error.message, 'error');
+    } finally {
+        $('specText').readOnly = false;
+        $('expertRunBtn').disabled = running;
     }
 }
 
@@ -64,22 +71,28 @@ async function syncToVisual() {
 }
 
 function showResult(response, element) {
-    $('pipeline-result').hidden = false;
-    $('result-output').textContent = JSON.stringify(response, null, 2);
-    status(response.success ? 'Пайплайн завершён.' : 'Пайплайн завершился с ошибкой.', response.success ? 'success' : 'error', element);
+    const success = renderPipelineResult($, response);
+    status(success ? 'Сценарий выполнен.' : 'Сценарий завершился с ошибкой.', success ? 'success' : 'error', element);
+    return success;
 }
 
 async function run(specification, button, element = $('status')) {
+    if (running) return;
+    running = true;
+    $('runBtn').disabled = $('expertRunBtn').disabled = true;
     window.setLoading(button, true);
-    status('Запуск пайплайна…', 'info', element);
+    $('pipeline-result').hidden = true;
+    status('Выполняем сценарий…', 'info', element);
     try {
         const response = await pipelineApi.run(specification);
-        showResult(response, element);
-        window.toast(response.success ? 'Пайплайн завершён' : 'Пайплайн завершился с ошибкой', response.success ? 'success' : 'error');
+        const success = showResult(response, element);
+        window.toast(success ? 'Сценарий выполнен' : 'Сценарий завершился с ошибкой', success ? 'success' : 'error');
     } catch (error) {
-        status(`Ошибка запуска: ${error.message}`, 'error', element);
+        showResult({success: false, error: `Ошибка запуска: ${error.message}`}, element);
     } finally {
         window.setLoading(button, false);
+        running = false;
+        $('runBtn').disabled = $('expertRunBtn').disabled = false;
     }
 }
 
@@ -93,10 +106,10 @@ async function validate() {
         if (response.success) {
             const warnings = response.warnings?.length ? ` Предупреждения: ${response.warnings.join('; ')}` : '';
             status(`Связи в порядке.${warnings}`, 'success');
-            window.toast('Пайплайн валиден', 'success');
+            window.toast('Связи проверены', 'success');
         } else {
             const errors = response.errors.map((error) =>
-                `${error.step === null || error.step === undefined ? '' : `шаг ${error.step}: `}${error.message}`,
+                `${error.step === null || error.step === undefined ? '' : `шаг ${error.step + 1}: `}${error.message}`,
             );
             status(`Найдены ошибки: ${errors.join('; ')}`, 'error');
         }
@@ -108,14 +121,14 @@ async function validate() {
 }
 
 function bindActions() {
-    $('modeVisualBtn').addEventListener('click', () => setMode('visual'));
+    $('modeVisualBtn').addEventListener('click', () => {
+        if (!$('expertMode').hidden && !$('specText').readOnly) syncToVisual();
+    });
     $('modeExpertBtn').addEventListener('click', () => setMode('expert'));
     $('toBuilderBtn').addEventListener('click', syncToVisual);
     $('addStepBtn').addEventListener('click', () => {
-        if (!model.state.operations.length) return void window.toast('Список операций пуст', 'error');
-        model.addStep(model.state.operations[0].id);
-        editor.render();
-        expertDirty = true;
+        $('opSearch').focus();
+        $('opSearch').scrollIntoView({block: 'center', behavior: 'smooth'});
     });
     $('validateBtn').addEventListener('click', validate);
     $('runBtn').addEventListener('click', () => {

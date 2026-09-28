@@ -49,6 +49,8 @@ tests/corpus/visual/charts/chart-corpus.pdf
 # Tool cache
 .textalchemy/
 .uv-cache/
+.uv-cache-codex/
+coverage.xml
 
 # Playwright MCP scratch files
 .playwright-mcp/

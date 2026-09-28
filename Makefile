@@ -17,9 +17,7 @@ format:
 	uv run ruff format
 
 clean:
-	rm -rf .pytest_cache .coverage coverage.xml
-	rm -rf src/**/__pycache__ tests/**/__pycache__
-	rm -rf *.egg-info
+	uv run python -m tools.clean --apply
 
 web:
 	uv run textalchemy web

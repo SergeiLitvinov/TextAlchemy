@@ -20,27 +20,21 @@
 | `match.bibliography` | `Text` → `Match` | `text` |
 | `match.files` | `path` → `list[Match]` | `source` |
 | `name.from_match` | `Match` → `str` | `match` |
-| `render.bibtex` | `list[BibItem]` → `str` | `input` |
+| `render.bibtex` | `list[BibItem]` → `str` | `items` |
 | `render.docx` | `Text` → `Path` | `text` |
 | `render.docx_model` | `DocumentModel` → `Path` | `document` |
 | `render.emails.debug` | `str` → `Path` | `full_text` |
 | `render.emails.docx` | `list[str]` → `Path` | `emails` |
 | `render.emails.txt` | `list[str]` → `Path` | `emails` |
-| `render.gost` | `list[BibItem]` → `str` | `input` |
+| `render.gost` | `list[BibItem]` → `str` | `items` |
 | `render.html.pptx` | `Document` → `ConversionResult` | `doc` |
-| `render.json` | `list[BibItem]` → `str` | `input` |
+| `render.json` | `list[BibItem]` → `str` | `items` |
 | `render.latex` | `Text` → `str` | `text` |
 | `render.latex.pandoc` | `Text` → `str` | `text` |
-| `render.markdown` | `list[BibItem]` → `str` | `input` |
+| `render.markdown` | `list[BibItem]` → `str` | `items` |
 | `render.pptx_model` | `DocumentModel` → `dict` | `document` |
 | `render.txt_model` | `DocumentModel` → `dict` | `document` |
 | `template.render` | `DocumentModel` → `DocumentModel` | `document` |
-
-## Несоответствия контрактов
-
-У следующих операций вход реестра отсутствует в сигнатуре: `render.bibtex`, `render.gost`, `render.json`, `render.markdown`.
-Для библиографических `render.*` используйте `params: {items: $bib}` без поля `input`. Исправление отслеживается в [M0.3](../../TODO.md#m0).
-
 
 ## Параметры
 

@@ -14,13 +14,18 @@ from textalchemy.web.routes import (
     localization,
     matching,
     pages,
+    pdf_order,
     pipeline,
     recognize,
     task_center,
+    template_loops,
+    template_source,
+    template_variables,
 )
 
 # Импорт пакета регистрирует все роуты на ``textalchemy.web.app.app``.
 __all__ = [
     "pages", "bibliography", "pipeline", "matching", "extract", "convert", "convert_jobs", "convert_preview",
-    "recognize", "generate", "task_center", "localization",
+    "recognize", "generate", "task_center", "localization", "pdf_order", "template_variables", "template_loops",
+    "template_source",
 ]

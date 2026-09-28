@@ -70,6 +70,8 @@ class TestMatchFiles:
         # Файл скопирован с новым именем
         copied = list(out.iterdir())
         assert len(copied) == 1
+        assert matched[0].copied_path == copied[0]
+        assert all(m.copied_path is None for m in matches if not m.matched)
         assert "Иванов" in copied[0].name or "ivanov" in copied[0].name.lower()
 
     def test_no_files(self, tmp_path):
@@ -105,6 +107,7 @@ class TestMatchFiles:
         (src / "Ferroresonance_2020.txt").write_text("Иванов 2020", encoding="utf-8")
         matches = match_files(source=src, items=items, output_dir=None, copy=False)
         assert len(matches) == 1
+        assert matches[0].copied_path is None
         # Только src и bib.txt (без out/)
         assert {p.name for p in tmp_path.iterdir()} == {"src", "bib.txt"}
 

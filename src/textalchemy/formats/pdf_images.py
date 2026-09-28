@@ -61,13 +61,13 @@ class PdfVectorDrawing:
     """One vector drawing element from a PDF page.
 
     Each drawing corresponds to a group in PyMuPDF's ``page.get_drawings()``.
-    The ``items`` list stores path commands as raw dict values.
+    The ``items`` tuple stores path operators and JSON-compatible coordinate tuples.
     """
 
     bbox: PdfBox
     number: int
     page: int
-    items: tuple[dict[str, Any], ...] = ()
+    items: tuple[tuple[Any, ...], ...] = ()
     fill: ColorValue | None = None
     stroke: ColorValue | None = None
     width: float = 0.0
@@ -203,7 +203,7 @@ def extract_pdf_vector_drawings(path: str | Path) -> tuple[list[PdfVectorDrawing
                     else (0.0, 0.0, 0.0, 0.0)
                 )
 
-                items = tuple(draw.get("items", []))
+                items = tuple(_drawing_value(command) for command in draw.get("items", []))
                 fill_opacity = float(draw.get("fill_opacity", 1.0) or 1.0)
                 stroke_opacity = float(draw.get("stroke_opacity", 1.0) or 1.0)
                 fill_color = _pdf_drawing_color(draw.get("fill"), alpha=fill_opacity)
@@ -229,6 +229,15 @@ def extract_pdf_vector_drawings(path: str | Path) -> tuple[list[PdfVectorDrawing
                 )
 
     return drawings, warnings
+
+
+def _drawing_value(value: Any) -> Any:
+    """Keep path operators and coordinates independent of PyMuPDF objects."""
+    import fitz
+
+    if isinstance(value, (list, tuple, fitz.Point, fitz.Rect, fitz.Quad)):
+        return tuple(_drawing_value(part) for part in value)
+    return value
 
 
 def enrich_geometry_with_images(

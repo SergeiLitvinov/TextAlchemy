@@ -223,12 +223,13 @@ class Signal:
 
 @dataclass
 class Match:
-    """Результат матчинга документа со строкой библиографии."""
+    """Результат матчинга; copied_path заполняется только после успешного копирования."""
 
     document: Document
     item: Optional[BibItem]
     signals: list[Signal] = field(default_factory=list)
     matched: bool = False
+    copied_path: Optional[Path] = None
 
     @property
     def score(self) -> float:

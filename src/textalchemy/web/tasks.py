@@ -155,16 +155,45 @@ class TaskStore:
         with self._lock:
             if not _valid_identifier(task_id):
                 return
-            task_dir = self._task_dir(task_id)
-            if not task_dir.is_dir():
-                return
-            for child in task_dir.iterdir():
-                if child.name == "source":
-                    continue
-                if child.is_dir():
-                    shutil.rmtree(child, ignore_errors=True)
-                else:
-                    child.unlink(missing_ok=True)
+            self._clear_result_locked(task_id)
+
+    def prepare_retry(self, task_id: str, *, expected: dict[str, Any], updates: dict[str, Any]) -> bool:
+        """Поставить неизменившуюся задачу в очередь и очистить старый результат под одной блокировкой."""
+        with self._lock:
+            if not _valid_identifier(task_id):
+                return False
+            current = self._read_meta_locked(task_id)
+            if current is None or current != expected or self._is_stale_locked(current):
+                return False
+            self._clear_result_locked(task_id)
+            self._write_meta_locked(task_id, {**current, **updates, "status": "queued", "_ts": time.time()})
+            return True
+
+    def request_cancel(self, task_id: str, *, removed_from_queue: bool) -> str | None:
+        """Do not overwrite a result completed between selection and cancellation."""
+        with self._lock:
+            if not _valid_identifier(task_id):
+                return None
+            current = self._read_meta_locked(task_id)
+            if not current or self._is_stale_locked(current) or current.get('status') not in {'queued', 'running', 'cancelling'}:
+                return None
+            status = 'cancelled' if removed_from_queue or current['status'] == 'queued' else 'cancelling'
+            self._clear_result_locked(task_id)
+            self._write_meta_locked(task_id, {**current, 'status': status, 'error': None, 'report': None,
+                                             'artifact': None, '_ts': time.time()})
+            return status
+
+    def _clear_result_locked(self, task_id: str) -> None:
+        task_dir = self._task_dir(task_id)
+        if not task_dir.is_dir():
+            return
+        for child in task_dir.iterdir():
+            if child.name == "source":
+                continue
+            if child.is_dir():
+                shutil.rmtree(child, ignore_errors=True)
+            else:
+                child.unlink(missing_ok=True)
 
     def set_job(self, job_id: str, payload: dict[str, Any]) -> None:
         """Записать метаданные пакетной задачи (job) и протушить старые."""

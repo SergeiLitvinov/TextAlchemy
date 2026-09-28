@@ -86,9 +86,9 @@ class ConversionTaskService:
         if status not in {"queued", "running", "cancelling"}:
             raise ValueError("Эту задачу уже нельзя отменить")
         removed_from_queue = self._queue.cancel(task_id)
-        next_status = "cancelled" if removed_from_queue or status == "queued" else "cancelling"
-        self._store.set(task_id, {**task, "status": next_status, "error": None, "report": None})
-        self._store.clear_result(task_id)
+        next_status = self._store.request_cancel(task_id, removed_from_queue=removed_from_queue)
+        if next_status is None:
+            raise ValueError('Состояние задачи изменилось; готовый результат сохранён')
         return {"task_id": task_id, "status": next_status}
 
     def rerun(self, task_id: str) -> dict[str, Any]:

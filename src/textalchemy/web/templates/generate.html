@@ -6,16 +6,10 @@
     <div>
         <p class="eyebrow">Создание документов</p>
         <h2>Соберите документ по шаблону</h2>
-        <p class="lead">Выберите основу, заполните данные и проверьте страницы перед скачиванием. Структура и оформление шаблона сохраняются автоматически.</p>
+        <p class="lead">Выберите шаблон, заполните поля и скачайте документ. Для настройки полей, условий и повторов перейдите в редактор шаблона.</p>
     </div>
     <div class="privacy-pill"><span aria-hidden="true">●</span> Данные обрабатываются локально</div>
 </section>
-
-<ol class="workflow-steps" aria-label="Этапы создания документа">
-    <li class="active"><span>1</span><div><strong>Шаблон</strong><small>Выберите основу</small></div></li>
-    <li><span>2</span><div><strong>Данные</strong><small>Заполните поля</small></div></li>
-    <li><span>3</span><div><strong>Результат</strong><small>Проверьте и скачайте</small></div></li>
-</ol>
 
 <form id="generate-form" class="generator-layout">
     <div class="generator-form-column">
@@ -28,20 +22,103 @@
                 <option value="">— выберите шаблон —</option>
             </select>
             <p class="field-help" id="templateDesc">Загружаем доступные шаблоны…</p>
+            <details class="workspace-disclosure"><summary>Создать шаблон из своего DOCX</summary>
+                <p>Загрузите обычный документ, затем отметьте значения для замены. Исходный файл остаётся у вас без изменений.</p>
+                <label for="sourceUpload">Документ-образец или готовый шаблон</label><input id="sourceUpload" type="file" accept=".docx">
+                <details><summary>Схема готового шаблона (необязательно)</summary><label for="sourceSchema">JSON-схема полей</label><textarea id="sourceSchema" rows="3"></textarea></details>
+                <button id="importTemplate" type="button">Загрузить отдельную копию</button>
+            </details><p id="sourceStatus" role="status"></p>
+            <div class="segmented workspace-modes" role="group" aria-label="Работа с шаблоном">
+                <button type="button" id="fillMode" class="seg-btn active" aria-pressed="true" aria-controls="documentFields documentOutput">Заполнить документ</button>
+                <button type="button" id="editMode" class="seg-btn" aria-pressed="false" aria-controls="templateEditor">Изменить шаблон</button>
+            </div>
         </section>
 
-        <section class="card generator-section" aria-labelledby="data-fields-title">
+        <section id="templateEditor" class="card generator-section" hidden aria-labelledby="template-editor-title">
+            <p class="eyebrow">Редактор шаблона</p><h3 id="template-editor-title">Что изменить?</h3>
+            <p class="section-copy">Выберите одно действие. Правка создаёт отдельную копию; после сохранения вы перейдёте к заполнению её данных.</p>
+            {% include "partials/template_source.html" %}
+            {% include "partials/template_rich.html" %}
+            <details name="template-tools" class="workspace-disclosure">
+                <summary>Изменить переменную шаблона</summary>
+                <p>Переименуйте простую переменную во всех её вхождениях. Будет сохранена отдельная копия со своей схемой полей. Независимые простые условия и циклы сохраняются. Сложные выражения не переименовываются.</p>
+                <button id="variableInspect" type="button" class="btn-secondary" disabled>Показать переменные</button>
+                <label for="variableSelect">Переменная</label><select id="variableSelect"></select>
+                <p id="variableContext" class="field-help" style="white-space: pre-wrap; overflow-wrap: anywhere"></p>
+                <label for="variableName">Новое имя</label>
+                <input id="variableName" type="text" maxlength="64" placeholder="Например, subject">
+                <p class="field-help">Латинские буквы, цифры и подчёркивание. Начните с буквы или подчёркивания.</p>
+                <button id="variableSave" type="button" disabled>Сохранить копию шаблона</button>
+                <p id="variableStatus" role="status" aria-live="polite"></p>
+            </details>
+            <details name="template-tools" class="workspace-disclosure">
+                <summary>Настроить условный абзац</summary>
+                <p>Один абзац основного текста можно показывать по флажку. Сохраняется отдельная копия шаблона. Независимые циклы сохраняются; else и вложенные условия не создаются.</p>
+                <button id="conditionInspect" type="button" class="btn-secondary" disabled>Показать абзацы</button>
+                <label for="conditionBlock">Абзац</label><select id="conditionBlock"></select>
+                <p id="conditionContext" class="field-help" style="white-space: pre-wrap; overflow-wrap: anywhere"></p>
+                <label for="conditionField">Имя поля-флажка</label><input id="conditionField" type="text" maxlength="64" value="show_section">
+                <p class="field-help">Латинские буквы, цифры и подчёркивание. Новое поле появится в данных документа; по умолчанию выключено.</p>
+                <label><input id="conditionNegate" type="checkbox"> Показывать, когда флажок выключен</label>
+                <button id="conditionSave" type="button" disabled>Сохранить копию с условием</button>
+                <p id="conditionStatus" role="status" aria-live="polite"></p>
+            </details>
+            <details name="template-tools" class="workspace-disclosure">
+                <summary>Повторять абзац по списку</summary>
+                <p>Выберите простой абзац основного текста и переменную, которая будет получать очередное значение списка. Пустой список убирает абзац. Для таблиц используйте действие ниже. Другие независимые конструкции сохраняются; вложенные циклы не создаются.</p>
+                <button id="loopInspect" type="button" class="btn-secondary" disabled>Показать абзацы для цикла</button>
+                <label for="loopBlock">Повторяемый абзац</label><select id="loopBlock"></select>
+                <p id="loopContext" class="field-help" style="white-space: pre-wrap; overflow-wrap: anywhere"></p>
+                <label for="loopVariable">Переменная для значения списка</label><select id="loopVariable"></select>
+                <label for="loopField">Имя поля-списка</label><input id="loopField" type="text" maxlength="64" value="items">
+                <p class="field-help">Новое поле появится в данных документа. Добавляйте значения по строкам и меняйте их порядок кнопками. Прежние поля сохраняются.</p>
+                <button id="loopSave" type="button" disabled>Сохранить копию с циклом</button>
+                <p id="loopStatus" role="status" aria-live="polite"></p>
+            </details>
+            <details name="template-tools" class="workspace-disclosure">
+                <summary>Повторять строку таблицы</summary>
+                <p>Выберите строку без объединённых ячеек и переменную для очередного значения списка. Остальные ячейки повторятся вместе с ней; пустой список убирает выбранную строку.</p>
+                <button id="rowLoopInspect" type="button" class="btn-secondary" disabled>Показать строки таблиц</button>
+                <label for="rowLoopBlock">Строка</label><select id="rowLoopBlock"></select>
+                <p id="rowLoopContext" class="field-help" style="white-space: pre-wrap; overflow-wrap: anywhere"></p>
+                <label for="rowLoopVariable">Переменная для значения списка</label><select id="rowLoopVariable"></select>
+                <label for="rowLoopField">Имя поля-списка</label><input id="rowLoopField" type="text" maxlength="64" value="items">
+                <p class="field-help">Добавляйте значения по строкам в данных документа. Поддержаны простые строки таблиц основного текста; вложенные таблицы и управляющие конструкции не поддерживаются.</p>
+                <button id="rowLoopSave" type="button" disabled>Сохранить копию с повторяемой строкой</button>
+                <p id="rowLoopStatus" role="status" aria-live="polite"></p>
+            </details>
+            <p class="field-help">Редактор поддерживает простые конструкции. Условия, циклы и вставки можно сочетать в разных местах одной копии; вложенные конструкции не создаются.</p>
+        </section>
+        <section id="documentFields" class="card generator-section" aria-labelledby="data-fields-title">
             <div class="card-head">
-                <div><p class="eyebrow">Шаг 2</p><h3 id="data-fields-title">Данные документа</h3></div>
+                <div><p class="eyebrow">Шаг 2</p><h3 id="data-fields-title" tabindex="-1">Данные документа</h3></div>
                 <span class="required-note">* обязательные поля</span>
             </div>
-            <p class="section-copy">Форма строится по схеме выбранного шаблона. Ошибки будут показаны рядом с соответствующим полем.</p>
+            <p class="section-copy">Заполните поля или загрузите сохранённые данные. Ошибки появятся рядом с полями.</p>
+            <p id="draftStatus" class="field-help" role="status" aria-live="polite">Начните ввод, чтобы сохранить черновик.</p>
+<button id="restoreDraft" type="button" class="btn-secondary" hidden>Восстановить предыдущий черновик</button>
+<details id="savedData" class="workspace-disclosure"><summary>Сохранённые данные и черновик</summary>
+        <p>Черновик сохраняется в этой вкладке отдельно для каждого шаблона. После перезагрузки открывается новая форма; восстановление прежних полей и изображений выполняется только по кнопке. Это временное хранение: не используйте его как архив после закрытия вкладки.</p>
+        <button id="clearDraft" type="button" class="btn-secondary">Удалить черновик этого шаблона</button>
+        <hr>
+        <h3>Именованные наборы данных</h3>
+        <p>Хранятся на сервере без срока истечения. Доступны во всех вкладках этого приложения. Данные проверяются перед генерацией.</p>
+        <label for="datasetList">Наборы текущего шаблона</label><select id="datasetList"></select>
+        <button id="datasetLoad" type="button" class="btn-secondary" disabled>Загрузить набор</button>
+        <label for="datasetName">Имя набора</label><input id="datasetName" maxlength="80" type="text">
+        <div class="ocr-edit-actions">
+            <button id="datasetCreate" type="button" disabled>Сохранить новый набор</button>
+            <button id="datasetUpdate" type="button" disabled>Обновить загруженный набор</button>
+        </div>
+        <p id="datasetStatus" role="status" aria-live="polite"></p>
+</details>
+
             <div id="fieldsContainer" class="generator-fields">
                 <div class="skeleton-field"></div><div class="skeleton-field"></div>
             </div>
         </section>
 
-        <section class="card generator-section">
+        <section id="documentOutput" class="card generator-section">
             <div class="card-head"><div><p class="eyebrow">Шаг 3</p><h3>Файл результата</h3></div></div>
             <div class="form-grid generator-output-grid">
                 <div>
@@ -65,23 +142,31 @@
         </section>
     </div>
 
-    <aside class="card generator-preview" id="previewSection" hidden aria-labelledby="preview-title">
+    <aside class="card generator-preview" id="previewSection" aria-labelledby="preview-title">
         <div class="card-head">
             <div><p class="eyebrow">Предпросмотр</p><h3 id="preview-title">Страницы шаблона</h3></div>
-            <div class="preview-paging">
+            <div class="preview-paging" id="previewPaging" hidden>
                 <button type="button" class="btn-secondary" id="previewPrev" aria-label="Предыдущая страница">‹</button>
                 <span id="previewPageLabel" role="status">—</span>
                 <button type="button" class="btn-secondary" id="previewNext" aria-label="Следующая страница">›</button>
             </div>
         </div>
-        <div class="preview-canvas preview-single" id="previewCanvas" tabindex="0" aria-live="polite">
-            <p class="field-help" id="previewMessage">Загрузка…</p>
+        <p class="field-help">Результат обновляется автоматически после паузы во вводе.</p>
+        <div class="row-actions"><button id="previewFilled" type="button" hidden>Вернуться к предпросмотру</button><button id="previewSource" type="button" class="btn-secondary">Исходный шаблон</button></div>
+        <div id="filledPreview" hidden>
+            <p id="filledPreviewStatus" role="status"></p>
+            <div class="row-actions"><button id="filledPrev" type="button" aria-label="Предыдущая страница результата" disabled>‹</button><span id="filledPageLabel"></span><button id="filledNext" type="button" aria-label="Следующая страница результата" disabled>›</button></div>
+            <div id="filledCanvas" class="preview-canvas preview-single"></div>
+            <a id="filledDownload" hidden>Скачать просмотренный файл</a>
         </div>
-        <p class="preview-note">Это исходный шаблон. Итоговый документ получит введённые данные после проверки.</p>
+        <div class="preview-canvas preview-single" id="previewCanvas" tabindex="0" aria-live="polite">
+            <p class="field-help" id="previewMessage">Выберите шаблон, чтобы увидеть его страницы.</p>
+        </div>
+        <p class="preview-note" id="previewNote">Это исходный шаблон. При заполнении результат обновляется автоматически после короткой паузы. Пустые поля отмечаются в черновике.</p>
     </aside>
 </form>
 {% endblock %}
 
 {% block scripts %}
-<script src="/static/js/pages/generate.js?v={{ asset_version }}" defer></script>
+<script src="/static/js/pages/generate.js?v={{ asset_version }}" type="module"></script>
 {% endblock %}

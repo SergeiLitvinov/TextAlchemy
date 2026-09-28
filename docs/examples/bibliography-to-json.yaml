@@ -1,0 +1,10 @@
+bib:
+  - index: 1
+    authors: [Иванов И.И.]
+    title: Исследование электрических сетей
+    year: 2020
+steps:
+  - op: render.json
+    input: bib
+    output: bibliography
+output: bibliography
