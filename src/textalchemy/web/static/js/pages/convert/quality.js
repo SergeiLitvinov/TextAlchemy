@@ -85,3 +85,25 @@ function renderTextEdits($, gate, summary) {
         $('qualityBadge').textContent = `Правок слов: ${gate.text_edits}`;
     }
 }
+
+export function renderFormulaGate($, report) {
+    const gate = report.metrics?.formula_quality_gate;
+    const summary = $('formulaGateSummary'); summary.hidden = !gate;
+    if (!gate) return;
+    summary.textContent = gate.verified
+        ? `Несовпавших или удалённых формул: ${gate.changed_formulas}; допустимо: ${gate.max_changed_formulas}. ` +
+            (gate.accepted ? 'Допуск соблюдён.' : 'Результат не выдан.')
+        : 'Сохранность формул не удалось проверить. Результат не выдан.';
+    if (!gate.accepted) $('qualityBadge').textContent = gate.verified ? 'Превышен допуск формул' : 'Формулы не проверены';
+}
+
+export function renderEmphasisGate($, report) {
+    const gate = report.metrics?.emphasis_quality_gate;
+    const summary = $('emphasisGateSummary'); summary.hidden = !gate;
+    if (!gate) return;
+    summary.textContent = gate.verified
+        ? `Символов с изменённым выделением: ${gate.changed_characters}; допустимо: ${gate.max_changed_emphasis}. ` +
+            (gate.accepted ? 'Допуск соблюдён.' : 'Результат не выдан.')
+        : 'Выделение не проверено: текст не сопоставим или представление недоступно. Результат не выдан.';
+    if (!gate.accepted) $('qualityBadge').textContent = gate.verified ? 'Превышен допуск выделения' : 'Выделение не проверено';
+}

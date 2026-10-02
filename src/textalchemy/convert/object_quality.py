@@ -3,6 +3,8 @@
 from pathlib import Path
 
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
+from textalchemy.core.emphasis_quality import EmphasisLossPolicy
+from textalchemy.core.formula_quality_policy import FormulaLossPolicy
 from textalchemy.core.inspection import compare_inspections, inspect_path
 from textalchemy.core.object_quality_policy import ObjectLossPolicy
 from textalchemy.core.text_quality_policy import TextPreservationPolicy
@@ -11,6 +13,7 @@ from textalchemy.core.text_quality_policy import TextPreservationPolicy
 def check_object_quality(
     source: Path, target: Path, report: ConversionReport, policy: ObjectLossPolicy | None,
     text_policy: TextPreservationPolicy | None = None,
+    formula_policy: FormulaLossPolicy | None = None, emphasis_policy: EmphasisLossPolicy | None = None,
 ) -> None:
     comparison = None
     try:
@@ -21,3 +24,7 @@ def check_object_quality(
         policy.evaluate(report, comparison)
     if text_policy is not None:
         text_policy.evaluate(report, comparison)
+    if formula_policy is not None:
+        formula_policy.evaluate(report, comparison)
+    if emphasis_policy is not None:
+        emphasis_policy.evaluate(report, comparison)

@@ -7,7 +7,7 @@ export const conversionApi = {
         formData.set('file', file);
         return window.api('/api/convert/inspect', {method: 'POST', formData});
     },
-    start(file, targetFormat, mode, minRetention, maxLossIssues = '', maxLostObjects = '', requireUnchangedText = false, textPreservation = '', maxTextEdits = '') {
+    start(file, targetFormat, mode, minRetention, maxLossIssues = '', maxLostObjects = '', requireUnchangedText = false, textPreservation = '', maxTextEdits = '', maxChangedFormulas = '', maxChangedEmphasis = '') {
         const formData = new FormData();
         formData.set('file', file);
         formData.set('source_format', 'auto');
@@ -19,9 +19,11 @@ export const conversionApi = {
         formData.set('require_unchanged_text', String(requireUnchangedText));
         if (textPreservation) formData.set('text_preservation', textPreservation);
         if (maxTextEdits !== '' && maxTextEdits != null) formData.set('max_text_edits', maxTextEdits);
+        if (maxChangedEmphasis !== '' && maxChangedEmphasis != null) formData.set('max_changed_emphasis', maxChangedEmphasis);
+        if (maxChangedFormulas !== '' && maxChangedFormulas != null) formData.set('max_changed_formulas', maxChangedFormulas);
         return window.api('/api/convert', {method: 'POST', formData});
     },
-    startBatch(files, targetFormat, mode, minRetention, maxLossIssues = '', maxLostObjects = '', requireUnchangedText = false, textPreservation = '', maxTextEdits = '', fileOptions = null) {
+    startBatch(files, targetFormat, mode, minRetention, maxLossIssues = '', maxLostObjects = '', requireUnchangedText = false, textPreservation = '', maxTextEdits = '', fileOptions = null, maxChangedFormulas = '', maxChangedEmphasis = '') {
         const formData = new FormData();
         for (const file of files) formData.append('files', file);
         if (fileOptions) formData.set('file_options', JSON.stringify(fileOptions));
@@ -33,6 +35,8 @@ export const conversionApi = {
         formData.set('require_unchanged_text', String(requireUnchangedText));
         if (textPreservation) formData.set('text_preservation', textPreservation);
         if (maxTextEdits !== '' && maxTextEdits != null) formData.set('max_text_edits', maxTextEdits);
+        if (maxChangedEmphasis !== '' && maxChangedEmphasis != null) formData.set('max_changed_emphasis', maxChangedEmphasis);
+        if (maxChangedFormulas !== '' && maxChangedFormulas != null) formData.set('max_changed_formulas', maxChangedFormulas);
         return window.api('/api/convert/batch', {method: 'POST', formData});
     },
     taskStatus(url) {
@@ -66,12 +70,12 @@ export const conversionApi = {
     },
     async previewPage(taskId, side, page, dpi = 110) {
         const url = `/api/convert/preview/${encodeURIComponent(taskId)}?side=${side}&page=${page}&dpi=${dpi}`;
-        const response = await fetch(url);
+        const response = await fetch(url, {cache: 'no-cache'});
         if (!response.ok) throw new Error('preview fetch failed');
         return response.blob();
     },
     async previewDiff(taskId, page, dpi = 110) {
-        const response = await fetch(`/api/convert/preview/${encodeURIComponent(taskId)}/diff?page=${page}&dpi=${dpi}`);
+        const response = await fetch(`/api/convert/preview/${encodeURIComponent(taskId)}/diff?page=${page}&dpi=${dpi}`, {cache: 'no-cache'});
         if (!response.ok) throw new Error('preview diff fetch failed');
         return {
             blob: await response.blob(),

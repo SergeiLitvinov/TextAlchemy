@@ -1,5 +1,5 @@
 "use strict";
-import {groupLabel, operationLabel} from './labels.js';
+const {groupLabel, operationLabel} = await import('./labels.js' + new URL(import.meta.url).search);
 
 export function createOperationPalette($, model, onAdd) {
     function render() {

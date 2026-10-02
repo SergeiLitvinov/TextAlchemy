@@ -1,5 +1,12 @@
 "use strict";
 
+const featureLabels = {
+    page_geometry: 'Размеры страниц', sections: 'Разделы', styles: 'Оформление', resources: 'Встроенные ресурсы',
+    text: 'Текст', tables: 'Таблицы', images: 'Изображения', formulas: 'Формулы', links: 'Ссылки',
+    'emphasis-quality': 'Жирное и курсивное выделение', 'formula-quality': 'Сохранность формул',
+    'object-quality': 'Сохранность объектов', 'text-quality': 'Сохранность текста',
+};
+
 export function renderIssues($, report) {
     const issues = report.issues || [];
     const locations = report.metrics?.step_metrics?.['html.model']?.html_locations || {};
@@ -13,7 +20,8 @@ export function renderIssues($, report) {
         const item = document.createElement('li');
         item.className = `issue-${['info', 'warning', 'loss', 'error'].includes(issue.severity) ? issue.severity : 'info'}`;
         const feature = document.createElement('strong');
-        feature.textContent = issue.feature;
+        feature.textContent = featureLabels[issue.feature] || 'Замечание';
+        feature.title = issue.feature;
         const message = document.createElement('span');
         message.textContent = issue.message;
         item.append(feature, message);

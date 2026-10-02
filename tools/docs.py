@@ -16,7 +16,6 @@ def main(argv=None):
     try:
         if args.command == "generate":
             print("Updated:", ", ".join(sync()) or "already current")
-            return 0
         if args.command in {"build", "check"}:
             sync(check=True)
         if args.command == "check":
@@ -25,7 +24,14 @@ def main(argv=None):
             check()
         print(f"Preparing {prepare()} documentation pages", flush=True)
         command = ["serve", "--dev-addr", args.address] if args.command == "serve" else ["build", "--strict"]
-        return subprocess.call([sys.executable, "-m", "mkdocs", *command], cwd=ROOT)
+        result = subprocess.call([sys.executable, "-m", "mkdocs", *command], cwd=ROOT)
+        if result == 0 and args.command != "serve":
+            from tools.documentation.bundle import sync_bundle
+
+            changed = sync_bundle(check=args.command != "generate")
+            if changed:
+                print("Updated: src/textalchemy/web/assets/documentation.zip")
+        return result
     except ValueError as error:
         print(str(error), file=sys.stderr)
         return 1

@@ -4,6 +4,7 @@ docs_dir: .textalchemy/docs-source
 site_dir: .textalchemy/docs-site
 theme:
   name: mkdocs
+  custom_dir: docs/theme
   locale: ru
   highlightjs: false
 plugins:
@@ -37,7 +38,7 @@ validation:
     absolute_links: warn
     unrecognized_links: warn
 nav:
-  - Проект: README.md
+  - Главная: README.md
   - Руководство:
       - Выбрать задачу: docs/reference/user-guide.md
       - Начать работу: docs/guide/index.md
@@ -51,6 +52,9 @@ nav:
       - Навигатор по коду: docs/reference/code.md
       - Web-маршруты: docs/reference/web-routes.md
       - Система документации: docs/development/documentation.md
+      - Библиотека документов: docs/development/document-library.md
+      - Интерфейс шаблонизатора: docs/development/templating.md
+      - Собранная зависимость OpenDoc: vendor/opendoc/README.md
       - Устройство проекта: AGENTS.md
       - Стандарты: CODING_STANDARDS.md
       - Корпус: tests/corpus/README.md

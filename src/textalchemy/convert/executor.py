@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 import shutil
-import tempfile
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
 from textalchemy.convert.backends import ExporterBackend, ImporterBackend, PathConverterBackend
 from textalchemy.convert.capabilities import create_capability_registry
 from textalchemy.convert.protocols import ConversionBackend, ConversionValue
+from textalchemy.convert.publication import _cancelled_report
 from textalchemy.convert.stages import StageContext
 from textalchemy.core.conversion_graph import (
     DEFAULT_FEATURES,
@@ -23,6 +22,8 @@ from textalchemy.core.conversion_graph import (
 )
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_model import ConversionMode, DocumentModel
+from textalchemy.core.emphasis_quality import EmphasisLossPolicy
+from textalchemy.core.formula_quality_policy import FormulaLossPolicy
 from textalchemy.core.object_quality_policy import ObjectLossPolicy
 from textalchemy.core.quality_policy import QualityPolicy
 from textalchemy.core.text_quality_policy import TextPreservationPolicy
@@ -53,6 +54,8 @@ class ConversionRequest:
     quality_policy: QualityPolicy | None = None
     object_loss_policy: ObjectLossPolicy | None = None
     text_preservation_policy: TextPreservationPolicy | None = None
+    formula_loss_policy: FormulaLossPolicy | None = None
+    emphasis_loss_policy: EmphasisLossPolicy | None = None
 
 
 class ConversionExecutor:
@@ -88,37 +91,9 @@ class ConversionExecutor:
         )
 
     def execute(self, request: ConversionRequest, *, cancelled: CancellationCheck | None = None) -> ConversionReport:
-        """Publish quality-gated output only after the whole route succeeds."""
-        if request.quality_policy is None and request.object_loss_policy is None and request.text_preservation_policy is None:
-            return self._execute(request, cancelled=cancelled)
-        report = ConversionReport(request.output_path)
-        try:
-            request.output_path.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.TemporaryDirectory(prefix=".textalchemy-", dir=request.output_path.parent) as directory:
-                staged = Path(directory) / request.output_path.name
-                report = self._execute(replace(request, output_path=staged), cancelled=cancelled)
-                report.output_path = request.output_path
-                if report.success and cancelled is not None and cancelled():
-                    return _cancelled_report(report)
-                if report.success and (request.object_loss_policy is not None or request.text_preservation_policy is not None):
-                    from textalchemy.convert.object_quality import check_object_quality
+        from textalchemy.convert.publication import execute_with_quality
 
-                    check_object_quality(
-                        request.input_path,
-                        staged,
-                        report,
-                        request.object_loss_policy,
-                        request.text_preservation_policy,
-                    )
-                    if cancelled is not None and cancelled():
-                        return _cancelled_report(report)
-                if report.success:
-                    if request.output_path.is_dir():
-                        raise ValueError("Для публикации каталога выберите новый путь результата")
-                    os.replace(staged, request.output_path)
-        except Exception as error:  # noqa: BLE001 - retain diagnostics on publication failure
-            report.add(IssueSeverity.ERROR, "publication", str(error))
-        return report
+        return execute_with_quality(self, request, cancelled=cancelled)
 
     def _execute(self, request: ConversionRequest, *, cancelled: CancellationCheck | None = None) -> ConversionReport:
         report = ConversionReport(request.output_path)
@@ -223,11 +198,6 @@ def requirement_available(requirement: str) -> bool:
     module = _MODULE_REQUIREMENTS.get(requirement, requirement.replace("-", "_"))
     return importlib.util.find_spec(module) is not None
 
-
-def _cancelled_report(report: ConversionReport) -> ConversionReport:
-    report.metrics["cancelled"] = True
-    report.add(IssueSeverity.ERROR, "cancelled", "conversion cancelled")
-    return report
 
 
 def infer_format(path: str | Path) -> DocFormat:

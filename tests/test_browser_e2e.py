@@ -87,7 +87,11 @@ def e2e_server(tmp_path_factory):
     # Session-фикстура не может использовать function-scoped monkeypatch,
     # поэтому патчим вручную и откатываем в teardown.
     session_patch = pytest.MonkeyPatch()
-    session_patch.setattr(web_app, "data_dir", tmp_path_factory.mktemp("e2e-data"))
+    data = tmp_path_factory.mktemp("e2e-data")
+    session_patch.setattr(web_app, "data_dir", data)
+    from textalchemy.core.database import Database
+
+    session_patch.setattr(web_app, "db", Database(db_path=data / "library.db"))
     session_store = TaskStore(tmp_path_factory.mktemp("e2e-session-tasks"))
     session_patch.setattr(web_app, "tasks_store", session_store)
     session_patch.setattr(convert_route, "tasks_store", session_store)
@@ -152,11 +156,22 @@ def _wait_convert_ready(current: Page) -> None:
     )
 
 
+def _open_batch_history(current: Page, job_id: str | None = None) -> None:
+    history = current.locator("#conversionHistory")
+    if not history.evaluate("element => element.open"):
+        history.locator(":scope > summary").click()
+    if job_id is not None:
+        entry = current.locator("#historyList .job-entry").filter(has=current.locator(f'[data-open-job="{job_id}"]'))
+        if not entry.evaluate("element => element.open"):
+            entry.locator(":scope > summary").click()
+
+
 def test_e2e_dashboard_loads_without_console_errors(e2e_server, page):
     page.goto(f"{e2e_server}/")
     page.wait_for_load_state("networkidle")
     assert page.locator("h1").first.text_content() == "TextAlchemy"
-    assert page.locator("nav a").count() == 10
+    assert page.locator("nav a").count() == 11
+    assert page.get_by_role("link", name="Руководство", exact=True).get_attribute("href") == "/help/"
     assert page.e2e_errors == []
 
 
@@ -264,23 +279,25 @@ def test_e2e_recognize_pdf_text_layer(e2e_server, page, tmp_path):
     pdf = _make_pdf(tmp_path / "recognize.pdf", "Recognized E2E text")
     page.goto(f"{e2e_server}/recognize")
 
-    page.get_by_role("radio", name="Обычный PDF В документе уже можно выделить текст").click()
+    page.locator("#scenario").select_option("fast")
     page.set_input_files("#fileInput", str(pdf))
+    page.locator("#processBtn").click()
     page.wait_for_function("document.getElementById('result').value.includes('Recognized E2E text')", timeout=30000)
 
     assert page.locator("#scenario").input_value() == "fast"
     assert page.locator("#copyBtn").is_enabled()
-    assert "Обработка завершена" in page.locator("#status").text_content()
+    assert "Текст готов к проверке" in page.locator("#status").text_content()
 
 
 def test_e2e_extract_text_from_pdf(e2e_server, page, tmp_path):
     pdf = _make_pdf(tmp_path / "extract.pdf", "Extracted E2E content")
     page.goto(f"{e2e_server}/extract")
     page.set_input_files("#fileInput", str(pdf))
+    page.locator("#processBtn").click()
     page.wait_for_function("document.getElementById('result').value.includes('Extracted E2E content')", timeout=30000)
 
     assert page.locator("#copyBtn").is_enabled()
-    assert "Извлечено" in page.locator("#status").text_content()
+    assert "Готово:" in page.locator("#status").text_content()
 
 
 def test_e2e_library_navigation_and_editor(e2e_server, page):
@@ -290,7 +307,7 @@ def test_e2e_library_navigation_and_editor(e2e_server, page):
 
     page.get_by_role("button", name="Добавить источник").click()
     assert page.locator("#bibEditor").get_attribute("open") is not None
-    assert page.locator("#authors").evaluate("element => element === document.activeElement") is True
+    assert page.locator("#title").evaluate("element => element === document.activeElement") is True
 
     tabs.get_by_role("link", name="Связать файлы").click()
     page.wait_for_url(f"{e2e_server}/matching")
@@ -310,7 +327,7 @@ def test_e2e_pipeline_visual_expert_roundtrip(e2e_server, page):
     page.wait_for_function("document.getElementById('specText').value.includes('render.latex')")
     assert "title: Demo" in page.locator("#specText").input_value()
 
-    page.click("#toBuilderBtn")
+    page.click("#modeVisualBtn")
     page.wait_for_function("!document.getElementById('visualMode').hidden")
     assert page.locator("#p-2-title").input_value() == "Demo"
     assert page.e2e_errors == []
@@ -411,6 +428,7 @@ def test_e2e_quality_budget(e2e_server, page, task_store, monkeypatch, budget, r
     page.set_viewport_size({"width": 375, "height": 900})
     page.set_input_files("#fileInput", {"name": "source.txt", "mimeType": "text/plain", "buffer": b"Original"})
     page.select_option("#target", "html")
+    page.locator("#expertConversionBtn").click()
     page.locator(".conversion-loss-budget summary").click()
     page.select_option("#maxLossIssues", budget)
     with page.expect_response(
@@ -472,6 +490,7 @@ def test_e2e_batch_passes_quality_budget_to_each_file(e2e_server, page, task_sto
         ],
     )
     page.select_option("#target", "model")
+    page.locator("#expertConversionBtn").click()
     page.locator(".conversion-loss-budget summary").click()
     page.select_option("#maxLossIssues", "0")
     page.select_option("#maxLostObjects", "0")
@@ -498,6 +517,7 @@ def test_e2e_object_budget_reports_verification(e2e_server, page, task_store, ta
     _wait_convert_ready(page)
     page.set_input_files("#fileInput", {"name": "source.txt", "mimeType": "text/plain", "buffer": b"Unique text"})
     page.select_option("#target", target)
+    page.locator("#expertConversionBtn").click()
     page.locator(".conversion-loss-budget summary").click()
     page.select_option("#maxLostObjects", "0")
     page.click("#convertBtn")
@@ -524,6 +544,7 @@ def test_e2e_exact_text_check(e2e_server, page, task_store, monkeypatch, changed
     page.set_viewport_size({"width": 375, "height": 900})
     page.set_input_files("#fileInput", {"name": "source.txt", "mimeType": "text/plain", "buffer": b"Original"})
     page.select_option("#target", "docx")
+    page.locator("#expertConversionBtn").click()
     page.locator(".conversion-loss-budget summary").click()
     page.select_option("#textPreservation", "paragraphs")
     page.click("#convertBtn")
@@ -550,6 +571,7 @@ def test_e2e_text_reflow_mode(e2e_server, page, task_store, monkeypatch, mode, a
     page.set_viewport_size({"width": 375, "height": 900})
     page.set_input_files("#fileInput", {"name": "source.txt", "mimeType": "text/plain", "buffer": b"First Second"})
     page.select_option("#target", "docx")
+    page.locator("#expertConversionBtn").click()
     page.locator(".conversion-loss-budget summary").click()
     page.select_option("#textPreservation", mode)
     page.click("#convertBtn")
@@ -591,7 +613,11 @@ def test_e2e_convert_batch_flow(e2e_server, page, tmp_path, task_store):
         assert len(manifest["files"]) == 2
         assert all(item["status"] == "done" and item["file"] in archive.namelist() for item in manifest["files"])
 
+    if not page.locator("#conversionHistory").evaluate("el => el.open"):
+        page.locator("#conversionHistory > summary").click()
     page.wait_for_selector("#historyList details.job-entry", timeout=30000)
+    if not page.locator("#conversionHistory").evaluate("el => el.open"):
+        page.locator("#conversionHistory > summary").click()
     page.locator("#historyList details.job-entry summary").first.click()
     page.wait_for_selector("[data-rerun-job]", timeout=30000)
     assert page.locator('#historyList [data-download-url$="/archive"]').is_visible()
@@ -603,7 +629,11 @@ def test_e2e_convert_batch_flow(e2e_server, page, tmp_path, task_store):
         timeout=120000,
     )
 
+    if not page.locator("#conversionHistory").evaluate("el => el.open"):
+        page.locator("#conversionHistory > summary").click()
     page.wait_for_selector("#historyList details.job-entry", timeout=30000)
+    if not page.locator("#conversionHistory").evaluate("el => el.open"):
+        page.locator("#conversionHistory > summary").click()
     page.locator("#historyList details.job-entry summary").first.click()
     page.wait_for_selector("[data-delete-job]", timeout=30000)
     page.click("[data-delete-job]")
@@ -631,7 +661,8 @@ def test_e2e_dropzone_is_keyboard_operable(e2e_server, page, tmp_path):
 def test_e2e_dropzone_reachable_via_tab(e2e_server, page):
     page.goto(f"{e2e_server}/convert")
     _wait_convert_ready(page)
-    for _ in range(20):
+    focusable_count = page.locator("a[href], button, input, select, textarea, [tabindex]").count()
+    for _ in range(focusable_count + 1):
         page.keyboard.press("Tab")
         if page.evaluate("document.activeElement.id") == "dropZone":
             break
@@ -665,7 +696,7 @@ def test_e2e_convert_controls_have_accessible_names(e2e_server, page, tmp_path, 
     page.goto(f"{e2e_server}/convert")
     _wait_convert_ready(page)
 
-    assert page.get_by_role("heading", name="Сохранить документ, а не просто текст").count() == 1
+    assert page.get_by_role("heading", name="Преобразовать документ", exact=True).count() == 1
     dropzone = page.get_by_role("button", name="Загрузите документ")
     assert dropzone.count() == 1
 
@@ -673,6 +704,8 @@ def test_e2e_convert_controls_have_accessible_names(e2e_server, page, tmp_path, 
     page.set_input_files("#fileInput", str(pdf))
     page.wait_for_function("!document.getElementById('conversionSetup').hidden")
     assert page.get_by_role("combobox", name="Формат результата").count() == 1
+    assert page.get_by_role("combobox", name="Приоритет").count() == 0
+    page.locator("#expertConversionBtn").click()
     assert page.get_by_role("combobox", name="Приоритет").count() == 1
     assert page.get_by_role("button", name="Начать конвертацию").count() == 1
     assert page.get_by_role("button", name="Выбрать другой").count() == 1
@@ -692,13 +725,18 @@ def test_e2e_batch_filters_persist_and_switch_jobs(e2e_server, page, task_store)
     page.set_viewport_size({"width": 375, "height": 812})
     page.goto(f"{e2e_server}/convert")
     _wait_convert_ready(page)
+    _open_batch_history(page, "filter-batch")
     page.locator('[data-open-job="filter-batch"]').click()
     page.wait_for_function("document.getElementById('batchFilterSummary').textContent.includes('4 из 4')")
+    if not page.locator("#batchFilters").evaluate("el => el.open"):
+        page.locator("#batchFilters > summary").click()
     page.select_option("#batchStateFilter", "attention")
     assert page.locator("#batchProgressList > li").count() == 2
     task_store.set("filter-running", {"status": "error"})
     page.wait_for_function("document.getElementById('batchFilterSummary').textContent.includes('3 из 4')")
     assert page.locator("#batchStateFilter").input_value() == "attention"
+    if not page.locator("#batchFilters").evaluate("el => el.open"):
+        page.locator("#batchFilters > summary").click()
     page.select_option("#batchStateFilter", "done")
     page.locator("#batchNameFilter").fill("ОТЧЁТ")
     assert page.locator("#batchProgressList > li").count() == 1
@@ -709,6 +747,7 @@ def test_e2e_batch_filters_persist_and_switch_jobs(e2e_server, page, task_store)
     assert page.locator("#batchProgressList > li").count() == 4
     page.locator("#batchNameFilter").fill("Ошибка")
     page.locator('[data-job="filter-other"] > summary').click()
+    _open_batch_history(page, "filter-other")
     page.locator('[data-open-job="filter-other"]').click()
     page.wait_for_function("document.getElementById('batchFilterSummary').textContent.includes('1 из 1')")
     assert page.locator("#batchNameFilter").input_value() == ""
@@ -727,6 +766,7 @@ def test_e2e_individual_batch_formats(e2e_server, page, task_store):
             {"name": "same.txt", "mimeType": "text/plain", "buffer": b"Second"},
         ]
     )
+    page.locator("#expertConversionBtn").click()
     page.locator("#batchIndividualOptions > summary").click()
     page.select_option("#batchTarget0", "model")
     page.select_option("#batchMode0", "editable")
@@ -745,6 +785,107 @@ def test_e2e_individual_batch_formats(e2e_server, page, task_store):
     first, second = [task_store.get(item["task_id"]) for item in created["tasks"]]
     assert (first["target_format"], first["mode"], first["status"]) == ("model", "editable", "done")
     assert (second["target_format"], second["status"]) == ("html", "done")
+    assert page.e2e_errors == []
+
+
+@pytest.mark.parametrize("width", [375, 1280])
+def test_e2e_batch_storage_failure_keeps_inputs_and_options(e2e_server, page, task_store, monkeypatch, width):
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.locator("#fileInput").set_input_files([
+        {"name": name, "mimeType": "text/plain", "buffer": name.encode()} for name in ("first.txt", "second.txt")
+    ])
+    page.locator("#expertConversionBtn").click()
+    page.select_option("#target", "html")
+    page.locator("#batchIndividualOptions > summary").click()
+    page.select_option("#batchTarget0", "model")
+    page.select_option("#batchMode0", "editable")
+    writer = task_store.set_job
+
+    def fail_job(job_id, payload):
+        writer(job_id, payload)
+        raise OSError("temporary batch storage failure")
+
+    with monkeypatch.context() as failure:
+        failure.setattr(task_store, "set_job", fail_job)
+        with page.expect_response(lambda response: response.url.endswith("/api/convert/batch")) as response:
+            page.locator("#batchConvertBtn").click()
+        assert response.value.status == 500
+        page.wait_for_function("!document.getElementById('batchConvertBtn').disabled")
+        assert task_store.list_jobs() == [] and task_store.list_tasks() == []
+        assert page.locator("#fileInput").evaluate("el => Array.from(el.files).map(file => file.name)") == [
+            "first.txt", "second.txt",
+        ]
+        assert page.locator("#batchTarget0").input_value() == "model"
+        assert page.locator("#batchMode0").input_value() == "editable"
+        assert page.locator("#batchTarget1").input_value() == "html"
+    with page.expect_response(lambda response: response.url.endswith("/api/convert/batch")) as response:
+        page.locator("#batchConvertBtn").click()
+    assert response.value.status == 200
+    page.wait_for_function("document.getElementById('batchProgressState').textContent === 'Готово'")
+    assert all(task_store.get(item["task_id"])["status"] == "done" for item in response.value.json()["tasks"])
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), page.evaluate(
+        "Array.from(document.querySelectorAll('body *')).filter(e => e.getBoundingClientRect().right > innerWidth + 1)"
+        ".slice(0, 15).map(e => [e.tagName, e.className, e.id, e.getBoundingClientRect().width])"
+    )
+    assert all("500 (Internal Server Error)" in error for error in page.e2e_errors)
+
+
+@pytest.mark.parametrize("width", [375, 1280])
+@pytest.mark.parametrize("failure", ["storage", "queue"])
+def test_e2e_retry_storage_failure_shows_reason_and_keeps_results(e2e_server, page, task_store, monkeypatch, width, failure):
+    page.set_viewport_size({"width": width, "height": 900})
+    page.goto(f"{e2e_server}/convert")
+    _wait_convert_ready(page)
+    page.locator("#fileInput").set_input_files([
+        {"name": name, "mimeType": "text/plain", "buffer": name.encode()} for name in ("good.txt", "retry.txt")
+    ])
+    page.select_option("#target", "model")
+    with page.expect_response(lambda response: response.url.endswith("/api/convert/batch")) as response:
+        page.locator("#batchConvertBtn").click()
+    created = response.value.json()
+    page.wait_for_function("document.getElementById('batchProgressState').textContent === 'Готово'")
+    good_id, retry_id = [item["task_id"] for item in created["tasks"]]
+    task_store.set(retry_id, {**task_store.get(retry_id), "status": "error", "error": "Временная ошибка"})
+    originals = {task_id: task_store.get(task_id) for task_id in (good_id, retry_id)}
+    results = {task_id: task_store.result_path(task_id, task["artifact"]).read_bytes() for task_id, task in originals.items()}
+    writer = task_store._write_meta_locked
+
+    def fail_retry(task_id, payload):
+        if task_id == retry_id and payload.get("status") == "queued":
+            raise OSError("temporary storage failure")
+        writer(task_id, payload)
+
+    if failure == "storage":
+        monkeypatch.setattr(task_store, "_write_meta_locked", fail_retry)
+    else:
+        def fail_queue(_task_id):
+            raise RuntimeError("queue unavailable")
+        monkeypatch.setattr(convert_route, "resume_conversion_task", fail_queue)
+    _open_batch_history(page)
+    page.locator("#historyRefresh").click()
+    page.wait_for_function("document.querySelector('#historyList .job-state').textContent.includes('1 ошибок')")
+    if not page.locator("#conversionHistory").evaluate("el => el.open"):
+        page.locator("#conversionHistory > summary").click()
+    page.locator("#historyList details > summary").first.click()
+    page.get_by_role("checkbox", name="Выбрать для повтора: retry.txt", exact=True).check()
+    with page.expect_response(lambda response: response.url.endswith("/rerun")) as response:
+        page.locator("[data-retry-selected]").click()
+    assert response.value.json()["launched"] == []
+    if failure == "storage":
+        page.get_by_text("Не удалось сохранить повтор; прежний результат сохранён.", exact=False).wait_for(state="visible")
+    else:
+        page.locator("#batchProgressList").get_by_text("Ожидает перезапуска очереди", exact=False).wait_for(state="visible")
+        assert response.value.json()["queued"] == [retry_id]
+        assert task_store.get(retry_id)["status"] == "queued"
+        assert task_store.source_path(retry_id).read_bytes() == b"retry.txt"
+    for task_id, task in originals.items():
+        if failure == "queue" and task_id == retry_id:
+            continue
+        assert task_store.get(task_id) == task
+        assert task_store.result_path(task_id, task["artifact"]).read_bytes() == results[task_id]
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     assert page.e2e_errors == []
 
 
@@ -791,8 +932,11 @@ def test_e2e_retry_only_failed_files(e2e_server, page, task_store):
     good_id, retry_id = [item["task_id"] for item in created["tasks"]]
     good = task_store.get(good_id)
     task_store.set(retry_id, {**task_store.get(retry_id), "status": "error", "error": "Временная ошибка"})
+    _open_batch_history(page)
     page.locator("#historyRefresh").click()
     page.wait_for_function("document.querySelector('#historyList .job-state').textContent.includes('ошибок')")
+    if not page.locator("#conversionHistory").evaluate("el => el.open"):
+        page.locator("#conversionHistory > summary").click()
     page.locator("#historyList details > summary").first.click()
     with page.expect_response(lambda response: response.url.endswith("/rerun")) as response:
         page.get_by_role("button", name="Повторить неудачные", exact=True).click()
@@ -826,8 +970,11 @@ def test_e2e_retry_selected_file(e2e_server, page, task_store, tmp_path, width, 
         task_store.set(task_id, {**task_store.get(task_id), "status": "error", "error": "Временная ошибка"})
     untouched = task_store.get(leave_id)
     untouched_bytes = task_store.result_path(leave_id, untouched["artifact"]).read_bytes()
+    _open_batch_history(page)
     page.locator("#historyRefresh").click()
     page.wait_for_function("document.querySelector('#historyList .job-state').textContent.includes('2 ошибок')")
+    if not page.locator("#conversionHistory").evaluate("el => el.open"):
+        page.locator("#conversionHistory > summary").click()
     page.locator("#historyList details > summary").first.click()
     button = page.locator('[data-retry-selected]')
     button.wait_for(state="visible")
@@ -884,9 +1031,11 @@ def test_e2e_cancel_remaining_batch_files(e2e_server, page, task_store, surface)
     page.goto(f"{e2e_server}/convert")
     _wait_convert_ready(page)
     if surface == "panel":
+        _open_batch_history(page, "cancel-batch")
         page.locator('[data-open-job="cancel-batch"]').click()
         button = page.locator("#batchCancelBtn")
     else:
+        _open_batch_history(page, "cancel-batch")
         button = page.locator('[data-cancel-job="cancel-batch"]')
     with page.expect_response(lambda response: response.url.endswith("/cancel")) as response:
         button.click()
@@ -907,8 +1056,9 @@ def test_e2e_ocr_edit_reload_and_export(e2e_server, page, task_store, tmp_path, 
 
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(f"{e2e_server}/recognize")
-    page.get_by_role("radio", name="Обычный PDF В документе уже можно выделить текст").click()
+    page.locator("#scenario").select_option("fast")
     page.set_input_files("#fileInput", _make_pdf(tmp_path / "ocr.pdf", "0CR err0r"))
+    page.locator("#processBtn").click()
     expect(page.locator("#result")).to_have_value("0CR err0r", timeout=30000)
     page.locator("#result").fill("Исправленный текст\n\nСтрока 2")
     page.locator("#saveTextBtn").click()
@@ -933,8 +1083,9 @@ def test_e2e_ocr_conflict_keeps_local_edit(e2e_server, page, task_store, tmp_pat
     from playwright.sync_api import expect
 
     page.goto(f"{e2e_server}/recognize")
-    page.get_by_role("radio", name="Обычный PDF В документе уже можно выделить текст").click()
+    page.locator("#scenario").select_option("fast")
     page.set_input_files("#fileInput", _make_pdf(tmp_path / "ocr.pdf", "Original"))
+    page.locator("#processBtn").click()
     expect(page.locator("#result")).to_have_value("Original", timeout=30000)
     draft_id = page.url.split("draft=")[1]
     response = page.request.put(f"{e2e_server}/api/recognize/drafts/{draft_id}",
@@ -956,10 +1107,12 @@ def test_e2e_ocr_paragraph_order(e2e_server, page, task_store, tmp_path, width):
 
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(f"{e2e_server}/recognize")
-    page.get_by_role("radio", name="Обычный PDF В документе уже можно выделить текст").click()
+    page.locator("#scenario").select_option("fast")
     page.set_input_files("#fileInput", _make_pdf(tmp_path / "order.pdf", "Second\nFirst\nThird"))
+    page.locator("#processBtn").click()
     result = page.locator("#result")
     expect(result).to_have_value("Second\nFirst\nThird", timeout=30000)
+    page.locator("#paragraphTools summary").click()
     result.focus()
     page.keyboard.press("Control+Home")
     expect(page.locator("#paragraphUp")).to_be_disabled()
@@ -981,6 +1134,7 @@ def test_e2e_ocr_paragraph_order(e2e_server, page, task_store, tmp_path, width):
     from textalchemy.core.document_codec import document_from_dict
 
     assert [b.plain_text for b in document_from_dict(model).sections[0].blocks] == ["First", "Second", "Third"]
+    page.locator("#paragraphTools summary").click()
     # Repeated text and empty paragraphs must move by position without loss.
     result.fill("Same\n\nSame\nLast")
     result.evaluate("e => {e.focus(); e.setSelectionRange(0, 6); e.dispatchEvent(new Event('select'));}")
@@ -1001,11 +1155,13 @@ def test_e2e_ocr_order_before_trailing_empty_paragraph(e2e_server, page, task_st
     from playwright.sync_api import expect
 
     page.goto(f"{e2e_server}/recognize")
-    page.get_by_role("radio", name="Обычный PDF В документе уже можно выделить текст").click()
+    page.locator("#scenario").select_option("fast")
     page.set_input_files("#fileInput", _make_pdf(tmp_path / "order-empty.pdf", "Original"))
+    page.locator("#processBtn").click()
     result = page.locator("#result")
     expect(result).to_have_value("Original", timeout=30000)
     result.fill("A\nB\n")
+    page.locator("#paragraphTools summary").click()
     result.evaluate("e => {e.setSelectionRange(0, 0); e.dispatchEvent(new Event('select'));}")
     page.locator("#paragraphDown").click()
     expect(result).to_have_value("B\nA\n")

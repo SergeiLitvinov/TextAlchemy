@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
 
 from fastapi import File, Form, HTTPException, UploadFile
@@ -21,13 +20,16 @@ from textalchemy.web.app import (
     tasks_store,
 )
 from textalchemy.web.preview import cached_page_count, cached_page_png  # noqa: F401 - compatibility facade
-from textalchemy.web.services.conversion_catalog import OUTPUT_SUFFIXES as _OUTPUT_SUFFIXES
 from textalchemy.web.services.conversion_catalog import available_conversions as _available_conversions
-from textalchemy.web.services.conversion_catalog import preservation_below as _preservation_below
 from textalchemy.web.services.conversion_catalog import resolve_conversion as _resolve_conversion
-from textalchemy.web.services.conversion_catalog import web_plan_supported as _web_plan_supported
+from textalchemy.web.services.conversion_inspection import ConversionInspectionService
+from textalchemy.web.services.conversion_submission import (
+    ConversionRequestError,
+    ConversionSettings,
+    ConversionSubmissionService,
+    SubmissionUnavailableError,
+)
 from textalchemy.web.services.conversion_tasks import ConversionTaskService
-from textalchemy.web.services.conversion_tasks import inspection_payload as _inspection_payload
 from textalchemy.web.workspace import create_web_workspace, save_upload
 
 
@@ -60,11 +62,23 @@ def _persist_conversion_task(
     require_unchanged_text: bool = False,
     text_preservation: str | None = None,
     max_text_edits: int | None = None,
+    max_changed_formulas: int | None = None,
+    max_changed_emphasis: int | None = None,
 ) -> None:
     """Compatibility wrapper around the application service."""
     _task_service().persist(
-        task_id, source_path, source, target, mode, quality_policy, object_loss_policy,
-        require_unchanged_text, text_preservation, max_text_edits,
+        task_id,
+        source_path,
+        source,
+        target,
+        mode,
+        quality_policy,
+        object_loss_policy,
+        require_unchanged_text,
+        text_preservation,
+        max_text_edits,
+        max_changed_formulas,
+        max_changed_emphasis,
     )
 
 
@@ -85,17 +99,13 @@ async def api_convert_capabilities():
 
 @app.post("/api/convert/inspect")
 async def api_convert_inspect(file: UploadFile = File(...)):
-    workspace = create_web_workspace()
+    service = ConversionInspectionService(workspace_factory=create_web_workspace, saver=save_upload, inspector=inspect_path)
     try:
-        source_path = await save_upload(workspace, file, fallback="document")
-        inspection = inspect_path(source_path)
-        return {"success": True, "inspection": _inspection_payload(inspection, source_path.name)}
+        return await service.inspect(file)
     except HTTPException:
         raise
-    except Exception as error:  # noqa: BLE001 - API boundary returns stable validation errors
-        raise HTTPException(status_code=400, detail=f"Не удалось проверить структуру документа: {error}") from error
-    finally:
-        workspace.cleanup()
+    except Exception as error:
+        raise HTTPException(400, f"Не удалось проверить структуру документа: {error}") from error
 
 
 @app.post("/api/convert")
@@ -111,59 +121,45 @@ async def api_convert(
     require_unchanged_text: bool = Form(False),
     text_preservation: str | None = Form(None),
     max_text_edits: int | None = Form(None, ge=0),
+    max_changed_formulas: int | None = Form(None, ge=0),
+    max_changed_emphasis: int | None = Form(None, ge=0),
 ):
-    workspace = create_web_workspace()
+    service = ConversionSubmissionService(
+        store=tasks_store,
+        persist=_persist_conversion_task,
+        resume=resume_conversion_task,
+        workspace_factory=create_web_workspace,
+        saver=save_upload,
+        resolver=_resolve_conversion,
+        executor_factory=ConversionExecutor,
+    )
+    settings = ConversionSettings(
+        target_format,
+        mode,
+        max_loss_issues,
+        max_lost_objects,
+        require_unchanged_text,
+        text_preservation,
+        max_text_edits,
+        max_changed_formulas,
+        max_changed_emphasis,
+    )
     try:
-        source_path = await save_upload(workspace, file, fallback="document")
-        source, target = _resolve_conversion(
-            source_path,
+        return await service.submit(
+            file,
+            settings=settings,
             source_format=source_format,
-            target_format=target_format,
             legacy_format=fmt,
-        )
-        conversion_mode = ConversionMode(mode)
-        plan = ConversionExecutor().plan(source, target, mode=conversion_mode)
-        if plan is None or not _web_plan_supported(plan):
-            raise HTTPException(
-                status_code=400,
-                detail=f"Маршрут {source.value} → {target.value} ({conversion_mode.value}) недоступен",
-            )
-        if target not in _OUTPUT_SUFFIXES:
-            raise HTTPException(status_code=400, detail=f"Формат результата {target.value} пока недоступен в Web UI")
-        below = _preservation_below(plan, min_retention)
-        if below:
-            details = ", ".join(f"{name}: {score:.0%}" for name, score in below.items())
-            raise HTTPException(
-                status_code=422,
-                detail=f"Прогноз ниже выбранного порога {min_retention:.0%}: {details}",
-            )
-        task_id = str(uuid.uuid4())
-        policy = QualityPolicy(max_loss_issues) if max_loss_issues is not None else None
-        object_policy = ObjectLossPolicy(max_lost_objects) if max_lost_objects is not None else None
-        _persist_conversion_task(
-            task_id, source_path, source, target, conversion_mode, policy, object_policy,
-            require_unchanged_text, text_preservation, max_text_edits,
+            min_retention=min_retention,
         )
     except HTTPException:
-        workspace.cleanup()
         raise
-    except ValueError as error:
-        workspace.cleanup()
-        raise HTTPException(status_code=400, detail=str(error)) from error
+    except ConversionRequestError as error:
+        raise HTTPException(error.status_code, str(error)) from error
+    except SubmissionUnavailableError as error:
+        raise HTTPException(503, str(error)) from error
     except Exception as error:
-        workspace.cleanup()
-        raise HTTPException(status_code=503, detail="Очередь конвертации временно недоступна") from error
-    workspace.cleanup()
-    try:
-        resume_conversion_task(task_id)
-    except Exception as error:
-        raise HTTPException(status_code=503, detail="Очередь конвертации временно недоступна") from error
-    return {
-        "success": True,
-        "task_id": task_id,
-        "status": f"/api/convert/status/{task_id}",
-        "result": f"/api/convert/result/{task_id}",
-    }
+        raise HTTPException(503, "Очередь конвертации временно недоступна") from error
 
 
 @app.get("/api/convert/status/{task_id}")

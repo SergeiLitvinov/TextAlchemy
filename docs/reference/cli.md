@@ -2,7 +2,7 @@
 
 # Справочник CLI
 
-Сформирован из парсера команд. Префикс: `uv run textalchemy`. [Сценарии и ограничения](../guide/index.md#справочник-команд). Наличие аргумента в парсере не подтверждает его поддержку; статус CLI — [M0](../../TODO.md#m0).
+Сформирован из парсера команд. Префикс: `uv run textalchemy`. [Сценарии и ограничения](../guide/index.md#справочник-команд). Наличие аргумента в парсере не подтверждает его поддержку; поведение описано в [руководстве](../guide/index.md#справочник-команд).
 
 ## Глобальные параметры
 
@@ -52,6 +52,8 @@
 | `--mode` |  | default: 'balanced'; варианты: editable, faithful, balanced |
 | `--feature` | Приоритетная функция документа; можно повторять | варианты: text, styles, raster_images, vector_graphics, formulas, tables, page_geometry, sections, running_content, notes, fields |
 | `--max-steps` |  | default: 4 |
+| `--max-changed-emphasis` | Maximum characters with changed bold/italic emphasis |  |
+| `--max-changed-formulas` | Допуск несовпавших или удалённых исходных формул |  |
 | `--max-loss-issues` | Максимум диагностированных потерь; 0 запрещает любые LOSS |  |
 | `--require-unchanged-text` | Требовать точного сохранения текста исходных абзацев | default: False |
 | `--text-preservation` | Режим проверки сохранности текста | варианты: paragraphs, flow |

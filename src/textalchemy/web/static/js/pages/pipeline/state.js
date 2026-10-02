@@ -17,7 +17,7 @@ export function createPipelineState() {
     function defaultSteps() {
         if (state.steps.length) return;
         state.steps = [
-            {op: 'ingest.file', output: 'doc', input: '', params: {path: 'input.txt'}},
+            {op: 'ingest.file', output: 'doc', input: '', params: {path: ''}},
             {op: 'extract.text', output: 'text', input: 'doc', params: {}},
             {op: 'render.latex', output: 'tex', input: 'text', params: {title: 'Demo'}},
         ];

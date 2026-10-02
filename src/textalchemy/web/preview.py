@@ -20,6 +20,8 @@ DEFAULT_PREVIEW_DPI = 110
 MAX_PREVIEW_DPI = 200
 
 _LIBREOFFICE_CANDIDATES = (
+    r"C:\Program Files\LibreOffice\program\soffice.com",
+    r"C:\Program Files (x86)\LibreOffice\program\soffice.com",
     r"C:\Program Files\LibreOffice\program\soffice.exe",
     r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
     "/usr/bin/libreoffice",
@@ -116,15 +118,18 @@ def cached_page_count(preview_dir: Path, source_file: Path, side: str) -> int:
     count_file = preview_dir / f"{side}-pages"
     if count_file.is_file():
         try:
-            return max(0, int(count_file.read_text(encoding="utf-8").strip()))
+            cached_count = int(count_file.read_text(encoding="utf-8").strip())
+            if cached_count > 0:
+                return cached_count
         except (OSError, ValueError):
             pass
     pdf = ensure_pdf(preview_dir, source_file, side)
     count = pdf_page_count(pdf) if pdf is not None else 0
-    try:
-        atomic_write_text(count_file, str(count), encoding="utf-8")
-    except OSError:
-        pass
+    if count > 0:
+        try:
+            atomic_write_text(count_file, str(count), encoding="utf-8")
+        except OSError:
+            pass
     return count
 
 

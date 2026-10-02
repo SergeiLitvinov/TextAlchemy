@@ -11,6 +11,8 @@ def cmd_convert_file(args: argparse.Namespace) -> int:
     from textalchemy.convert.executor import ConversionExecutor, ConversionRequest, infer_format
     from textalchemy.core.conversion_graph import DocumentFeature
     from textalchemy.core.document_model import ConversionMode
+    from textalchemy.core.emphasis_quality import EmphasisLossPolicy
+    from textalchemy.core.formula_quality_policy import FormulaLossPolicy
     from textalchemy.core.object_quality_policy import ObjectLossPolicy
     from textalchemy.core.quality_policy import QualityPolicy
     from textalchemy.core.text_quality_policy import resolve_text_policy
@@ -25,6 +27,10 @@ def cmd_convert_file(args: argparse.Namespace) -> int:
         policy = QualityPolicy(limit) if limit is not None else None
         object_limit = getattr(args, "max_lost_objects", None)
         object_policy = ObjectLossPolicy(object_limit) if object_limit is not None else None
+        emphasis_limit = getattr(args, "max_changed_emphasis", None)
+        emphasis_policy = EmphasisLossPolicy(emphasis_limit) if emphasis_limit is not None else None
+        formula_limit = getattr(args, 'max_changed_formulas', None)
+        formula_policy = FormulaLossPolicy(formula_limit) if formula_limit is not None else None
         text_policy = resolve_text_policy(
             getattr(args, "require_unchanged_text", False), getattr(args, "text_preservation", None),
             getattr(args, "max_text_edits", None),
@@ -52,6 +58,8 @@ def cmd_convert_file(args: argparse.Namespace) -> int:
             quality_policy=policy,
             object_loss_policy=object_policy,
             text_preservation_policy=text_policy,
+            formula_loss_policy=formula_policy,
+            emphasis_loss_policy=emphasis_policy,
         )
     )
     if args.json:

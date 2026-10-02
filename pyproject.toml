@@ -15,6 +15,7 @@ authors = [
 
 dependencies = [
     # Core
+    "opendoc==0.1.0",
     "pyyaml>=6.0.1",
     "platformdirs>=4.0.0",
     "pypdf>=4.0.0",
@@ -105,4 +106,7 @@ strict = false
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["textalchemy"]
+source = ["textalchemy", "opendoc"]
+
+[tool.uv.sources]
+opendoc = { path = "vendor/opendoc/opendoc-0.1.0-py3-none-any.whl" }

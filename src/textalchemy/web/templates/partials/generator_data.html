@@ -1,0 +1,20 @@
+<p id="draftStatus" class="field-help" role="status" aria-live="polite">Начните ввод, чтобы сохранить черновик.</p>
+<button id="restoreDraft" type="button" class="btn-secondary" hidden>Восстановить предыдущий черновик</button>
+<details id="savedData" class="workspace-disclosure">
+    <summary>Сохранённые данные и черновик</summary>
+    <p>Черновик сохраняется в этой вкладке отдельно для каждого шаблона. После перезагрузки открывается новая форма; восстановление прежних полей и изображений выполняется только по кнопке. Это временное хранение: не используйте его как архив после закрытия вкладки.</p>
+    <button id="clearDraft" type="button" class="btn-secondary">Удалить черновик этого шаблона</button>
+    <hr>
+    <h3>Именованные наборы данных</h3>
+    <p>Хранятся на сервере без срока истечения. Доступны во всех вкладках этого приложения. Данные проверяются перед генерацией.</p>
+    <label for="datasetList">Наборы текущего шаблона</label>
+    <select id="datasetList"></select>
+    <button id="datasetLoad" type="button" class="btn-secondary" disabled>Загрузить набор</button>
+    <label for="datasetName">Имя набора</label>
+    <input id="datasetName" maxlength="80" type="text">
+    <div class="ocr-edit-actions">
+        <button id="datasetCreate" type="button" disabled>Сохранить новый набор</button>
+        <button id="datasetUpdate" type="button" disabled>Обновить загруженный набор</button>
+    </div>
+    <p id="datasetStatus" role="status" aria-live="polite"></p>
+</details>

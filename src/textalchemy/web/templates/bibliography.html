@@ -11,21 +11,18 @@
     <button type="button" id="newItemBtn" class="btn-primary">+ Добавить источник</button>
 </section>
 {% include "partials/library_nav.html" %}
+<div id="libraryStatus" class="status-bar" role="status" aria-live="polite" hidden></div>
 
 <section class="card library-collection">
     <div class="library-toolbar">
         <div class="library-search">
-            <label class="visually-hidden" for="bibSearch">Поиск по авторам или названию</label>
+            <label class="visually-hidden" for="bibSearch">Поиск по авторам, названию или году</label>
             <input type="search" id="bibSearch" placeholder="Найти автора, название или год…">
         </div>
-        <form id="importForm" enctype="multipart/form-data" class="import-control">
-            <label for="importFile" class="btn-secondary">Импортировать файл</label>
-            <input type="file" name="file" accept=".json,.bib,.txt" id="importFile" class="visually-hidden">
-            <button type="submit" id="importBtn" class="btn-secondary">Загрузить</button>
-        </form>
+        <button type="button" id="refreshLibraryBtn" class="btn-secondary">Обновить список</button>
     </div>
     <div class="collection-summary">
-        <div><strong id="bibCount">{{ bib_items|length }}</strong><small>источников в библиотеке</small></div>
+        <div><strong id="bibCount">{{ bib_items|length }}</strong><small>источников в библиотеке</small><small id="bibShown" role="status"></small></div>
         <a href="/matching">Связать записи с документами →</a>
     </div>
     <div class="table-scroll">
@@ -51,8 +48,22 @@
     </div>
 </section>
 
-<details class="card record-editor" id="bibEditor">
-    <summary><span><strong>Карточка источника</strong><small>Основные сведения и идентификаторы публикации</small></span></summary>
+<details class="card workspace-disclosure" id="importPanel">
+    <summary>Импортировать список источников</summary>
+    <p class="field-help">TXT, BibTeX или JSON. Импорт добавляет записи к библиотеке; существующие записи сохраняются. Повторный импорт может добавить дубликаты.</p>
+    <form id="importForm" enctype="multipart/form-data">
+        <label for="importFile">Файл со списком источников</label>
+        <input type="file" name="file" accept=".json,.bib,.txt" id="importFile">
+        <p id="importSelection" class="field-help" role="status">Файл не выбран.</p>
+        <div class="form-actions">
+            <button type="submit" id="importBtn" disabled>Добавить записи из файла</button>
+            <button type="button" id="cancelImportBtn" class="btn-secondary" hidden>Снять выбор</button>
+        </div>
+    </form>
+</details>
+
+<details class="card record-editor" id="bibEditor" hidden>
+    <summary><span><strong id="editorTitle">Новый источник</strong><small>Изменения сохраняются только по кнопке ниже</small></span></summary>
     <form id="bibForm">
         <input type="hidden" id="itemId" value="">
         <div class="form-grid">
@@ -67,6 +78,10 @@
                 <option value="other">Прочее</option>
             </select></div>
             <div><label for="year">Год</label><input type="text" id="year" inputmode="numeric"></div>
+        </div>
+        <details class="workspace-disclosure" id="sourceDetails">
+            <summary>Выходные данные и идентификаторы</summary>
+            <div class="form-grid">
             <div><label for="journal">Журнал</label><input type="text" id="journal"></div>
             <div><label for="publisher">Издательство</label><input type="text" id="publisher"></div>
             <div><label for="city">Город</label><input type="text" id="city"></div>
@@ -75,14 +90,16 @@
             <div><label for="doi">DOI</label><input type="text" id="doi"></div>
             <div class="wide-field"><label for="source">Связанный файл</label><input type="text" id="source" placeholder="Путь к документу"></div>
         </div>
+        </details>
         <div class="form-actions">
             <button type="submit" id="saveBtn">Сохранить запись</button>
-            <button type="button" id="cancelEdit" class="btn-secondary" hidden>Отмена</button>
+            <button type="button" id="cancelEdit" class="btn-secondary">Отменить изменения</button>
         </div>
     </form>
 </details>
 {% endblock %}
 
 {% block scripts %}
+<script type="application/json" id="bibliographyData">{{ bib_items|tojson }}</script>
 <script src="/static/js/pages/bibliography.js?v={{ asset_version }}" defer></script>
 {% endblock %}

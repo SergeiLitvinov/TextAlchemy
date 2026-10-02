@@ -15,7 +15,8 @@
 </section>
 
 <div id="visualMode" class="pipeline-layout">
-    <aside class="card operations-panel" aria-labelledby="operations-title">
+    <details class="card operations-panel" id="operationCatalog">
+        <summary>Каталог действий</summary>
         <div class="card-head">
             <div><p class="eyebrow">Действия</p><h3 id="operations-title">Добавить шаг</h3></div>
             <span class="count-badge" id="opsCount">…</span>
@@ -26,7 +27,7 @@
         <div id="opsPalette" class="ops-palette">
             <p class="hint">Загружаем доступные действия…</p>
         </div>
-    </aside>
+    </details>
 
     <section class="pipeline-canvas" aria-labelledby="steps-title">
         <div class="card pipeline-toolbar">
@@ -36,11 +37,13 @@
             </div>
             <div class="btn-group">
                 <button type="button" id="addStepBtn" class="btn-secondary">+ Добавить действие</button>
-                <button type="button" id="validateBtn" class="btn-secondary">Проверить</button>
+                <button type="button" id="validateBtn" class="btn-secondary">Проверить связи</button>
                 <button type="button" id="runBtn" class="btn-primary">Запустить <span aria-hidden="true">→</span></button>
             </div>
         </div>
 
+        <p class="field-help">Начальный пример: файл → текст → LaTeX. Выберите исходник в первом шаге или замените действия. Проверка связей не выполняет сценарий; «Запустить» обрабатывает данные и создаёт файлы результата.</p>
+        <div id="status" class="status-bar" role="status" aria-live="polite" hidden></div>
         <div id="stepsList" class="pipeline-steps" aria-live="polite"></div>
 
         <details class="card pipeline-runtime">
@@ -60,7 +63,6 @@
             </div>
         </details>
 
-        <div id="status" class="status-bar" hidden></div>
     </section>
 </div>
 
@@ -68,21 +70,21 @@
     <div class="card-head">
         <div><p class="eyebrow">Для опытных пользователей</p><h3 id="expert-title">Текстовое описание сценария</h3></div>
         <div class="btn-group">
-            <button type="button" id="toBuilderBtn" class="btn-secondary">Перенести в конструктор</button>
             <button type="button" id="expertRunBtn" class="btn-primary">Запустить <span aria-hidden="true">→</span></button>
         </div>
     </div>
-    <p class="section-copy">Поддерживаются форматы YAML и JSON. Изменения синхронизируются с визуальным конструктором при переносе.</p>
+    <p class="section-copy">YAML или JSON. Для переноса правок переключитесь на «Конструктор». Ошибка в тексте оставляет вас здесь и сохраняет ввод.</p>
     <textarea id="specText" rows="20" spellcheck="false" aria-label="Спецификация сценария"></textarea>
-    <div id="statusExpert" class="status-bar" hidden></div>
+    <div id="statusExpert" class="status-bar" role="status" aria-live="polite" hidden></div>
 </section>
 <section id="pipeline-result" class="card pipeline-output" hidden aria-labelledby="pipeline-result-title">
     <div class="card-head"><h3 id="pipeline-result-title" tabindex="-1">Результат выполнения</h3></div>
     <p id="resultSummary" role="status"></p>
+    <p id="resultVersionNote" class="field-help" role="status" hidden></p>
+    <div id="resultDownloads" class="row-actions" role="group" aria-label="Файлы результата"></div>
     <ol id="resultSteps" class="pipeline-result-steps"></ol>
     <p id="resultValueNote" class="field-help"></p>
     <pre id="resultValue" hidden></pre>
-    <div id="resultDownloads" class="row-actions" role="group" aria-label="Файлы результата"></div>
     <details class="workspace-disclosure"><summary>Подробный отчёт (JSON)</summary><pre id="result-output"></pre></details>
 </section>
 {% endblock %}

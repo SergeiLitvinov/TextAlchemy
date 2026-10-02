@@ -3,10 +3,11 @@
         <svg class="ui-icon" aria-hidden="true"><use href="#icon-menu"/></svg>
     </button>
     <a class="brand" href="/" aria-label="TextAlchemy — главная">
-        <span class="brand-mark" aria-hidden="true">T</span>
-        <span><h1>TextAlchemy</h1><small>Документы без потерь</small></span>
+        <img class="brand-mark" src="/static/favicon.svg?v={{ asset_version }}" width="36" height="36" alt="" aria-hidden="true">
+        <span><h1>TextAlchemy</h1><small>Преобразование и контроль</small></span>
     </a>
     <div class="header-actions">
+        <a class="icon-button" href="/help/" aria-label="Открыть руководство" title="Руководство пользователя"><svg class="ui-icon" aria-hidden="true"><use href="#icon-library"/></svg></a>
         <button class="task-center-trigger" type="button" data-task-center-open aria-controls="taskCenter" aria-expanded="false" aria-label="Открыть задачи">
             <svg class="ui-icon" aria-hidden="true"><use href="#icon-clock"/></svg><span data-i18n="header.tasks">Задачи</span><strong id="activeTaskCount" hidden>0</strong>
         </button>

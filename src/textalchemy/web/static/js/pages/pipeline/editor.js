@@ -1,7 +1,30 @@
 "use strict";
-import {operationLabel, parameterLabel} from './labels.js';
+const {operationLabel, parameterLabel} = await import('./labels.js' + new URL(import.meta.url).search);
 
-export function createStepEditor($, model, onChange) {
+export function createStepEditor($, model, onChange, onUploadBusy = () => {}) {
+    async function uploadFile(input, step, name) {
+        const file = input.files[0];
+        if (!file) return;
+        const field = input.closest('.param-field');
+        const note = field.querySelector('[data-upload-status]');
+        const retry = field.querySelector('[data-retry-upload]');
+        onUploadBusy(true);
+        retry.hidden = true;
+        note.textContent = `Загрузка ${file.name}…`;
+        try {
+            const form = new FormData(); form.set('file', file);
+            const data = await window.api('/api/pipeline/files', {method: 'POST', formData: form});
+            if (model.state.steps.includes(step) && name in step.params) {
+                step.params[name] = data.value;
+                field.querySelector('[data-name]').value = data.value;
+                note.textContent = `${data.name} загружен. Доступен один час.`;
+                onChange();
+            }
+        } catch (error) {
+            note.textContent = `${file.name}: ${error.message}. Текущий путь шага не изменён.`;
+            retry.hidden = false;
+        } finally { onUploadBusy(false); }
+    }
     function parameterControl(step, operation, name, index) {
         const info = operation.params[name] || {default: null, required: false, annotation: ''};
         if (name === operation.input_param && step.input) return '';
@@ -22,7 +45,7 @@ export function createStepEditor($, model, onChange) {
             const display = value && typeof value === 'object' ? JSON.stringify(value) : value ?? '';
             control = `<input type="${type}"${stepAttribute} id="${id}" data-name="${window.esc(name)}" value="${window.esc(display)}"${hint}>`;
         }
-        const upload = ['path', 'input_path'].includes(name) ? `<label for="${id}-file">Выбрать файл с компьютера</label><input id="${id}-file" type="file" data-upload="${window.esc(name)}"><small data-upload-status></small>` : '';
+        const upload = ['path', 'input_path'].includes(name) ? `<label for="${id}-file">Выбрать файл с компьютера</label><input id="${id}-file" type="file" data-upload="${window.esc(name)}"><small data-upload-status></small><button type="button" class="btn-secondary" data-retry-upload hidden>Повторить загрузку</button>` : '';
         const outputHelp = ['output_path', 'output_dir', 'output'].includes(name) ? '<small>Имя результата. Файл будет доступен для скачивания; запись в исходную папку не выполняется.</small>' : '';
         return `<div class="param-field"><label for="${id}" title="${window.esc(name)}">${window.esc(parameterLabel(name))}${info.required ? ' <span class="req">*</span>' : ''}</label>${control}${upload}${outputHelp}</div>`;
     }
@@ -45,6 +68,7 @@ export function createStepEditor($, model, onChange) {
             const operation = model.state.operationMap.get(step.op);
             const operations = model.state.operations.map((item) =>
                 `<option value="${window.esc(item.id)}" ${item.id === step.op ? 'selected' : ''}>${window.esc(operationLabel(item.id))}</option>`).join('');
+            const unavailable = operation ? '' : `<option selected value="${window.esc(step.op)}">Недоступное действие — ${window.esc(step.op)}</option>`;
             const names = model.knownNames(index);
             const missing = step.input && !names.includes(step.input);
             const inputLabel = name => {
@@ -57,10 +81,15 @@ export function createStepEditor($, model, onChange) {
             let params = '<span class="hint">Параметры не требуются.</span>';
             if (operation) {
                 const names = Object.keys(operation.params).filter((name) => !(step.input && name === operation.input_param));
-                if (names.length) params = names.map((name) => parameterControl(step, operation, name, index)).join('');
+                if (names.length) {
+                    const required = names.filter(name => operation.params[name].required);
+                    const optional = names.filter(name => !operation.params[name].required);
+                    params = required.map(name => parameterControl(step, operation, name, index)).join('');
+                    if (optional.length) params += `<details class="workspace-disclosure step-extra"><summary>Дополнительные параметры (${optional.length})</summary><div class="step-params">${optional.map(name => parameterControl(step, operation, name, index)).join('')}</div></details>`;
+                }
             }
             return `<div class="step-card" data-index="${index}">
-                <div class="step-head"><select class="op-select" data-field="op" aria-label="Операция">${operations}</select>
+                <div class="step-head"><select class="op-select" data-field="op" aria-label="Операция">${operations}${unavailable}</select>
                     <div class="btn-group step-actions"><button type="button" class="btn btn-sm" data-move="-1" aria-label="Выше" ${index === 0 ? 'disabled' : ''}>↑</button>
                     <button type="button" class="btn btn-sm" data-move="1" aria-label="Ниже" ${index === model.state.steps.length - 1 ? 'disabled' : ''}>↓</button>
                     <button type="button" class="btn btn-sm btn-danger" data-remove aria-label="Удалить">✕</button></div></div>
@@ -79,6 +108,7 @@ export function createStepEditor($, model, onChange) {
         const card = event.target.closest('.step-card');
         if (!card) return;
         const step = model.state.steps[Number(card.dataset.index)];
+        if (event.target.dataset.name !== undefined) step.params[event.target.dataset.name] = event.target.type === 'checkbox' ? event.target.checked : event.target.value;
         if (event.target.dataset.field === 'output') { step.output = event.target.value.trim(); renderOutputs(); }
         if (event.target.dataset.field === 'input') {
             step.input = event.target.value;
@@ -93,20 +123,7 @@ export function createStepEditor($, model, onChange) {
         const index = Number(card.dataset.index);
         const step = model.state.steps[index];
         if (event.target.dataset.upload) {
-            const input = event.target, file = input.files[0], name = input.dataset.upload;
-            if (!file) return;
-            input.disabled = true;
-            const note = input.closest('.param-field').querySelector('[data-upload-status]');
-            note.textContent = 'Загрузка…';
-            try {
-                const form = new FormData(); form.set('file', file);
-                const data = await window.api('/api/pipeline/files', {method: 'POST', formData: form});
-                if (model.state.steps.includes(step) && name in step.params) {
-                    step.params[name] = data.value; input.closest('.param-field').querySelector('[data-name]').value = data.value;
-                    note.textContent = `${data.name} загружен. Доступен один час.`; onChange();
-                }
-            } catch (error) { note.textContent = error.message; }
-            finally { input.disabled = false; }
+            await uploadFile(event.target, step, event.target.dataset.upload);
             return;
         }
         if (event.target.classList.contains('op-select')) { model.changeOperation(index, event.target.value); render(); }
@@ -118,6 +135,11 @@ export function createStepEditor($, model, onChange) {
         const card = event.target.closest('.step-card');
         if (!card) return;
         const index = Number(card.dataset.index);
+        if (event.target.closest('[data-retry-upload]')) {
+            const input = event.target.closest('.param-field').querySelector('[data-upload]');
+            uploadFile(input, model.state.steps[index], input.dataset.upload);
+            return;
+        }
         if (event.target.closest('[data-remove]')) model.removeStep(index);
         else {
             const move = event.target.closest('[data-move]');

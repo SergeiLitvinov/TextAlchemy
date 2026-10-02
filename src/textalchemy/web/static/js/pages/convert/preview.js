@@ -1,6 +1,6 @@
 "use strict";
 
-import {conversionApi} from './api.js';
+const {conversionApi} = await import('./api.js' + new URL(import.meta.url).search);
 
 export function createPreviewController($, onCompletedTask) {
     let taskId = null;
@@ -8,6 +8,18 @@ export function createPreviewController($, onCompletedTask) {
     let mode = 'source';
     let page = 1;
     let requestId = 0;
+    const urls = new Set();
+
+    function clearImages() {
+        for (const url of urls) URL.revokeObjectURL(url);
+        urls.clear();
+    }
+
+    function imageUrl(blob) {
+        const url = URL.createObjectURL(blob);
+        urls.add(url);
+        return url;
+    }
 
     function availablePages() {
         if (mode === 'compare') return Math.min(meta?.source?.pages || 0, meta?.target?.pages || 0);
@@ -41,6 +53,7 @@ export function createPreviewController($, onCompletedTask) {
     async function render() {
         const currentRequest = ++requestId;
         const canvas = $('previewCanvas');
+        clearImages();
         canvas.innerHTML = '<p class="field-help" id="previewMessage">Рендерим страницы…</p>';
         syncControls();
         if (mode === 'diff') {
@@ -49,7 +62,7 @@ export function createPreviewController($, onCompletedTask) {
                 if (currentRequest !== requestId) return;
                 const image = document.createElement('img');
                 image.alt = 'Тепловая карта отличий исходника и результата';
-                image.src = URL.createObjectURL(result.blob);
+                image.src = imageUrl(result.blob);
                 canvas.innerHTML = '';
                 const wrapper = document.createElement('div');
                 wrapper.className = 'preview-single preview-diff';
@@ -78,7 +91,7 @@ export function createPreviewController($, onCompletedTask) {
                 const image = document.createElement('img');
                 image.alt = side === 'source' ? 'Страница исходника' : 'Страница результата';
                 image.loading = 'lazy';
-                image.src = URL.createObjectURL(blob);
+                image.src = imageUrl(blob);
                 const caption = document.createElement('figcaption');
                 caption.textContent = side === 'source' ? 'Исходник' : 'Результат';
                 figure.append(image, caption);
@@ -95,35 +108,44 @@ export function createPreviewController($, onCompletedTask) {
         meta = null;
         mode = 'source';
         page = 1;
-        requestId += 1;
+        const currentRequest = ++requestId;
+        clearImages();
         $('previewSection').hidden = true;
         if (!taskId) return;
         try {
-            meta = await conversionApi.previewMeta(taskId);
+            const nextMeta = await conversionApi.previewMeta(newTaskId);
+            if (currentRequest !== requestId || newTaskId !== taskId) return;
+            meta = nextMeta;
             if (!meta.source?.available && !meta.target?.available) return;
             $('previewSection').hidden = false;
             syncControls();
             render();
         } catch (_) {
-            $('previewSection').hidden = true;
+            if (currentRequest === requestId) $('previewSection').hidden = true;
         }
     }
 
     async function open(newTaskId) {
         if (!newTaskId) return;
+        const currentRequest = ++requestId;
         try {
             const data = await conversionApi.task(newTaskId);
+            if (currentRequest !== requestId) return;
             if (data.status === 'done') {
                 onCompletedTask(data, newTaskId);
                 return;
             }
         } catch (_) { /* standalone preview remains useful */ }
+        if (currentRequest !== requestId) return;
         await init(newTaskId);
-        $('previewSection').scrollIntoView({behavior: 'smooth', block: 'center'});
+        if (taskId === newTaskId) $('previewSection').scrollIntoView({behavior: 'smooth', block: 'center'});
     }
 
     function reset() {
         requestId += 1;
+        taskId = null;
+        meta = null;
+        clearImages();
         $('previewSection').hidden = true;
     }
 

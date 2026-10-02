@@ -9,6 +9,7 @@ from textalchemy.web.routes import (
     convert,
     convert_jobs,
     convert_preview,
+    documentation,
     extract,
     generate,
     localization,
@@ -27,5 +28,5 @@ from textalchemy.web.routes import (
 __all__ = [
     "pages", "bibliography", "pipeline", "matching", "extract", "convert", "convert_jobs", "convert_preview",
     "recognize", "generate", "task_center", "localization", "pdf_order", "template_variables", "template_loops",
-    "template_source",
+    "template_source", "documentation",
 ]

@@ -14,6 +14,7 @@ from textalchemy.core.object_quality_policy import ObjectLossPolicy
 from textalchemy.core.quality_policy import QualityPolicy
 from textalchemy.core.types import DocFormat
 from textalchemy.web.queue import TaskQueue
+from textalchemy.web.services.batch_retry import retry_saved_task
 from textalchemy.web.services.conversion_catalog import output_path_for
 from textalchemy.web.services.conversion_policy import request_policy_fields, stored_policy_fields
 from textalchemy.web.services.conversion_results import artifact_meta, inspection_payload
@@ -50,6 +51,8 @@ class ConversionTaskService:
         require_unchanged_text: bool = False,
         text_preservation: str | None = None,
         max_text_edits: int | None = None,
+        max_changed_formulas: int | None = None,
+        max_changed_emphasis: int | None = None,
     ) -> None:
         self._store.set(
             task_id,
@@ -63,7 +66,13 @@ class ConversionTaskService:
                 "mode": mode.value,
                 "source_name": source_path.name,
                 **stored_policy_fields(
-                    quality_policy, object_loss_policy, require_unchanged_text, text_preservation, max_text_edits,
+                    quality_policy,
+                    object_loss_policy,
+                    require_unchanged_text,
+                    text_preservation,
+                    max_text_edits,
+                    max_changed_formulas,
+                    max_changed_emphasis,
                 ),
             },
         )
@@ -88,32 +97,12 @@ class ConversionTaskService:
         removed_from_queue = self._queue.cancel(task_id)
         next_status = self._store.request_cancel(task_id, removed_from_queue=removed_from_queue)
         if next_status is None:
-            raise ValueError('Состояние задачи изменилось; готовый результат сохранён')
+            raise ValueError("Состояние задачи изменилось; готовый результат сохранён")
         return {"task_id": task_id, "status": next_status}
 
     def rerun(self, task_id: str) -> dict[str, Any]:
-        """Повторно поставить индивидуальную задачу по сохранённому исходнику."""
-        task = self._store.get(task_id)
-        if task is None or self._store.source_path(task_id) is None:
-            raise KeyError(task_id)
-        if task.get("queue_kind") != "convert":
-            raise ValueError("Для этого типа задачи повтор пока недоступен")
-        if task.get("status") in {"queued", "running", "cancelling"}:
-            raise ValueError("Задача уже выполняется")
-        self._store.clear_result(task_id)
-        self._store.set(
-            task_id,
-            {
-                **task,
-                "status": "queued",
-                "error": None,
-                "report": None,
-                "artifact": None,
-                "filename": task.get("source_name") or task.get("filename"),
-            },
-        )
-        self.resume(task_id)
-        return {"task_id": task_id, "status": "queued"}
+        """Повторить сохранённую задачу без потери результата при отказе записи."""
+        return retry_saved_task(self._store, task_id, resume=self.resume)
 
     def run_stored(self, task_id: str) -> None:
         """Выполнить задачу только по сохранённому описанию и исходнику."""
@@ -161,7 +150,11 @@ class ConversionTaskService:
             except Exception as error:  # noqa: BLE001 - inspection must not block conversion
                 inspection_error = f"Не удалось проверить исходный документ: {error}"
             request = ConversionRequest(
-                input_path=source_path, output_path=output_path, source=source, target=target, mode=mode,
+                input_path=source_path,
+                output_path=output_path,
+                source=source,
+                target=target,
+                mode=mode,
                 **request_policy_fields(task),
             )
             executor = ConversionExecutor()

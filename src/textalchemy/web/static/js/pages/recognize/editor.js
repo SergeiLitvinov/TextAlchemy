@@ -24,7 +24,9 @@ export function createOcrEditor($, setStatus) {
         draft = data;
         result.value = data.text;
         result.hidden = false;
-        $('resultEmpty').hidden = true;
+        $('resultCard').hidden = false;
+        $('ingestLayout').classList.add('has-result');
+        $('resultSource').textContent = data.source_name || '';
         dirty = false;
         const url = new URL(window.location.href);
         url.searchParams.set('draft', draft.draft_id);

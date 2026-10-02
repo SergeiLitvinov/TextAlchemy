@@ -65,10 +65,11 @@ def routes(tree):
 
 def code_pages(root: Path, notice: str):
     source = root / 'src/textalchemy'
-    modules = {module_name(path, source): (path, ast.parse(path.read_text(encoding='utf-8-sig')))
-               for path in sorted(source.rglob('*.py'))}
+    modules = {module_name(path, directory): (path, ast.parse(path.read_text(encoding='utf-8-sig')))
+               for directory in (source,) for path in sorted(directory.rglob('*.py'))}
     tests = defaultdict(set)
-    for path in sorted((root / 'tests').rglob('test_*.py')):
+    test_paths = (root / 'tests').rglob('test_*.py')
+    for path in sorted(test_paths):
         tree = ast.parse(path.read_text(encoding='utf-8-sig'))
         for module in resolve_imports(tree, 'tests.' + path.stem, modules):
             tests[module].add(path)

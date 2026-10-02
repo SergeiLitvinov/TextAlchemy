@@ -1,105 +1,49 @@
-"""HTTP endpoints рендеринга постраничного preview конвертации."""
+"""HTTP-адаптеры постраничного предпросмотра сохранённой конвертации."""
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import Any
 
 from fastapi import HTTPException
 from fastapi.responses import Response
 
-from textalchemy.quality.visual import difference_heatmap_png
 from textalchemy.web.app import app
-from textalchemy.web.preview import DEFAULT_PREVIEW_DPI, MAX_PREVIEW_DPI
+from textalchemy.web.preview import DEFAULT_PREVIEW_DPI
 from textalchemy.web.routes import convert as facade
+from textalchemy.web.services.conversion_preview import ConversionPreviewService, PreviewError, PreviewImage
 
-_PREVIEW_SIDES = ("source", "target")
+
+def _service() -> ConversionPreviewService:
+    return ConversionPreviewService(store=facade.tasks_store, counter=facade.cached_page_count, renderer=facade.cached_page_png)
 
 
-def _side_meta(preview_dir: Path, file: Path | None, side: str) -> dict[str, object]:
-    if file is None or not file.is_file():
-        return {"available": False, "pages": 0, "error": None}
-    try:
-        pages = facade.cached_page_count(preview_dir, file, side)
-    except Exception as error:  # noqa: BLE001 - preview must never break the API
-        return {"available": False, "pages": 0, "error": str(error)}
-    return {"available": pages > 0, "pages": pages, "error": None}
+def _image_response(image: PreviewImage) -> Response:
+    headers = {"Cache-Control": "private, no-cache, max-age=0"}
+    if image.similarity is not None:
+        headers["X-Visual-Similarity"] = f"{image.similarity:.4f}"
+        headers["X-Visual-RMSE"] = f"{image.rmse:.4f}"
+    return Response(image.content, media_type="image/png", headers=headers)
 
 
 @app.get("/api/convert/preview/{task_id}/meta")
-async def api_convert_preview_meta(task_id: str):
-    task = facade.tasks_store.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if task["status"] != "done":
-        raise HTTPException(status_code=409, detail="Preview is not ready")
-    preview_dir = facade.tasks_store.preview_dir(task_id)
-    return {
-        "source": _side_meta(preview_dir, facade.tasks_store.source_path(task_id), "source"),
-        "target": _side_meta(
-            preview_dir,
-            facade.tasks_store.result_path(task_id, task.get("artifact", "")),
-            "target",
-        ),
-    }
+def api_convert_preview_meta(task_id: str) -> dict[str, Any]:
+    try:
+        return _service().meta(task_id)
+    except PreviewError as error:
+        raise HTTPException(error.status_code, str(error)) from error
 
 
 @app.get("/api/convert/preview/{task_id}")
-async def api_convert_preview(task_id: str, side: str = "source", page: int = 1, dpi: int = DEFAULT_PREVIEW_DPI):
-    if side not in _PREVIEW_SIDES:
-        raise HTTPException(status_code=400, detail="side must be 'source' or 'target'")
-    if page < 1:
-        raise HTTPException(status_code=400, detail="page must be positive")
-    task = facade.tasks_store.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if task["status"] != "done":
-        raise HTTPException(status_code=409, detail="Preview is not ready")
-    preview_dir = facade.tasks_store.preview_dir(task_id)
-    file = (
-        facade.tasks_store.source_path(task_id)
-        if side == "source"
-        else facade.tasks_store.result_path(task_id, task.get("artifact", ""))
-    )
-    if file is None or not file.is_file():
-        raise HTTPException(status_code=404, detail="Source file is not available")
+def api_convert_preview(task_id: str, side: str = "source", page: int = 1, dpi: int = DEFAULT_PREVIEW_DPI) -> Response:
     try:
-        pages = facade.cached_page_count(preview_dir, file, side)
-    except Exception:  # noqa: BLE001 - preview must never break the API
-        pages = 0
-    if page > pages:
-        raise HTTPException(status_code=404, detail="Page is out of range")
-    data = facade.cached_page_png(preview_dir, file, side, page - 1, dpi=min(dpi, MAX_PREVIEW_DPI))
-    if data is None:
-        raise HTTPException(status_code=404, detail="Не удалось отрисовать страницу")
-    return Response(content=data, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
+        return _image_response(_service().page(task_id, side=side, page=page, dpi=dpi))
+    except PreviewError as error:
+        raise HTTPException(error.status_code, str(error)) from error
 
 
 @app.get("/api/convert/preview/{task_id}/diff")
-async def api_convert_preview_diff(task_id: str, page: int = 1, dpi: int = DEFAULT_PREVIEW_DPI):
-    if page < 1:
-        raise HTTPException(status_code=400, detail="page must be positive")
-    task = facade.tasks_store.get(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if task["status"] != "done":
-        raise HTTPException(status_code=409, detail="Preview is not ready")
-    preview_dir = facade.tasks_store.preview_dir(task_id)
-    source = facade.tasks_store.source_path(task_id)
-    target = facade.tasks_store.result_path(task_id, task.get("artifact", ""))
-    if source is None or target is None:
-        raise HTTPException(status_code=404, detail="Source or result is not available")
-    render_dpi = min(dpi, MAX_PREVIEW_DPI)
-    source_png = facade.cached_page_png(preview_dir, source, "source", page - 1, dpi=render_dpi)
-    target_png = facade.cached_page_png(preview_dir, target, "target", page - 1, dpi=render_dpi)
-    if source_png is None or target_png is None:
-        raise HTTPException(status_code=404, detail="Не удалось отрисовать сравниваемые страницы")
-    data, comparison = difference_heatmap_png(source_png, target_png)
-    return Response(
-        content=data,
-        media_type="image/png",
-        headers={
-            "Cache-Control": "private, max-age=3600",
-            "X-Visual-Similarity": f"{comparison.similarity:.4f}",
-            "X-Visual-RMSE": f"{comparison.root_mean_square_error:.4f}",
-        },
-    )
+def api_convert_preview_diff(task_id: str, page: int = 1, dpi: int = DEFAULT_PREVIEW_DPI) -> Response:
+    try:
+        return _image_response(_service().diff(task_id, page=page, dpi=dpi))
+    except PreviewError as error:
+        raise HTTPException(error.status_code, str(error)) from error

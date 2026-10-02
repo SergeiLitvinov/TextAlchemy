@@ -47,6 +47,8 @@ def test_pipeline_search_keeps_operation_ids(e2e_server, page, width):
     page.goto(f'{e2e_server}/pipeline')
     expect(page.locator('#stepsList .step-card')).to_have_count(3)
     expect(page.locator('#stepsList .op-select').first).to_contain_text('Открыть файл')
+    if not page.locator('#operationCatalog').evaluate('el => el.open'):
+        page.locator('#operationCatalog > summary').click()
     page.locator('#opSearch').fill('Сохранить документ в Word')
     result = page.locator('#opsPalette [data-op="render.docx_model"]')
     expect(result).to_be_visible()
@@ -54,7 +56,7 @@ def test_pipeline_search_keeps_operation_ids(e2e_server, page, width):
     expect(page.locator('#stepsList .step-card')).to_have_count(4)
     page.locator('#modeExpertBtn').click()
     expect(page.locator('#specText')).to_have_value(re.compile('render.docx_model'))
-    page.locator('#toBuilderBtn').click()
+    page.locator('#modeVisualBtn').click()
     expect(page.locator('#stepsList .step-card')).to_have_count(4)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     assert page.e2e_errors == []
@@ -86,13 +88,21 @@ def test_pipeline_connections_and_renaming(e2e_server, page, width):
     expect(page.locator('#input-0 option')).to_have_count(1)
     expect(page.locator('#input-1 option')).to_have_count(2)
     page.locator('#output-0').fill('source')
+    if not page.locator('#operationCatalog').evaluate('el => el.open'):
+        page.locator('#operationCatalog > summary').click()
     page.locator('#opSearch').click()  # Commit the changed source name.
     expect(page.locator('#connection-1')).to_contain_text('Источник удалён')
     expect(page.locator('#input-1')).to_have_value('doc')
     page.locator('#input-1').select_option('source')
     expect(page.locator('#connection-1')).not_to_contain_text('Источник удалён')
+    if not page.locator('#operationCatalog').evaluate('el => el.open'):
+        page.locator('#operationCatalog > summary').click()
     page.locator('#opSearch').fill('render.latex.pandoc')
+    if not page.locator('#operationCatalog').evaluate('el => el.open'):
+        page.locator('#operationCatalog > summary').click()
     page.locator('[data-op="render.latex.pandoc"]').click()
+    if not page.locator('#operationCatalog').evaluate('el => el.open'):
+        page.locator('#operationCatalog > summary').click()
     page.locator('[data-op="render.latex.pandoc"]').click()
     expect(page.locator('#output-3')).to_have_value('result_4')
     expect(page.locator('#output-4')).to_have_value('result_5')
@@ -140,6 +150,7 @@ def test_pdf_preparation_is_conversion_step(e2e_server, page, tmp_path, width):
     expect(page.locator('nav a[href="/pdf-order"]')).to_have_count(0)
     expect(page.locator('#pdfPreparation')).to_be_hidden()
     page.locator('#fileInput').set_input_files(str(pdf))
+    page.locator('#pdfPreparation > summary').click()
     expect(page.locator('#preparePdfBtn')).to_be_visible()
     page.locator('#preparePdfBtn').click()
     page.wait_for_url('**/pdf-order?draft=*')

@@ -37,7 +37,8 @@ def write_changed(path, data):
 
 
 def prepare():
-    docs = sorted([*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md"), *(ROOT / "tests/corpus").rglob("README.md")])
+    docs = sorted([*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md"), *(ROOT / "tests/corpus").rglob("README.md"),
+                   *(ROOT / "vendor/opendoc").glob("README.md")])
     contents = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8") for path in docs}
     # A fresh interpreter sees edited CLI/operation modules during live rebuilds.
     reference = subprocess.run(

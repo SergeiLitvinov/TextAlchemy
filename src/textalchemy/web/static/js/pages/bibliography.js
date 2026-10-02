@@ -1,149 +1,165 @@
 "use strict";
 
-const $ = (id) => document.getElementById(id);
+const $ = id => document.getElementById(id);
+const fields = ['authors', 'title', 'doc_type', 'year', 'journal', 'publisher', 'city', 'pages', 'isbn', 'doi', 'source'];
+const extraFields = ['journal', 'publisher', 'city', 'pages', 'isbn', 'doi', 'source'];
+const typeLabels = Object.fromEntries(Array.from($('doc_type').options).map(option => [option.value, option.textContent]));
+let items = JSON.parse($('bibliographyData').textContent);
+let busy = false;
+let baseline;
 
 function collectForm() {
-    const fd = new FormData();
-    fd.set('authors', $('authors').value);
-    fd.set('title', $('title').value);
-    fd.set('doc_type', $('doc_type').value);
-    fd.set('year', $('year').value);
-    fd.set('journal', $('journal').value);
-    fd.set('publisher', $('publisher').value);
-    fd.set('city', $('city').value);
-    fd.set('pages', $('pages').value);
-    fd.set('isbn', $('isbn').value);
-    fd.set('doi', $('doi').value);
-    fd.set('source', $('source').value);
-    return fd;
+    const data = new FormData();
+    for (const name of fields) data.set(name, $(name).value);
+    return data;
 }
-
-function fillForm(item) {
-    $('itemId').value = item.id;
-    $('authors').value = (item.authors || []).join('; ');
-    $('title').value = item.title || '';
-    $('doc_type').value = item.doc_type || 'article';
-    $('year').value = item.year || '';
-    $('journal').value = item.journal || '';
-    $('publisher').value = item.publisher || '';
-    $('city').value = item.city || '';
-    $('pages').value = item.pages || '';
-    $('isbn').value = item.isbn || '';
-    $('doi').value = item.doi || '';
-    $('source').value = item.source || '';
-    $('bibEditor').open = true;
-    $('cancelEdit').hidden = false;
-    $('saveBtn').textContent = 'Обновить запись';
-    $('bibEditor').scrollIntoView({behavior: 'smooth', block: 'start'});
+function snapshot() { return JSON.stringify(Array.from(collectForm().entries())); }
+function dirty() { return snapshot() !== baseline; }
+function canDiscard() { return !dirty() || confirm('Отменить несохранённые изменения карточки?'); }
+function status(message, type = 'info') {
+    $('libraryStatus').hidden = !message;
+    $('libraryStatus').className = 'status-bar ' + type;
+    $('libraryStatus').textContent = message;
 }
-
+function setBusy(value) {
+    busy = value;
+    document.querySelectorAll('#bibForm input, #bibForm select, #bibForm button, #bibBody button, #newItemBtn, #importForm input, #importForm button, #refreshLibraryBtn').forEach(control => { control.disabled = value; });
+    if (!value) updateImportSelection();
+}
 function resetForm() {
     $('itemId').value = '';
     $('bibForm').reset();
-    $('cancelEdit').hidden = true;
-    $('saveBtn').textContent = 'Сохранить запись';
+    $('saveBtn').textContent = 'Добавить источник';
+    $('editorTitle').textContent = 'Новый источник';
+    $('sourceDetails').open = false;
     $('bibEditor').open = false;
+    $('bibEditor').hidden = true;
+    baseline = snapshot();
 }
-
-function renderRows(items) {
-    const body = $('bibBody');
-    body.innerHTML = '';
-    const q = ($('bibSearch').value || '').toLowerCase();
-    let shown = 0;
-    for (const item of items) {
-        const hay = ((item.authors || []).join(' ') + ' ' + (item.title || '')).toLowerCase();
-        if (q && !hay.includes(q)) continue;
-        shown++;
-        const tr = document.createElement('tr');
-        tr.dataset.id = item.id;
-        const title = esc(item.title || 'Без названия');
-        tr.innerHTML =
-            `<td><strong>${title}</strong><small>${esc((item.authors || []).join('; '))}</small></td>` +
-            `<td>${esc(item.doc_type)}</td>` +
-            `<td>${esc(item.year)}</td>` +
-            `<td class="row-actions">` +
-            `<button class="icon-button" data-act="edit" data-id="${esc(item.id)}" title="Редактировать" aria-label="Редактировать ${title}">✎</button>` +
-            `<button class="icon-button danger-action" data-act="delete" data-id="${esc(item.id)}" title="Удалить" aria-label="Удалить ${title}">×</button>` +
-            `</td>`;
-        body.appendChild(tr);
-    }
-    $('bibCount').textContent = items.length;
-    $('bibEmpty').hidden = shown !== 0;
-}
-
-// Загрузка списка с сервера (вместо location.reload)
-async function refresh() {
-    try {
-        const items = await api('/api/bibliography');
-        renderRows(items);
-    } catch (_) { /* toast уже показан */ }
-}
-
-$('bibForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const id = $('itemId').value;
-    const fd = collectForm();
-    const btn = $('saveBtn');
-    setLoading(btn, true);
-    try {
-        if (id) {
-            await api(`/api/bibliography/${id}`, { method: 'PUT', formData: fd });
-            toast('Запись обновлена', 'success');
-        } else {
-            await api('/api/bibliography', { method: 'POST', formData: fd });
-            toast('Запись добавлена', 'success');
-        }
-        resetForm();
-        await refresh();
-    } catch (_) { /* toast уже показан */ }
-    finally { setLoading(btn, false); }
-});
-
-$('newItemBtn').addEventListener('click', () => {
+function openEditor(item) {
+    if (busy || !canDiscard()) return;
     resetForm();
-    $('bibEditor').open = true;
-    $('authors').focus();
-});
-$('cancelEdit').addEventListener('click', resetForm);
-
-$('bibBody').addEventListener('click', async (e) => {
-    const btn = e.target.closest('button[data-act]');
-    if (!btn) return;
-    const id = Number(btn.dataset.id);
-    const act = btn.dataset.act;
-    if (act === 'edit') {
-        const items = await api('/api/bibliography');
-        const item = items.find((i) => i.id === id);
-        if (item) fillForm(item);
-    } else if (act === 'delete') {
-        if (!confirm('Удалить запись?')) return;
-        setLoading(btn, true);
-        try {
-            await api(`/api/bibliography/${id}`, { method: 'DELETE' });
-            toast('Запись удалена', 'success');
-            await refresh();
-        } catch (_) { /* toast уже показан */ }
-        finally { setLoading(btn, false); }
+    if (item) {
+        $('itemId').value = item.id;
+        if (!Array.from($('doc_type').options).some(option => option.value === item.doc_type)) {
+            $('doc_type').add(new Option(item.doc_type, item.doc_type));
+        }
+        for (const name of fields) $(name).value = name === 'authors' ? (item.authors || []).join('; ') : item[name] || '';
+        $('saveBtn').textContent = 'Сохранить изменения';
+        $('editorTitle').textContent = 'Редактирование: ' + (item.title || 'Без названия');
+        $('sourceDetails').open = extraFields.some(name => Boolean(item[name]));
     }
-});
+    baseline = snapshot();
+    $('bibEditor').hidden = false;
+    $('bibEditor').open = true;
+    $('title').focus();
+    $('bibEditor').scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+function renderRows() {
+    const query = $('bibSearch').value.trim().toLocaleLowerCase();
+    const visible = items.filter(item => [(item.authors || []).join(' '), item.title, item.year].join(' ').toLocaleLowerCase().includes(query));
+    $('bibBody').innerHTML = visible.map(item => {
+        const title = esc(item.title || 'Без названия');
+        return `<tr data-id="${esc(item.id)}"><td><strong>${title}</strong><small>${esc((item.authors || []).join('; '))}</small></td>` +
+            `<td>${esc(typeLabels[item.doc_type] || item.doc_type)}</td><td>${esc(item.year)}</td><td class="row-actions">` +
+            `<button type="button" class="icon-button" data-act="edit" data-id="${esc(item.id)}" aria-label="Редактировать ${title}" ${busy ? 'disabled' : ''}>✎</button>` +
+            `<button type="button" class="icon-button danger-action" data-act="delete" data-id="${esc(item.id)}" aria-label="Удалить ${title}" ${busy ? 'disabled' : ''}>×</button></td></tr>`;
+    }).join('');
+    $('bibCount').textContent = items.length;
+    $('bibShown').textContent = query ? `Показано: ${visible.length}` : '';
+    $('bibEmpty').hidden = visible.length !== 0;
+    $('bibEmpty').innerHTML = items.length
+        ? '<p><strong>По этому запросу ничего не найдено</strong><small>Измените автора, название или год.</small></p>'
+        : '<p><strong>Библиотека пуста</strong><small>Добавьте источник или импортируйте список.</small></p>';
+}
+function updateImportSelection() {
+    const file = $('importFile').files[0];
+    $('importSelection').textContent = file ? `Выбран: ${file.name}` : 'Файл не выбран.';
+    $('importBtn').disabled = busy || !file;
+    $('cancelImportBtn').hidden = !file;
+}
+async function refresh() {
+    items = await api('/api/bibliography');
+    renderRows();
+}
 
-$('importForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fileInput = $('importFile');
-    if (!fileInput.files[0]) return;
-    const fd = new FormData();
-    fd.set('file', fileInput.files[0]);
-    const btn = $('importBtn');
-    setLoading(btn, true);
+$('bibForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (busy) return;
+    const id = $('itemId').value;
+    const data = collectForm();
+    setBusy(true);
+    status('Сохраняем карточку…');
     try {
-        const r = await api('/api/bibliography/import', { method: 'POST', formData: fd });
-        toast(`Импортировано записей: ${r.count}`, 'success');
-        fileInput.value = '';
-        await refresh();
-    } catch (_) { /* toast уже показан */ }
-    finally { setLoading(btn, false); }
+        const response = await api(id ? `/api/bibliography/${id}` : '/api/bibliography', {method: id ? 'PUT' : 'POST', formData: data});
+        if (!response.success || !response.item) throw new Error(response.error || 'Запись не сохранена');
+        if (id) items = items.map(item => String(item.id) === id ? response.item : item);
+        else items.push(response.item);
+        resetForm();
+        renderRows();
+        status(id ? 'Изменения сохранены.' : 'Источник добавлен.', 'success');
+        $('newItemBtn').focus();
+    } catch (error) { status(`Не удалось сохранить: ${error.message}. Введённые данные сохранены в карточке.`, 'error'); }
+    finally { setBusy(false); }
 });
-
-$('bibSearch').addEventListener('input', () => {
-    api('/api/bibliography').then(renderRows).catch(() => {});
+$('newItemBtn').addEventListener('click', () => openEditor());
+$('cancelEdit').addEventListener('click', () => {
+    if (busy || !canDiscard()) return;
+    resetForm();
+    $('newItemBtn').focus();
 });
+$('bibBody').addEventListener('click', async event => {
+    const button = event.target.closest('button[data-act]');
+    if (!button || busy) return;
+    const item = items.find(item => String(item.id) === button.dataset.id);
+    if (!item) return;
+    if (button.dataset.act === 'edit') return openEditor(item);
+    if (!confirm(`Удалить источник «${item.title || 'Без названия'}»? Файл документа не удаляется.`)) return;
+    setBusy(true);
+    try {
+        const response = await api(`/api/bibliography/${item.id}`, {method: 'DELETE'});
+        if (!response.success) throw new Error(response.error || 'Удаление не выполнено');
+        items = items.filter(row => row.id !== item.id);
+        if (String(item.id) === $('itemId').value) resetForm();
+        renderRows();
+        status('Запись удалена. Файл документа сохранён.', 'success');
+    } catch (error) { status(`Не удалось удалить: ${error.message}`, 'error'); }
+    finally { setBusy(false); }
+});
+$('importFile').addEventListener('change', updateImportSelection);
+$('cancelImportBtn').addEventListener('click', () => { $('importFile').value = ''; updateImportSelection(); });
+$('importForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const file = $('importFile').files[0];
+    if (busy || !file) return;
+    if (!/\.(txt|bib|json)$/i.test(file.name)) return status('Выберите список в формате TXT, BibTeX или JSON.', 'error');
+    const data = new FormData(); data.set('file', file);
+    setBusy(true);
+    status(`Добавляем записи из ${file.name}…`);
+    try {
+        const response = await api('/api/bibliography/import', {method: 'POST', formData: data});
+        if (!response.success) throw new Error(response.error || 'Импорт не выполнен');
+        $('importFile').value = '';
+        try {
+            await refresh();
+            status(`Добавлено записей: ${response.count}. Прежние записи сохранены.`, 'success');
+        } catch (error) {
+            status(`Добавлено записей: ${response.count}, но список не обновлён: ${error.message}. Нажмите «Обновить список». Повторный импорт не требуется.`, 'error');
+        }
+    } catch (error) { status(`Не удалось импортировать: ${error.message}. Выбранный файл сохранён для повтора.`, 'error'); }
+    finally { setBusy(false); }
+});
+$('refreshLibraryBtn').addEventListener('click', async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await refresh(); status('Список обновлён. Правки открытой карточки сохранены в форме.', 'success'); }
+    catch (error) { status(`Не удалось обновить: ${error.message}. Показан прежний список.`, 'error'); }
+    finally { setBusy(false); }
+});
+$('bibSearch').addEventListener('input', renderRows);
+window.addEventListener('beforeunload', event => {
+    if (dirty() || busy) { event.preventDefault(); event.returnValue = ''; }
+});
+resetForm();
+renderRows();
+updateImportSelection();

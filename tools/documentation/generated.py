@@ -64,7 +64,8 @@ def cli():
         "",
         "Сформирован из парсера команд. Префикс: `uv run textalchemy`. "
         "[Сценарии и ограничения](../guide/index.md#справочник-команд). "
-        "Наличие аргумента в парсере не подтверждает его поддержку; статус CLI — [M0](../../TODO.md#m0).",
+        "Наличие аргумента в парсере не подтверждает его поддержку; "
+        "поведение описано в [руководстве](../guide/index.md#справочник-команд).",
         "",
     ]
     for name, current in [("Глобальные параметры", parser), *sorted(sub.choices.items())]:
@@ -89,8 +90,12 @@ def cli():
 def pages():
     from tools.documentation.navigator import code_pages, user_guide
 
-    return {"docs/reference/operations.md": operations(), "docs/reference/cli.md": cli(),
-            "docs/reference/user-guide.md": user_guide(ROOT, NOTICE), **code_pages(ROOT, NOTICE)}
+    return {
+        "docs/reference/operations.md": operations(),
+        "docs/reference/cli.md": cli(),
+        "docs/reference/user-guide.md": user_guide(ROOT, NOTICE),
+        **code_pages(ROOT, NOTICE),
+    }
 
 
 def sync(*, check=False):

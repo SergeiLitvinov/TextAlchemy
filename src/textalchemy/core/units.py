@@ -1,110 +1,65 @@
-"""Canonical physical units, rounding, and page coordinate transforms."""
+"""Compatibility imports; document implementation lives in opendoc."""
 
-from __future__ import annotations
-
-from dataclasses import dataclass
-from decimal import ROUND_HALF_UP, Decimal
-from enum import Enum
-
-POINTS_PER_INCH = 72.0
-CSS_PIXELS_PER_INCH = 96.0
-EMU_PER_INCH = 914400
-EMU_PER_POINT = EMU_PER_INCH / POINTS_PER_INCH
-OOXML_ANGLE_PER_DEGREE = 60000
-
-
-class CoordinateOrigin(str, Enum):
-    TOP_LEFT = "top-left"
-    BOTTOM_LEFT = "bottom-left"
-
-
-@dataclass(frozen=True)
-class Point2D:
-    x: float
-    y: float
-
-
-@dataclass(frozen=True)
-class Rect2D:
-    x: float
-    y: float
-    width: float
-    height: float
-
-
-def canonical_coordinate_contract() -> dict[str, str]:
-    return {
-        "unit": "pt",
-        "origin": CoordinateOrigin.TOP_LEFT.value,
-        "x_axis": "right",
-        "y_axis": "down",
-        "rotation_unit": "degree",
-        "rotation_direction": "clockwise",
-    }
-
-
-def round_half_away(value: float, digits: int = 0) -> int | float:
-    """Round decimal halves away from zero, independent of binary float ties."""
-    quantum = Decimal(1).scaleb(-digits)
-    rounded = Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP)
-    return int(rounded) if digits == 0 else float(rounded)
-
-
-def emu_to_points(value: float | int) -> float:
-    return float(value) / EMU_PER_POINT
-
-
-def emu_to_inches(value: float | int) -> float:
-    return float(value) / EMU_PER_INCH
-
-
-def inches_to_emu(value: float) -> int:
-    return int(round_half_away(value * EMU_PER_INCH))
-
-
-def points_to_emu(value: float) -> int:
-    return int(round_half_away(value * EMU_PER_POINT))
-
-
-def points_to_css_px(value: float) -> float:
-    return value * CSS_PIXELS_PER_INCH / POINTS_PER_INCH
-
-
-def css_px_to_points(value: float) -> float:
-    return value * POINTS_PER_INCH / CSS_PIXELS_PER_INCH
-
-
-def ooxml_angle_to_degrees(value: float | int) -> float:
-    return float(value) / OOXML_ANGLE_PER_DEGREE
-
-
-def degrees_to_ooxml_angle(value: float) -> int:
-    return int(round_half_away(value * OOXML_ANGLE_PER_DEGREE))
-
-
-def transform_point_origin(
-    point: Point2D,
-    *,
-    page_height: float,
-    source: CoordinateOrigin,
-    target: CoordinateOrigin,
-) -> Point2D:
-    if source is target:
-        return point
-    return Point2D(point.x, page_height - point.y)
-
-
-def transform_rect_origin(
-    rectangle: Rect2D,
-    *,
-    page_height: float,
-    source: CoordinateOrigin,
-    target: CoordinateOrigin,
-) -> Rect2D:
-    if source is target:
-        return rectangle
-    return Rect2D(rectangle.x, page_height - rectangle.y - rectangle.height, rectangle.width, rectangle.height)
-
+from opendoc.units import (
+    CSS_PIXELS_PER_INCH as CSS_PIXELS_PER_INCH,
+)
+from opendoc.units import (
+    EMU_PER_INCH as EMU_PER_INCH,
+)
+from opendoc.units import (
+    EMU_PER_POINT as EMU_PER_POINT,
+)
+from opendoc.units import (
+    OOXML_ANGLE_PER_DEGREE as OOXML_ANGLE_PER_DEGREE,
+)
+from opendoc.units import (
+    POINTS_PER_INCH as POINTS_PER_INCH,
+)
+from opendoc.units import (
+    CoordinateOrigin as CoordinateOrigin,
+)
+from opendoc.units import (
+    Point2D as Point2D,
+)
+from opendoc.units import (
+    Rect2D as Rect2D,
+)
+from opendoc.units import (
+    canonical_coordinate_contract as canonical_coordinate_contract,
+)
+from opendoc.units import (
+    css_px_to_points as css_px_to_points,
+)
+from opendoc.units import (
+    degrees_to_ooxml_angle as degrees_to_ooxml_angle,
+)
+from opendoc.units import (
+    emu_to_inches as emu_to_inches,
+)
+from opendoc.units import (
+    emu_to_points as emu_to_points,
+)
+from opendoc.units import (
+    inches_to_emu as inches_to_emu,
+)
+from opendoc.units import (
+    ooxml_angle_to_degrees as ooxml_angle_to_degrees,
+)
+from opendoc.units import (
+    points_to_css_px as points_to_css_px,
+)
+from opendoc.units import (
+    points_to_emu as points_to_emu,
+)
+from opendoc.units import (
+    round_half_away as round_half_away,
+)
+from opendoc.units import (
+    transform_point_origin as transform_point_origin,
+)
+from opendoc.units import (
+    transform_rect_origin as transform_rect_origin,
+)
 
 __all__ = [
     "CSS_PIXELS_PER_INCH",

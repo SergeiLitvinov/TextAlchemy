@@ -22,7 +22,8 @@ def test_builtin_registry_routes_docx_through_model_to_pdf():
     assert [step.id for step in plan.steps] == ["docx.model", "model.pdf"]
     assert plan.feature_support[DocumentFeature.TEXT] is FeatureSupport.EXACT
     assert plan.feature_support[DocumentFeature.PAGE_GEOMETRY] is FeatureSupport.VISUAL
-    assert "reportlab" in plan.executable_requirements
+    assert "pymupdf" in plan.executable_requirements
+    assert "reportlab" not in plan.executable_requirements
     assert plan.preservation is not None
     assert plan.visual_score < 1.0
     assert plan.editability_score < plan.visual_score

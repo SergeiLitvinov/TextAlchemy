@@ -23,9 +23,10 @@ uv run textalchemy web
 | Запустить готовый конвейер | [Пример TXT → DOCX](docs/examples/text-to-docx.yaml), [операции](docs/reference/operations.md) |
 | Найти команду и её параметры | [Автоматический справочник CLI](docs/reference/cli.md) |
 | Узнать ограничения форматов | [Каталог справочников и приёмок](docs/README.md) |
-| Посмотреть завершённые и будущие этапы | [План по вехам M0–M8](TODO.md) |
+| Посмотреть оставшиеся работы | [Активные вехи](TODO.md) |
 | Понять результаты аудита документации | [Аудит и проверка примеров](docs/history/documentation-audit.md) |
 | Разрабатывать проект | [AGENTS.md](AGENTS.md), [стандарты кода](CODING_STANDARDS.md) |
+| Подключить структуры документов в другом приложении | [Самостоятельная библиотека OpenDoc](docs/development/document-library.md) |
 
 Доступность форматов зависит от окружения. Прогноз маршрута не является измерением качества вашего файла, а отсутствие сообщений LOSS не гарантирует полной идентичности. Ограниченный PPTX-сценарий принят на двух презентациях в PowerPoint; HTML — на перечисленных примерах. Границы описаны в руководстве и справочниках.
 
@@ -37,7 +38,7 @@ uv run textalchemy web
 uv sync --all-extras
 uv run ruff check
 uv run pytest tests/ -v --tb=short
-uv run pytest tests/ --cov=textalchemy
+uv run pytest tests/ --cov=textalchemy --cov=opendoc
 ```
 
 При включённом покрытии действует порог 80%. Браузерные тесты требуют установленного Chromium (`uv run playwright install chromium`). Состав CI — в [workflow](.github/workflows/ci.yml); число тестов не фиксируется в README.

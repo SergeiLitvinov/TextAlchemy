@@ -1,5 +1,5 @@
 "use strict";
-import {operationLabel} from './labels.js';
+const {operationLabel} = await import('./labels.js' + new URL(import.meta.url).search);
 
 export function renderPipelineResult($, response) {
     const result = response.result;

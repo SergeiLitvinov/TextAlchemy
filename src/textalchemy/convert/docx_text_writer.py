@@ -66,6 +66,10 @@ def write_paragraph_content(
     for index, item in enumerate(source.content):
         item_location = f"{location}.content[{index}]"
         if isinstance(item, TextRun):
+            if document.source_format == "html" and item.properties.get("anchor_id"):
+                from textalchemy.convert.docx_html_links import add_bookmark
+
+                add_bookmark(paragraph, item.properties["anchor_id"])
             if item.properties.get("docx_raw_inline_xml"):
                 _write_raw_inline(paragraph, str(item.properties["docx_raw_inline_xml"]), report, item_location)
             elif item.properties.get("bookmark_start") is not None:

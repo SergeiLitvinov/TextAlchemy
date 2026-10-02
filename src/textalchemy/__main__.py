@@ -135,6 +135,8 @@ def _setup_parser():
         help="Приоритетная функция документа; можно повторять",
     )
     p.add_argument("--max-steps", type=int, default=4)
+    p.add_argument("--max-changed-emphasis", type=int, help="Maximum characters with changed bold/italic emphasis")
+    p.add_argument("--max-changed-formulas", type=int, help="Допуск несовпавших или удалённых исходных формул")
     p.add_argument("--max-loss-issues", type=int, help="Максимум диагностированных потерь; 0 запрещает любые LOSS")
     text_check = p.add_mutually_exclusive_group()
     text_check.add_argument(

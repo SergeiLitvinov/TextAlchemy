@@ -8,7 +8,8 @@ from typing import Any
 from textalchemy.convert.color_preflight import preflight_colors
 from textalchemy.convert.font_preflight import prepare_fonts
 from textalchemy.convert.html_writer import _HtmlRenderer
-from textalchemy.convert.pdf_resources import PdfHtmlRenderer
+from textalchemy.convert.pdf_resources import PdfResourceStage
+from textalchemy.convert.stages import StageContext
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_model import Block, DocumentModel, Formula, FormulaFormat, Paragraph, Section, Table
 from textalchemy.fonts.html_embedding import archived_font_stylesheet
@@ -21,6 +22,12 @@ def write_pdf_model(document: DocumentModel, output_path: str | Path) -> Convers
 
     output = Path(output_path)
     report = ConversionReport(output)
+    prepared = PdfResourceStage().execute(document, StageContext(output))
+    report.issues.extend(prepared.report.issues)
+    report.metrics.update(prepared.report.metrics)
+    if not report.success:
+        return report
+    document = prepared.value
     document = prepare_fonts(document, report)
     preflight_colors(document, report, target="pdf")
     target = fitz.open()
@@ -79,7 +86,7 @@ def _render_section(
         source_format=document.source_format,
         version=document.version,
     )
-    renderer = PdfHtmlRenderer(section_model, report)
+    renderer = _HtmlRenderer(section_model, report)
     main_html = renderer._blocks(section.blocks, f"sections[{section_index}].blocks")
     header_html = renderer._blocks(section.headers, f"sections[{section_index}].headers")
     footer_html = renderer._blocks(section.footers, f"sections[{section_index}].footers")

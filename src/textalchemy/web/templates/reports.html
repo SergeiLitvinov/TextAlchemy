@@ -1,27 +1,19 @@
 {% extends "base.html" %}
 {% set active = 'reports' %}
-{% block title %}TextAlchemy — качество и результаты{% endblock %}
+{% block title %}TextAlchemy — состояние коллекции{% endblock %}
 {% block content %}
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Контроль результата</p>
-        <h2>Качество документов и коллекции</h2>
-        <p class="lead">Проверяйте структуру и отличия страниц после преобразования, затем контролируйте полноту связей в библиотеке.</p>
+        <p class="eyebrow">Библиотека</p>
+        <h2>Состояние коллекции</h2>
+        <p class="lead">Записи библиотеки, файлы в настроенных папках и результат последнего сопоставления.</p>
     </div>
-    <a class="btn btn-primary" href="/convert">Проверить документ</a>
-</section>
-
-<section class="quality-workflow" aria-label="Возможности проверки качества">
-    <article><span>1</span><div><strong>До запуска</strong><small>Определяем структуру, доступные маршруты и прогноз сохранности.</small></div></article>
-    <article><span>2</span><div><strong>После преобразования</strong><small>Сравниваем текст, таблицы, изображения, формулы, связи и редактируемость.</small></div></article>
-    <article><span>3</span><div><strong>Визуальная проверка</strong><small>Показываем страницы до и после, различия и конкретные предупреждения.</small></div></article>
-</section>
-
-<div class="section-heading reports-section-heading">
-    <div><p class="eyebrow">Организация библиотеки</p><h2>Состояние коллекции</h2></div>
     <button type="button" id="refreshBtn" class="btn-secondary">Обновить данные</button>
-</div>
+</section>
+
 {% include "partials/library_nav.html" %}
+<p class="field-help">Обновление только читает данные. Сопоставление и создание копий выполняются в разделе «Связать файлы».</p>
+<div id="status" class="status-bar" role="status" aria-live="polite" hidden></div>
 
 <section class="library-metrics" id="stats" aria-label="Основные показатели">
     <div class="metric-skeleton"></div><div class="metric-skeleton"></div><div class="metric-skeleton"></div><div class="metric-skeleton"></div>
@@ -35,12 +27,12 @@
     <section class="card report-panel">
         <div class="card-head">
             <div><p class="eyebrow">Последняя проверка</p><h3>Связь источников и файлов</h3></div>
-            <a href="/matching" class="text-link">Повторить →</a>
+            <a href="/matching" class="text-link">Открыть сопоставление →</a>
         </div>
         <div id="lastMatching"><p class="hint">Загружаем результат…</p></div>
     </section>
 </div>
-<div id="status" class="status-bar" hidden></div>
+<p class="field-help">Сохранность документа проверяется при <a href="/convert">конвертации</a>: отчёт и сравнение страниц находятся рядом с готовым результатом.</p>
 {% endblock %}
 
 {% block scripts %}

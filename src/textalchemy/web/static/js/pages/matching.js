@@ -12,7 +12,7 @@ function renderResults(data, isPreview) {
         const tr = document.createElement('tr');
         tr.innerHTML =
             `<td>${esc(item.original)}</td>` +
-            `<td>${esc(item.new)}</td>` +
+            `<td>${esc(item.new || (data.dry_run ? item.planned_name : 'Копия не создана'))}</td>` +
             `<td>${item.match ? '✅' : '❌'}</td>` +
             `<td>${esc(item.score)}</td>`;
         body.appendChild(tr);
@@ -64,9 +64,11 @@ $('matchForm').addEventListener('submit', async (e) => {
     try {
         const data = await api('/api/match/run', { method: 'POST', formData: fd });
         renderResults(data, false);
-        const verb = $('dryRun').checked ? 'Предпросмотр' : 'Переименование';
-        setStatus(`${verb} завершено: совпало ${data.matched.length}, без совпадений ${data.unmatched.length}.`, 'success');
-        toast('Сопоставление завершено', 'success');
+        const verb = data.dry_run ? 'Предпросмотр завершён' : 'Копирование завершено';
+        const errors = data.errors ? data.errors.length : 0;
+        setStatus(`${verb}: совпало ${data.matched.length}, без совпадений ${data.unmatched.length}` +
+            (errors ? `, копия не создана для ${errors} файлов.` : '.'), errors ? 'error' : 'success');
+        toast(errors ? 'Проверьте ошибки копирования' : 'Сопоставление завершено', errors ? 'error' : 'success');
     } catch (_) { setStatus('', null); }
     finally { setLoading(btn, false); }
 });
@@ -81,3 +83,8 @@ $('downloadBtn').addEventListener('click', () => {
     URL.revokeObjectURL(a.href);
 });
 
+function updateRunAction() {
+    $('runBtn').textContent = $('dryRun').checked ? 'Составить отчёт' : 'Копировать с новыми именами';
+}
+$('dryRun').addEventListener('change', updateRunAction);
+updateRunAction();

@@ -1,86 +1,81 @@
 "use strict";
 
-const $ = (id) => document.getElementById(id);
-const dropZone = $('dropZone');
-const fileInput = $('fileInput');
+const {createIngestInput} = await import('../components/ingest-input.js' + new URL(import.meta.url).search);
+const $ = id => document.getElementById(id);
 const resultArea = $('result');
+let download = null;
+let busy = false;
 
 function setStatus(message, type) {
     const element = $('status');
     element.hidden = !message;
-    if (!message) return;
     element.className = 'status-bar ' + (type || 'info');
     element.textContent = message;
 }
 
-function selectOutput(button) {
-    document.querySelectorAll('.output-option').forEach((option) => {
-        const selected = option === button;
-        option.classList.toggle('active', selected);
-        option.setAttribute('aria-checked', String(selected));
-    });
-    $('output-kind').value = button.dataset.output;
-    $('extract-result-title').textContent = button.dataset.output === 'latex' ? 'Исходник LaTeX' : 'Извлечённый текст';
-}
+const input = createIngestInput($, setStatus, {extensions: ['.pdf', '.docx', '.txt', '.djvu']});
 
-document.querySelectorAll('.output-option').forEach((button) => button.addEventListener('click', () => selectOutput(button)));
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput.click(); }
-});
-dropZone.addEventListener('dragover', (event) => { event.preventDefault(); dropZone.classList.add('dragover'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', (event) => {
-    event.preventDefault();
-    dropZone.classList.remove('dragover');
-    if (event.dataTransfer.files[0]) handleFile(event.dataTransfer.files[0]);
-});
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) handleFile(fileInput.files[0]); });
-
-function showText(text) {
-    resultArea.value = text;
-    resultArea.hidden = false;
-    $('resultEmpty').hidden = true;
-    $('copyBtn').disabled = false;
-}
-
-async function handleFile(file) {
+async function process() {
+    const file = input.getFile();
+    if (!file || busy) return;
     const output = $('output-kind').value;
     if (output === 'latex' && !file.name.toLowerCase().endsWith('.docx')) {
-        setStatus('LaTeX можно извлечь только из документа Word (DOCX).', 'error');
+        setStatus('LaTeX можно извлечь только из документа Word (DOCX). Выберите Word или результат «Чистый текст».', 'error');
         return;
     }
+    busy = true;
+    input.setBusy(true);
     setStatus(`Извлекаем содержимое из «${file.name}»…`, 'info');
     const form = new FormData();
     form.append('file', file);
     try {
+        let text;
         if (output === 'latex') {
             form.append('doc_type', 'manuscript');
             const response = await fetch('/api/extract/latex', {method: 'POST', body: form});
-            const text = await response.text();
-            if (!response.ok) throw new Error('LaTeX extraction failed');
-            showText(text);
-            setStatus(`LaTeX извлечён из «${file.name}»`, 'success');
+            if (response.headers.get('Content-Type')?.includes('application/json')) {
+                const error = await response.json();
+                throw new Error(error.error || error.detail || 'Не удалось извлечь LaTeX.');
+            }
+            if (!response.ok) throw new Error('Не удалось извлечь LaTeX. Проверьте документ Word.');
+            text = await response.text();
         } else {
             form.append('fmt', $('input-fmt').value);
-            const data = await api('/api/extract/text', {method: 'POST', formData: form});
-            showText(data.text);
-            setStatus(`Извлечено ${data.text.length} символов из «${data.filename}»`, 'success');
+            const data = await window.api('/api/extract/text', {method: 'POST', formData: form});
+            if (!data.success) throw new Error(data.error || 'Не удалось извлечь текст.');
+            text = data.text;
         }
-        toast('Содержимое готово', 'success');
-    } catch (_) {
-        setStatus('Не удалось извлечь содержимое. Проверьте файл и выбранный результат.', 'error');
+        resultArea.value = text;
+        $('emptyTextHint').hidden = Boolean(text.trim());
+        resultArea.classList.toggle('code-result', output === 'latex');
+        $('extract-result-title').textContent = output === 'latex' ? 'Исходник LaTeX' : 'Извлечённый текст';
+        $('resultSource').textContent = file.name;
+        $('resultCard').hidden = false;
+        $('ingestLayout').classList.add('has-result');
+        download = {text, name: file.name.replace(/\.[^.]+$/, '') + (output === 'latex' ? '.tex' : '.txt')};
+        setStatus(`Готово: ${text.length} символов. Исходник не изменён.`, 'success');
+        resultArea.focus({preventScroll: false});
+    } catch (error) {
+        setStatus(error.message || 'Не удалось извлечь содержимое. Файл и настройки сохранены — повторите обработку.', 'error');
+    } finally {
+        busy = false;
+        input.setBusy(false);
     }
 }
 
+$('processBtn').addEventListener('click', process);
+$('downloadBtn').addEventListener('click', () => {
+    if (!download) return;
+    const url = URL.createObjectURL(new Blob([download.text], {type: 'text/plain;charset=utf-8'}));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = download.name;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
 $('copyBtn').addEventListener('click', async () => {
     if (!resultArea.value) return;
-    try {
-        await navigator.clipboard.writeText(resultArea.value);
-        toast('Содержимое скопировано', 'success');
-    } catch (_) {
-        resultArea.select();
-        document.execCommand('copy');
-        toast('Содержимое скопировано', 'success');
-    }
+    try { await navigator.clipboard.writeText(resultArea.value); }
+    catch (_) { resultArea.select(); document.execCommand('copy'); }
+    window.toast('Содержимое скопировано', 'success');
 });

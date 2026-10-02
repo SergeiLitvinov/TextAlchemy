@@ -1,4 +1,5 @@
 # Include Python sources and all shipped document/web assets from the src layout.
 graft src/textalchemy
+recursive-include vendor/opendoc *.whl *.json *.md
 prune tests
 global-exclude __pycache__ *.py[cod]

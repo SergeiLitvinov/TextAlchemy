@@ -39,6 +39,30 @@ def check_mapping():
     return len(mapped)
 
 
+def check_active_plan(text: str) -> int:
+    """В активном плане остаются только незавершённые задачи с уникальными ID своей вехи."""
+    milestone = None
+    identifiers = set()
+    for line in text.splitlines():
+        heading = re.match(r"## M(\d+)\.", line)
+        if heading:
+            milestone = heading[1]
+        elif line.startswith("## "):
+            milestone = None
+        checkbox = re.match(r"\s*- \[([ xX])\]", line)
+        if not checkbox:
+            continue
+        if checkbox[1] != " ":
+            raise ValueError("Закрытые задачи должны быть удалены из активного TODO")
+        task = re.match(r"\s*- \[ \] \*\*(M(\d+)\.\d+)\b", line)
+        if not task or task[2] != milestone:
+            raise ValueError("Задача TODO должна иметь ID своей вехи")
+        if task[1] in identifiers:
+            raise ValueError(f"Повторяющийся ID TODO: {task[1]}")
+        identifiers.add(task[1])
+    return len(identifiers)
+
+
 def run(arguments):
     output = io.StringIO()
     with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
@@ -106,6 +130,7 @@ def check():
     guide = (ROOT / "docs/guide/index.md").read_text(encoding="utf-8")
     count = sum(check_commands(path.read_text(encoding="utf-8")) for path in (ROOT / "docs/guide").glob("*.md"))
     mapped = check_mapping()
+    active = check_active_plan((ROOT / "TODO.md").read_text(encoding="utf-8"))
     parent = ROOT / ".textalchemy/docs-check"
     parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=parent) as temporary:
@@ -116,6 +141,7 @@ def check():
             raise ValueError("Unexpected examples workspace")
         check_examples(guide, directory)
     print(
-        f"Checked {count} command examples, {mapped} migrated tasks, bibliography/text pipelines and DOCX/HTML/PDF generation",
+        f"Checked {count} command examples, {mapped} migrated tasks, {active} active tasks, "
+        "bibliography/text pipelines and DOCX/HTML/PDF generation",
         flush=True,
     )

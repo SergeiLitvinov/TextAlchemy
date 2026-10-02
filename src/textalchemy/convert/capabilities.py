@@ -149,7 +149,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
                 notes=S.PARTIAL,
                 fields=S.VISUAL,
             ),
-            requirements=("reportlab",),
+            requirements=("pymupdf",),
             description="Portable PDF exporter",
             preservation=_profile(content=0.99, semantics=0.65, geometry=0.94, style=0.94, relationships=0.70, editability=0.20),
         ),

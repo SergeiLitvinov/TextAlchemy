@@ -76,12 +76,14 @@ class HtmlReader:
             if not content and not has_image:
                 return
             preserve = self.css.style(root).get("white-space") in {"pre", "pre-wrap"}
+            visible = [item for item in content if not (isinstance(item, TextRun) and not item.text)]
             if not preserve:
-                if content and isinstance(content[0], TextRun) and not content[0].properties.get("html_preserve_space"):
-                    content[0].text = content[0].text.lstrip(" \t\r\n")
-                if content and isinstance(content[-1], TextRun) and not content[-1].properties.get("html_preserve_space"):
-                    content[-1].text = content[-1].text.rstrip(" \t\r\n")
-            if has_image or any(not isinstance(item, TextRun) or item.text for item in content):
+                if visible and isinstance(visible[0], TextRun) and not visible[0].properties.get("html_preserve_space"):
+                    visible[0].text = visible[0].text.lstrip(" \t\r\n")
+                if visible and isinstance(visible[-1], TextRun) and not visible[-1].properties.get("html_preserve_space"):
+                    visible[-1].text = visible[-1].text.rstrip(" \t\r\n")
+            has_anchor = any(isinstance(item, TextRun) and item.properties.get("anchor_id") for item in content)
+            if has_image or has_anchor or any(not isinstance(item, TextRun) or item.text for item in content):
                 css = self.css.style(root)
                 props = {"html": {"tag": root.name}}
                 if root.get("id") and not result:
@@ -111,7 +113,8 @@ class HtmlReader:
                 value = str(node)
                 if css.get("white-space") not in {"pre", "pre-wrap"}:
                     value = re.sub(r"[\t\r\n\f ]+", " ", value)
-                    if not content or (isinstance(content[-1], TextRun) and content[-1].text.endswith((" ", "\n"))):
+                    previous = next((item for item in reversed(content) if not isinstance(item, TextRun) or item.text), None)
+                    if previous is None or (isinstance(previous, TextRun) and previous.text.endswith((" ", "\n"))):
                         value = value.lstrip(" ")
                 if value:
                     content_nodes.append(node)
@@ -161,7 +164,8 @@ class HtmlReader:
                 if node.name not in INLINE:
                     self.warn("html-content", f"Элемент сохранён как содержимое: {node.name}")
                 if node.get("id"):
-                    self.warn("html-links", f"Строчный якорь не перенесён: {node['id']}")
+                    content.append(TextRun("", properties={"anchor_id": node["id"]}))
+                    content_nodes.append(node)
                 for child in node.children:
                     visit(child)
 
@@ -230,6 +234,6 @@ class HtmlReader:
                     spans.append(span)
                 cells.append(TableCell(self.blocks(cell), row_span=spans[0], column_span=spans[1]))
             rows.append(TableRow(cells))
-        table = Table(rows)
+        table = Table(rows, properties={"anchor_id": node["id"]} if node.get("id") else {})
         self.diagnostics.bind(table, node)
         return table

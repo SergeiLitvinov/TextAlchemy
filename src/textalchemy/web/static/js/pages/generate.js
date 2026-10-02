@@ -148,6 +148,7 @@ function buildField(field) {
     error.id = fieldErrorId(name);
     error.style.color = '#991b1b';
     error.style.display = 'none';
+    if (['array', 'object', 'formula'].includes(type)) input.classList.add('code-input');
     wrap.appendChild(input);
     if (type === 'array') listEditors.set(name, createListEditor(input, fieldLabel(name)));
     wrap.appendChild(error);

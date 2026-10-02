@@ -3,98 +3,61 @@
 {% block title %}TextAlchemy — распознать скан{% endblock %}
 {% block content %}
 <section class="page-heading">
-    <div>
-        <p class="eyebrow">Распознавание текста</p>
-        <h2>Превратите скан в редактируемый текст</h2>
-        <p class="lead">Загрузите изображение или PDF. TextAlchemy извлечёт существующий текст и подключит OCR только там, где он нужен.</p>
-    </div>
-    <div class="privacy-pill"><span aria-hidden="true">●</span> Изображения не покидают компьютер</div>
+    <div><p class="eyebrow">Распознавание текста</p><h2>Превратите скан в редактируемый текст</h2>
+        <p class="lead">Выберите PDF или изображение, проверьте настройки и начните обработку. Затем исправьте и скачайте текст.</p></div>
+    <div class="privacy-pill"><span aria-hidden="true">●</span> Файлы остаются на компьютере</div>
 </section>
-
-<p class="card"><strong>В PDF уже есть текст?</strong> <a href="/pdf-order">Подготовить структуру перед конвертацией</a><br><span class="field-help">Уточните порядок чтения, заголовки и таблицы для будущего DOCX. Исходный PDF не изменяется.</span></p>
-<div class="ocr-layout">
-    <section class="card ocr-setup" aria-labelledby="ocr-source-title">
-        <div class="card-head"><div><p class="eyebrow">Источник</p><h3 id="ocr-source-title">Что находится в файле?</h3></div></div>
-        <div class="scenario-picker" role="radiogroup" aria-label="Тип исходного документа">
-            <button type="button" class="scenario-option" role="radio" aria-checked="false" data-scenario="fast">
-                <span aria-hidden="true">A</span><div><strong>Обычный PDF</strong><small>В документе уже можно выделить текст</small></div>
-            </button>
-            <button type="button" class="scenario-option active" role="radio" aria-checked="true" data-scenario="structure">
-                <span aria-hidden="true">◫</span><div><strong>PDF со сканами</strong><small>Сохраним текстовый слой и распознаем изображения</small></div><em>Рекомендуется</em>
-            </button>
-            <button type="button" class="scenario-option" role="radio" aria-checked="false" data-scenario="scan">
-                <span aria-hidden="true">◎</span><div><strong>Фото или чистый скан</strong><small>Распознаем всё содержимое с помощью OCR</small></div>
-            </button>
+<div class="ingest-layout" id="ingestLayout">
+    <section class="card ingest-setup" aria-labelledby="ocr-source-title">
+        <div class="card-head"><div><p class="eyebrow">1 · Исходник</p><h3 id="ocr-source-title">Выберите PDF или изображение</h3></div></div>
+        <div class="file-drop ingest-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Выбрать изображение или PDF">
+            <span class="drop-icon" aria-hidden="true">↥</span><strong>Перетащите файл или выберите на компьютере</strong>
+            <div class="hint">PNG, JPG или PDF</div><input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.pdf">
         </div>
-        <select id="scenario" class="visually-hidden" aria-label="Сценарий распознавания">
-            <option value="fast">Обычный PDF</option>
-            <option value="structure" selected>PDF со сканами</option>
-            <option value="scan">Фото или чистый скан</option>
-        </select>
-
-        <div class="file-drop ocr-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Выбрать изображение или PDF">
-            <div class="drop-icon" aria-hidden="true">↥</div>
-            <strong>Перетащите файл или выберите на компьютере</strong>
-            <div class="hint">PNG, JPG или PDF</div>
-            <input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.pdf">
-        </div>
-
-        <details class="advanced-settings">
-            <summary>Дополнительные настройки</summary>
-            <div class="form-grid advanced-grid">
-                <div>
-                    <label for="lang">Языки документа</label>
-                    <select id="lang">
-                        <option value="rus+eng">Русский и английский</option>
-                        <option value="rus">Русский</option>
-                        <option value="eng">Английский</option>
-                    </select>
-                </div>
-                <div>
-                    <label for="mode">Тип текста</label>
-                    <select id="mode">
-                        <option value="printed">Печатный</option>
-                        <option value="handwriting">Рукописный</option>
-                    </select>
-                </div>
-                <label class="check-option"><input type="checkbox" id="gpu"> <span><strong>Ускорение на видеокарте</strong><small>Использовать, если OCR-библиотека поддерживает GPU</small></span></label>
-            </div>
-        </details>
-        <div id="status" class="status-bar" hidden></div>
-    </section>
-
-    <section class="card ocr-result" aria-labelledby="ocr-result-title">
-        <div class="card-head">
-            <div><p class="eyebrow">Результат</p><h3 id="ocr-result-title">Распознанный текст</h3></div>
-            <button type="button" class="btn-secondary" id="copyBtn" disabled>Копировать</button>
-        </div>
-        <div class="ocr-empty" id="resultEmpty"><span aria-hidden="true">≡</span><strong>Текст появится здесь</strong><small>После обработки его можно проверить, исправить, сохранить и скачать.</small></div>
-        <textarea id="result" hidden aria-label="Распознанный текст" placeholder="Распознанный текст появится здесь..."></textarea>
-        <fieldset class="ocr-paragraph-order">
-            <legend>Порядок абзацев</legend>
-            <p class="field-help" id="paragraphHelp">Поставьте курсор в абзац или выделите несколько абзацев, затем переместите их. Каждая новая строка — отдельный абзац, включая пустые строки. После перемещения сохраните правки.</p>
-            <div class="ocr-edit-actions">
-                <button type="button" id="paragraphUp" class="btn-secondary" aria-describedby="paragraphHelp" disabled>Переместить выше</button>
-                <button type="button" id="paragraphDown" class="btn-secondary" aria-describedby="paragraphHelp" disabled>Переместить ниже</button>
-            </div>
-            <p id="paragraphPosition" role="status" aria-live="polite"></p>
-        </fieldset>
-        <p class="field-help">Редактор сохраняет текст и абзацы. Расположение областей, изображения и таблицы скана не восстанавливаются. Сохранённый текст доступен по адресу этой страницы в течение часа после сохранения.</p>
-        <p id="editStatus" role="status" aria-live="polite"></p>
-        <div class="ocr-edit-actions">
-            <button type="button" id="saveTextBtn" disabled>Сохранить правки</button>
-            <button type="button" id="reloadTextBtn" class="btn-secondary" disabled>Загрузить сохранённое</button>
-            <label for="ocrExportFormat">Формат скачивания</label>
-            <select id="ocrExportFormat" disabled>
-                <option value="txt">Текст TXT</option><option value="docx">Документ DOCX</option>
-                <option value="pdf">Документ PDF</option><option value="model">JSON-модель</option>
+        <p id="selectedFile" class="ingest-file" role="status" hidden></p>
+        <div id="inputOptions" class="ingest-options">
+            <div id="scenarioOptions"><label for="scenario">2 · Как обработать PDF?</label>
+                <select id="scenario" aria-describedby="scenarioHint">
+                    <option value="structure" selected>Текст и сканы (рекомендуется)</option>
+                    <option value="fast">Только готовый текст</option>
+                    <option value="scan">Распознать все страницы заново</option>
+                </select></div>
+            <p id="scenarioHint" class="field-help">Сохраняем существующий текст, OCR используется для сканов при наличии движка.</p>
+            <label for="lang">Языки документа</label><select id="lang">
+                <option value="rus+eng">Русский и английский</option><option value="rus">Русский</option><option value="eng">Английский</option>
             </select>
-            <button type="button" id="exportTextBtn" disabled>Сохранить и скачать</button>
+            <details class="advanced-settings"><summary>Рукописный текст и ускорение</summary>
+                <div class="advanced-grid"><label for="mode">Тип текста</label><select id="mode">
+                    <option value="printed">Печатный</option><option value="handwriting">Рукописный</option>
+                </select><label class="check-option"><input type="checkbox" id="gpu"> <span>Использовать видеокарту, если движок поддерживает GPU</span></label></div>
+            </details>
         </div>
+        <button type="button" id="processBtn" class="ingest-primary" disabled>Получить текст</button>
+        <div id="status" class="status-bar" role="status" aria-live="polite" hidden></div>
+        <details class="advanced-settings"><summary>Нужна структура исходного PDF?</summary>
+            <p class="field-help">Для конвертации PDF с текстом можно предварительно уточнить порядок чтения, заголовки и таблицы.</p>
+            <a href="/pdf-order">Подготовить структуру PDF →</a>
+        </details>
+    </section>
+    <section class="card ingest-result" id="resultCard" aria-labelledby="ocr-result-title" hidden>
+        <div class="card-head"><div><p class="eyebrow">3 · Проверка и скачивание</p><h3 id="ocr-result-title">Проверьте текст</h3>
+            <p id="resultSource" class="field-help ingest-file"></p></div><button type="button" class="btn-secondary" id="copyBtn" disabled>Копировать</button></div>
+        <textarea id="result" aria-label="Распознанный текст" hidden></textarea>
+        <p id="editStatus" role="status" aria-live="polite"></p>
+        <div class="ingest-export"><label for="ocrExportFormat">Формат скачивания</label><select id="ocrExportFormat" disabled>
+            <option value="txt">Текст TXT</option><option value="docx">Документ DOCX</option><option value="pdf">Документ PDF</option><option value="model">JSON-модель</option>
+        </select><button type="button" id="exportTextBtn" disabled>Сохранить и скачать</button>
+            <button type="button" id="saveTextBtn" class="btn-secondary" disabled>Сохранить правки</button></div>
+        <details class="advanced-settings" id="paragraphTools"><summary>Порядок абзацев и сохранённая версия</summary>
+            <fieldset class="ocr-paragraph-order"><legend>Порядок абзацев</legend>
+                <p class="field-help" id="paragraphHelp">Поставьте курсор в абзац или выделите несколько. Каждая новая строка — отдельный абзац, включая пустые строки. После перемещения сохраните правки.</p>
+                <div class="ocr-edit-actions"><button type="button" id="paragraphUp" class="btn-secondary" aria-describedby="paragraphHelp" disabled>Переместить выше</button>
+                    <button type="button" id="paragraphDown" class="btn-secondary" aria-describedby="paragraphHelp" disabled>Переместить ниже</button></div>
+                <p id="paragraphPosition" role="status" aria-live="polite"></p></fieldset>
+            <button type="button" id="reloadTextBtn" class="btn-secondary" disabled>Загрузить сохранённое</button>
+        </details>
+        <p class="field-help">Редактор сохраняет текст и абзацы, а не расположение областей, таблицы и изображения скана. Сохранённая версия доступна по адресу страницы один час после сохранения.</p>
     </section>
 </div>
 {% endblock %}
-
-{% block scripts %}
-<script src="/static/js/pages/recognize.js?v={{ asset_version }}" type="module"></script>
-{% endblock %}
+{% block scripts %}<script src="/static/js/pages/recognize.js?v={{ asset_version }}" type="module"></script>{% endblock %}

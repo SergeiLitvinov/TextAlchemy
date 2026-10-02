@@ -104,6 +104,31 @@ def test_web_services_do_not_depend_on_routes_or_templates():
         assert not invalid, f"{path.name}: application service зависит от presentation routes: {invalid}"
 
 
+@pytest.mark.parametrize("name", ["matching", "pipeline", "extract", "recognize", "convert_jobs", "convert_preview"])
+def test_matching_and_pipeline_routes_only_adapt_http(name: str) -> None:
+    path = ROOT / "routes" / f"{name}.py"
+    imports = _imports(path)
+    assert not any(item.startswith(("textalchemy.pipeline", "textalchemy.organize", "textalchemy.core")) for item in imports)
+    source = path.read_text(encoding="utf-8")
+    assert ".rglob(" not in source and ".all_items(" not in source
+
+
+@pytest.mark.parametrize("name", ["matching", "pipeline_builder", "bibliography_export", "generator_catalog",
+                                  "generator_execution", "generator_sessions", "extraction", "recognition",
+                                  "upload_input", "documentation", "batch_submission", "batch_retry", "batch_history",
+                                  "conversion_preview", "conversion_inspection", "conversion_submission"])
+def test_matching_pipeline_and_export_services_do_not_import_http_or_application_state(name: str) -> None:
+    imports = _imports(ROOT / "services" / f"{name}.py")
+    assert not any(item.startswith(("fastapi", "starlette", "textalchemy.web.app")) for item in imports)
+
+
+def test_generator_route_delegates_execution_and_dataset_validation() -> None:
+    source = (ROOT / "routes" / "generate.py").read_text(encoding="utf-8")
+    assert "service.generate(" in source and "GeneratorDatasetService(" in source
+    assert "validate_snapshot(" not in source and "validate_template_data(" not in source
+    assert "workspace.artifact_path(" not in source and "workspace.cleanup(" not in source
+
+
 def test_page_routes_delegate_context_queries_to_application_service():
     path = ROOT / "routes" / "pages.py"
     source = path.read_text(encoding="utf-8")
@@ -173,8 +198,8 @@ def test_theme_uses_semantic_tokens_without_inline_palette():
     assert ':root[data-theme="dark"]' in css
     for token in ("--surface-raised", "--text-strong", "--on-primary", "--danger-soft", "--document-paper"):
         assert css.count(token) >= 2, f"{token}: token must exist in both themes"
-    assert 'style.setProperty' not in app_source
-    assert 'dataset.theme' in app_source
+    assert "style.setProperty" not in app_source
+    assert "dataset.theme" in app_source
 
 
 def test_localization_is_catalog_driven_not_duplicated_templates():
@@ -203,7 +228,7 @@ def test_web_python_import_graph_has_no_cycles():
 
     def visit(name: str, trail: list[str]) -> None:
         if name in visiting:
-            cycle = " → ".join([*trail[trail.index(name):], name])
+            cycle = " → ".join([*trail[trail.index(name) :], name])
             pytest.fail(f"Циклическая зависимость Web-модулей: {cycle}")
         if name in visited:
             return

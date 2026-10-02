@@ -2,16 +2,16 @@
 {% set active = 'convert' %}
 {% block title %}TextAlchemy — Конвертация{% endblock %}
 {% block content %}
-<section class="convert-workspace">
+<section class="convert-workspace" id="conversionWorkspace" data-experience="simple">
     <ol class="workflow-steps conversion-workflow" aria-label="Этапы преобразования">
-        <li class="active"><span>1</span><div><strong>Документ</strong><small>Загрузка и проверка</small></div></li>
-        <li><span>2</span><div><strong>Результат</strong><small>Формат и приоритет</small></div></li>
+        <li class="active" aria-current="step"><span>1</span><div><strong>Документ</strong><small>Загрузка и проверка</small></div></li>
+        <li><span>2</span><div><strong>Результат</strong><small>Выбор формата</small></div></li>
         <li><span>3</span><div><strong>Проверка</strong><small>Сравнение и скачивание</small></div></li>
     </ol>
     <div class="card convert-intro">
         <div>
             <p class="eyebrow">Универсальный конвертор</p>
-            <h2>Сохранить документ, а не просто текст</h2>
+            <h2>Преобразовать документ</h2>
             <p class="lead">Загрузите документ — TextAlchemy определит формат, предложит доступные результаты и покажет качество преобразования.</p>
         </div>
 
@@ -20,6 +20,7 @@
             <p class="field-help">Здесь показаны доступные направления и причины ограничений: поддержка движком, компоненты установки или возможности веб-интерфейса. Сохранение в тот же формат не изменяет документ.</p>
             <div id="formatCatalogContent" aria-live="polite">Загружаем направления…</div>
         </details>
+        <div id="filePickerWrap">
         <div class="file-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput">
             <div class="drop-icon" aria-hidden="true">↥</div>
             <strong id="drop-label">Загрузите документ</strong>
@@ -27,7 +28,18 @@
             <input type="file" id="fileInput" multiple>
         </div>
 
+        </div>
+
         <div id="conversionSetup" hidden>
+        <div class="experience-bar">
+            <div class="experience-switch" role="group" aria-label="Режим конвертации">
+                <button type="button" class="seg-btn" id="simpleConversionBtn" aria-pressed="true">Простой</button>
+                <button type="button" class="seg-btn" id="expertConversionBtn" aria-pressed="false">Экспертный</button>
+            </div>
+            <p id="experienceHelp" class="field-help" role="status">Выберите файл и формат. Маршрут подберётся автоматически; замечания будут в отчёте.</p>
+        </div>
+
+
             <div class="selected-file" id="singleFileBlock">
                 <div>
                     <span class="file-kind" id="sourceBadge">—</span>
@@ -43,26 +55,26 @@
                 <ul class="batch-file-list" id="batchFileList"></ul>
                 <button type="button" class="btn-link" id="batchReplaceBtn">Изменить набор</button>
             </div>
-            <div class="inspection-panel" id="sourceInspection" aria-live="polite">
-                <div class="inspection-heading">
+            <details class="inspection-panel conversion-disclosure" id="sourceInspection">
+                <summary class="inspection-summary">
                     <strong>Структура исходного документа</strong>
                     <span id="inspectionState">Проверяем…</span>
-                </div>
+                </summary>
                 <div class="inspection-metrics" id="inspectionMetrics"></div>
                 <p class="field-help inspection-message" id="inspectionMessage"></p>
-            </div>
-            <div id="pdfPreparation" class="workspace-disclosure" hidden>
-                <strong>Нужно уточнить структуру PDF?</strong>
+            </details>
+            <details id="pdfPreparation" class="workspace-disclosure conversion-disclosure" hidden>
+                <summary>Уточнить структуру PDF перед конвертацией</summary>
                 <p class="field-help">Настройте порядок чтения, заголовки и границы таблиц перед созданием DOCX. Исходный PDF не изменится; повторно выбирать файл не потребуется.</p>
                 <button type="button" id="preparePdfBtn" class="btn-secondary">Подготовить PDF к конвертации</button>
-            </div>
+            </details>
             <div class="form-grid conversion-options">
                 <div>
                     <label for="target">Формат результата</label>
                     <select id="target"></select>
-                    <p class="field-help" id="route-help"></p>
+                    <p class="field-help" data-expert id="route-help"></p>
                 </div>
-                <div>
+                <div data-expert>
                     <label for="mode">Что важнее</label>
                     <select id="mode" aria-label="Приоритет">
                         <option value="balanced">Разумный баланс</option>
@@ -72,17 +84,17 @@
                     <p class="field-help" id="mode-help">Оптимальный баланс оформления и редактируемости.</p>
                 </div>
             </div>
-            <div id="routeGuidance" aria-live="polite" hidden>
-                <h3>Что сохранится и что проверить</h3>
+            <details id="routeGuidance" class="conversion-disclosure" hidden>
+                <summary>Что проверить для выбранного формата</summary>
                 <ul id="routeGuidanceList" class="issue-list"></ul>
-            </div>
-            <details id="batchIndividualOptions" hidden>
-                <summary>Формат и приоритет каждого файла</summary>
+            </details>
+            <details id="batchIndividualOptions" data-expert hidden>
+                <summary>Выбор формата каждого файла</summary>
                 <p class="field-help">Общие настройки применяются, пока вы не измените настройки файла отдельно. Если общий формат или режим недоступен, для файла выбирается доступный вариант — проверьте его ниже. Проверки сохранности остаются общими для всех файлов.</p>
                 <button type="button" class="btn-link" id="batchApplyDefaults">Применить общие настройки ко всем</button>
                 <div id="batchOptionsList"></div>
             </details>
-            <details class="conversion-loss-budget">
+            <details class="conversion-loss-budget" data-expert>
                 <summary>Расширенная проверка сохранности</summary>
                 <label for="maxLossIssues" data-i18n="quality.limit">Допустимое число сообщений о потерях</label>
                 <select id="maxLossIssues" aria-describedby="lossBudgetHelp">
@@ -100,6 +112,12 @@
                     <option value="5" data-i18n="quality.five">Не больше пяти</option>
                 </select>
                 <p class="field-help" id="objectBudgetHelp" data-i18n="objects.help">Проверяем абзацы, таблицы, изображения и формулы, включая вложенные. Таблица и каждый вложенный объект учитываются отдельно. При превышении лимита или недостоверном сравнении результат не выдаётся. Частичные изменения текста и оформление этим лимитом не ограничиваются.</p>
+                <label for="maxChangedEmphasis">Допустимое число символов с изменённым выделением</label>
+                <input id="maxChangedEmphasis" type="number" min="0" step="1" placeholder="Без ограничения" aria-describedby="emphasisBudgetHelp">
+                <p class="field-help" id="emphasisBudgetHelp">Пустое поле отключает проверку; 0 сохраняет жирное и курсивное выделение текста модели. Один символ учитывается один раз, даже если меняются оба свойства. Пробелы и разбиение абзацев не учитываются. При изменении последовательности текста результат не выдаётся. Шрифты, размеры и компоновка не проверяются.</p>
+                <label for="maxChangedFormulas">Допустимое число изменённых или удалённых формул</label>
+                <input id="maxChangedFormulas" type="number" min="0" step="1" placeholder="Без ограничения" aria-describedby="formulaBudgetHelp">
+                <p class="field-help" id="formulaBudgetHelp">Пустое поле отключает проверку; 0 требует совпадения всех исходных формул. Сравнивается структура поддержанного MathML/Office Math или исходная запись LaTeX, включая повторения. При непроверяемом представлении результат не выдаётся. Это не проверка математической эквивалентности или вида страницы.</p>
                 <label for="textPreservation" data-i18n="textcheck.mode">Проверка текста</label>
                 <select id="textPreservation" aria-describedby="textPolicyHelp">
                     <option value="" data-i18n="textcheck.disabled">Не блокировать по тексту</option>
@@ -129,7 +147,7 @@
             <div class="progress-track"><div id="progressBar" class="progress-value"></div></div>
             <div id="progressText" class="field-help">Подготовка…</div>
         </div>
-        <div id="status" class="status-bar" hidden></div>
+        <div id="status" class="status-bar" role="status" aria-live="polite" hidden></div>
     </div>
 
     <div class="card batch-progress" id="batchProgressCard" hidden>
@@ -137,6 +155,7 @@
             <h2>Пакетная конвертация</h2>
             <span id="batchProgressState" class="field-help"></span>
         </div>
+        <details id="batchFilters" class="conversion-disclosure"><summary>Найти файлы и отфильтровать список</summary>
         <div class="form-grid">
             <div><label for="batchStateFilter">Состояние файлов</label>
                 <select id="batchStateFilter">
@@ -152,20 +171,12 @@
         </div>
         <p id="batchFilterSummary" class="field-help" role="status"></p>
         <button type="button" class="btn-link" id="batchFilterReset">Сбросить фильтры</button>
+        </details>
         <p id="batchFilterEmpty" class="field-help" hidden>Нет файлов, соответствующих фильтрам.</p>
         <ul class="batch-progress-list" id="batchProgressList"></ul>
         <button type="button" id="batchArchiveBtn" hidden>Скачать готовые результаты ZIP</button>
         <button type="button" id="batchCancelBtn" hidden>Отменить оставшиеся файлы</button>
         <p class="field-help">Фильтры меняют только список на экране. ZIP содержит все готовые результаты пакета и список статусов файлов; доступен после завершения пакета. Ошибочные файлы не включаются. Лимит результатов — 512 МБ.</p>
-    </div>
-
-    <div class="card conversion-history">
-        <div class="card-head">
-            <h2>История конвертаций</h2>
-            <button type="button" class="btn-link" id="historyRefresh">Обновить</button>
-        </div>
-        <p class="field-help">Исходники и результаты хранятся локально один час. Эта же очередь доступна через кнопку «Задачи» на любой странице.</p>
-        <div id="historyList" aria-live="polite"></div>
     </div>
 
     <div class="card conversion-result" id="resultCard" hidden>
@@ -176,14 +187,20 @@
             </div>
             <span class="quality-badge" id="qualityBadge">Ожидает проверки</span>
         </div>
+        <div class="form-actions result-actions">
+            <button type="button" id="downloadBtn">Скачать результат</button>
+            <button type="button" class="btn-secondary" id="anotherBtn">Конвертировать ещё</button>
+        </div>
         <div class="result-summary">
             <div><span>Файл</span><strong id="resultFilename">—</strong></div>
             <div><span>Режим</span><strong id="resultMode">—</strong></div>
-            <div><span>Маршрут</span><strong id="resultRoute">—</strong></div>
+            <div data-expert><span>Маршрут</span><strong id="resultRoute">—</strong></div>
         </div>
         <p class="field-help" id="qualityGateSummary" role="status" hidden></p>
         <p class="field-help" id="objectGateSummary" role="status" hidden></p>
         <p class="field-help" id="textGateSummary" role="status" hidden></p>
+        <p class="field-help" id="emphasisGateSummary" role="status" hidden></p>
+        <p class="field-help" id="formulaGateSummary" role="status" hidden></p>
         <div id="issuesSection" hidden>
             <h3>Что требует внимания</h3>
             <ul class="issue-list" id="issueList"></ul>
@@ -194,8 +211,8 @@
                 <p class="field-help">Фрагмент после импорта HTML. Оформление и расположение на странице здесь не показаны.</p>
             </section>
         </div>
-        <div id="comparisonSection" hidden>
-            <h3>Сохранность структуры</h3>
+        <details id="comparisonSection" class="conversion-disclosure" hidden>
+            <summary>Сохранность структуры и изменения объектов</summary>
             <div class="retention-grid" id="retentionGrid"></div>
             <p class="field-help inspection-message" id="comparisonMessage"></p>
             <div id="objectDiff" class="object-diff" hidden>
@@ -204,7 +221,7 @@
                 <div class="retention-grid" id="objectDiffMetrics"></div>
                 <ul class="issue-list" id="objectDiffList"></ul>
             </div>
-        </div>
+        </details>
         <div id="previewSection" hidden>
             <h3>Сравнение страниц</h3>
             <div class="preview-toolbar">
@@ -225,11 +242,18 @@
             </div>
             <p class="field-help" id="previewHint">Листайте стрелками ← →. Красным подсвечиваются визуальные отличия результата.</p>
         </div>
-        <div class="form-actions result-actions">
-            <button type="button" id="downloadBtn">Скачать результат</button>
-            <button type="button" class="btn-secondary" id="anotherBtn">Конвертировать ещё</button>
-        </div>
+
     </div>
+    <details class="card conversion-history" id="conversionHistory">
+        <summary>История пакетов <span id="historyCount" class="field-help"></span></summary>
+        <div class="card-head">
+            <h3>Сохранённые пакеты</h3>
+            <button type="button" class="btn-link" id="historyRefresh">Обновить</button>
+        </div>
+        <p class="field-help">Исходники и результаты хранятся локально один час. Эта же очередь доступна через кнопку «Задачи» на любой странице.</p>
+        <div id="historyList" aria-live="polite"></div>
+    </details>
+
 </section>
 {% endblock %}
 

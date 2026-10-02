@@ -1,6 +1,6 @@
 # AGENTS.md
 
-TextAlchemy — Python toolkit for scientific/educational document processing. Single Python package, single CLI entry point.
+TextAlchemy — Python toolkit for scientific/educational document processing. Application plus an independently installable document library; one application CLI entry point.
 
 ## Layout
 
@@ -11,9 +11,10 @@ Start with these stable entry points:
 | Work | Entry point |
 |---|---|
 | CLI parsing and dispatch | `src/textalchemy/__main__.py`, handlers under `src/textalchemy/cli/` |
-| Document types and operations | `src/textalchemy/core/`, `src/textalchemy/pipeline/` |
+| Document structures | Independent OpenDoc project at `C:/project/opendoc`; bundled dependency in `vendor/opendoc/`; compatibility imports under `src/textalchemy/core/` |
+| Application operations | `src/textalchemy/pipeline/` |
 | Format import/export | `src/textalchemy/formats/`, `src/textalchemy/convert/` |
-| Template generation | `src/textalchemy/generate/` |
+| Template generation | In-memory API under `src/textalchemy/templating/`; application file/export adapters under `src/textalchemy/generate/` |
 | Web behavior | `src/textalchemy/web/routes/`, `services/`, `static/js/pages/` |
 | Reproducible fixtures | [Corpus](tests/corpus/README.md), [Office provenance](tests/corpus/office/README.md) |
 
@@ -27,7 +28,7 @@ Always run via `uv` so the lockfile-resolved env is used.
 - Minimal install: `uv sync` (core: yaml, platformdirs, pypdf, jinja2, tqdm). Heavy deps live in extras — `pdf` (pymupdf, pdf2docx), `docx` (python-docx), `pptx` (python-pptx, lxml, Pillow), `epub` (ebooklib, bs4), `web` (fastapi, uvicorn, python-multipart, sqlalchemy), `ocr` (pytesseract, easyocr, paddleocr, paddlepaddle). Readers/converters lazy-import their backends and never force them at `import textalchemy`.
 - Lint: `uv run ruff check` (configuration is defined in `pyproject.toml`)
 - Format: `uv run ruff check --fix && uv run ruff format`
-- Test: `uv run pytest tests/ -v --tb=short` (or `--cov=textalchemy` for coverage). Coverage threshold `--cov-fail-under=80` is enforced whenever `--cov` is active (see `pyproject.toml`).
+- Test: `uv run pytest tests/ -v --tb=short` (or `--cov=textalchemy --cov=opendoc` for coverage). Coverage threshold `--cov-fail-under=80` is enforced whenever `--cov` is active (see `pyproject.toml`).
 - Single test: `uv run pytest tests/test_pipeline/test_runner.py::test_run_chained_ingest_extract -v`
 - Pipeline run: `uv run textalchemy run pipeline.yaml` (or `textalchemy run --list`, `--json` for JSON output)
 - Most commands support `--json` for structured machine-readable output (`extract`, `convert`, `convert-file`, `plan`, `inspect`, `template-check`, `pptx2html`, `gost`, `stats`, `generate`, `bibtex`, `recognize`, `match`, `run`)
@@ -43,7 +44,9 @@ Documentation lives in [guide](docs/guide/index.md), [generated reference](docs/
 
 Generated documentation also includes [user-guide navigation](docs/reference/user-guide.md), [code navigator](docs/reference/code.md) and [Web routes](docs/reference/web-routes.md). Regenerate after Python source, Web file inventory, test imports or guide headings change. The navigator uses static AST inspection; test links are not coverage claims. Use `uv run python -m tools.clean` to preview reproducible cache cleanup, and add `--apply` to remove only that allowlist; never clean the entire `.textalchemy` data directory.
 
-`.github/workflows/ci.yml` runs on Python 3.11/3.12/3.13: `uv sync --all-extras` → `uv run ruff check` → `uv run pytest tests/ --cov=textalchemy --cov-report=xml` (uploads to codecov). Required order: install → lint → test.
+The application serves its bundled documentation at `/help/`. `tools.docs generate` builds the site and updates `src/textalchemy/web/assets/documentation.zip`; `build` and `check` reject a stale bundle. Regenerate after documentation or theme changes as well. The archive is a distribution asset, not a user-data cache; runtime does not require MkDocs or access to the source checkout.
+
+`.github/workflows/ci.yml` runs on Python 3.11/3.12/3.13: `uv sync --all-extras` → `uv run ruff check` → `uv run pytest tests/ --cov=textalchemy --cov=opendoc --cov-report=xml` (uploads to codecov). Required order: install → lint → test. A separate job verifies the bundled document wheel without the application. OpenDoc owns its source, tests and build CI. See [library workflow](docs/development/document-library.md).
 
 ## Operation contract (pipeline/)
 

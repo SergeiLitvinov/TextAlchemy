@@ -1,22 +1,23 @@
 <nav class="side-nav">
     <div class="nav-section nav-section-primary">
-        <span class="nav-label">Задачи</span>
+        <span class="nav-label">Документы</span>
         <a href="/" {% if active == 'index' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-home"/></svg><span data-i18n="nav.overview">Обзор</span></a>
         <a href="/convert" {% if active == 'convert' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-convert"/></svg><span data-i18n="nav.convert">Преобразовать</span></a>
         <a href="/generate" {% if active == 'generate' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-template"/></svg><span data-i18n="nav.generate">Создать по шаблону</span></a>
         <a href="/recognize" {% if active == 'recognize' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-scan"/></svg><span data-i18n="nav.recognize">Распознать скан</span></a>
-        <a href="/reports" {% if active == 'reports' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-quality"/></svg><span data-i18n="nav.quality">Проверить качество</span></a>
-        <a href="/pipeline" {% if active == 'pipeline' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-flow"/></svg><span data-i18n="nav.automate">Автоматизировать</span></a>
     </div>
     <div class="nav-section">
-        <span class="nav-label">Организовать библиотеку</span>
+        <span class="nav-label">Библиотека</span>
         <a href="/bibliography" {% if active == 'bibliography' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-library"/></svg><span data-i18n="nav.sources">Источники</span></a>
         <a href="/matching" {% if active == 'matching' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-link"/></svg><span data-i18n="nav.match">Связать файлы</span></a>
+        <a href="/reports" {% if active == 'reports' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-quality"/></svg><span data-i18n="nav.collection">Состояние коллекции</span></a>
         <a href="/export" {% if active == 'export' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-export"/></svg><span data-i18n="nav.export">Экспортировать</span></a>
     </div>
     <div class="nav-section nav-section-secondary">
-        <span class="nav-label">Дополнительно</span>
+        <span class="nav-label">Инструменты</span>
+        <a href="/pipeline" {% if active == 'pipeline' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-flow"/></svg><span data-i18n="nav.automate">Автоматизировать</span></a>
         <a href="/extract" {% if active == 'extract' %}class="active" aria-current="page"{% endif %}><svg class="ui-icon" aria-hidden="true"><use href="#icon-extract"/></svg><span data-i18n="nav.extract">Извлечь содержимое</span></a>
+        <a href="/help/"><svg class="ui-icon" aria-hidden="true"><use href="#icon-library"/></svg><span data-i18n="nav.help">Руководство</span></a>
     </div>
     <button class="privacy-note" type="button" data-task-center-open>
         <span aria-hidden="true">●</span><span><strong>Локально и приватно</strong><small>Конвертации — 1 час · наборы и шаблоны — постоянно</small></span>

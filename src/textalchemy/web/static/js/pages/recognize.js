@@ -1,92 +1,67 @@
 "use strict";
 
-import {createOcrEditor} from './recognize/editor.js';
-
-const $ = (id) => document.getElementById(id);
-const dropZone = $('dropZone');
-const fileInput = $('fileInput');
+const version = new URL(import.meta.url).search;
+const {createOcrEditor} = await import('./recognize/editor.js' + version);
+const {createIngestInput} = await import('../components/ingest-input.js' + version);
+const $ = id => document.getElementById(id);
 const resultArea = $('result');
 const editor = createOcrEditor($, setStatus);
+let busy = false;
 
 function setStatus(message, type) {
     const element = $('status');
     element.hidden = !message;
-    if (!message) return;
     element.className = 'status-bar ' + (type || 'info');
     element.textContent = message;
 }
 
-function selectScenario(button) {
-    document.querySelectorAll('.scenario-option').forEach((option) => {
-        const selected = option === button;
-        option.classList.toggle('active', selected);
-        option.setAttribute('aria-checked', String(selected));
-    });
-    $('scenario').value = button.dataset.scenario;
+function syncScenario(file = input.getFile()) {
+    const image = file && !file.name.toLowerCase().endsWith('.pdf');
+    $('scenarioOptions').hidden = Boolean(image);
+    const hints = {
+        fast: 'Извлекаем только существующий текст. OCR-движок не требуется; текст изображений пропускается.',
+        structure: 'Сохраняем существующий текст, OCR используется для сканов при наличии движка.',
+        scan: 'Требуется установленный OCR-движок. Распознаём все страницы, даже если текстовый слой уже есть.',
+    };
+    $('scenarioHint').textContent = image ? 'Для изображения используется OCR. Требуется установленный движок распознавания.' : hints[$('scenario').value];
 }
 
-document.querySelectorAll('.scenario-option').forEach((button) => {
-    button.addEventListener('click', () => selectScenario(button));
-});
+const input = createIngestInput($, setStatus, {extensions: ['.png', '.jpg', '.jpeg', '.pdf'], onSelected: syncScenario});
+$('scenario').addEventListener('change', () => syncScenario());
 
-dropZone.addEventListener('click', () => fileInput.click());
-dropZone.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        fileInput.click();
-    }
-});
-dropZone.addEventListener('dragover', (event) => {
-    event.preventDefault();
-    dropZone.classList.add('dragover');
-});
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
-dropZone.addEventListener('drop', (event) => {
-    event.preventDefault();
-    dropZone.classList.remove('dragover');
-    if (event.dataTransfer.files[0]) handleFile(event.dataTransfer.files[0]);
-});
-fileInput.addEventListener('change', () => {
-    if (fileInput.files[0]) handleFile(fileInput.files[0]);
-});
-
-async function handleFile(file) {
-    if (!editor.canReplace()) return;
+async function process() {
+    const file = input.getFile();
+    if (!file || busy || !editor.canReplace()) return;
+    busy = true;
     editor.setBusy(true);
+    input.setBusy(true);
     setStatus(`Обрабатываем «${file.name}»…`, 'info');
-    dropZone.classList.add('is-processing');
     const form = new FormData();
     form.append('file', file);
     form.append('lang', $('lang').value);
     form.append('gpu', $('gpu').checked ? 'true' : 'false');
     form.append('mode', $('mode').value);
-    form.append('scenario', $('scenario').value);
+    form.append('scenario', file.name.toLowerCase().endsWith('.pdf') ? $('scenario').value : 'scan');
     try {
-        const data = await api('/api/recognize', {method: 'POST', formData: form});
+        const data = await window.api('/api/recognize', {method: 'POST', formData: form});
         if (!data.success) throw new Error(data.error || 'Не удалось распознать файл.');
         editor.accept(data);
-        const confidence = data.confidence ? ` · уверенность ${(data.confidence * 100).toFixed(1)}%` : '';
-        setStatus(`Обработка завершена${confidence}`, 'success');
-        toast('Текст готов к проверке', 'success');
+        const confidence = Number.isFinite(data.confidence) ? ` · уверенность ${(data.confidence * 100).toFixed(1)}%` : '';
+        setStatus(`Текст готов к проверке${confidence}`, 'success');
+        resultArea.focus({preventScroll: false});
     } catch (error) {
-        setStatus(error.message || 'Не удалось распознать файл. Проверьте формат и настройки.', 'error');
+        setStatus(error.message || 'Не удалось распознать файл. Файл и настройки сохранены — повторите обработку.', 'error');
     } finally {
-        dropZone.classList.remove('is-processing');
         editor.setBusy(false);
+        input.setBusy(false);
+        busy = false;
     }
 }
 
+$('processBtn').addEventListener('click', process);
 $('copyBtn').addEventListener('click', async () => {
-    if (!resultArea.value) {
-        toast('Нечего копировать', 'warning');
-        return;
-    }
-    try {
-        await navigator.clipboard.writeText(resultArea.value);
-        toast('Текст скопирован', 'success');
-    } catch (_) {
-        resultArea.select();
-        document.execCommand('copy');
-        toast('Текст скопирован', 'success');
-    }
+    if (!resultArea.value) return;
+    try { await navigator.clipboard.writeText(resultArea.value); }
+    catch (_) { resultArea.select(); document.execCommand('copy'); }
+    window.toast('Текст скопирован', 'success');
 });

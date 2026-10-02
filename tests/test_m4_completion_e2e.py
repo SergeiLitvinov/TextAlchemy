@@ -133,6 +133,8 @@ def test_selected_results_and_cancellation(e2e_server, page, m4_client, tmp_path
     store.set_job("selection", {"job_id": "selection", "files": entries, "mode": "balanced", "target_format": "txt"})
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(e2e_server + "/convert")
+    fixtures._wait_convert_ready(page)
+    fixtures._open_batch_history(page, "selection")
     page.locator("[data-archive-task=choice1]").check()
     with page.expect_download() as download:
         page.locator("[data-archive-selected]").click()

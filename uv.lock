@@ -2040,6 +2040,23 @@ wheels = [
 ]
 
 [[package]]
+name = "opendoc"
+version = "0.1.0"
+source = { path = "vendor/opendoc/opendoc-0.1.0-py3-none-any.whl" }
+wheels = [
+    { filename = "opendoc-0.1.0-py3-none-any.whl", hash = "sha256:a1b608ff405776a02260b2d9077574a43263f7e481e7c5080a12bd28d9425c1f" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "lxml", marker = "extra == 'math'", specifier = ">=5.0.0" },
+    { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6,<2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.0" },
+]
+provides-extras = ["math", "dev", "docs"]
+
+[[package]]
 name = "opt-einsum"
 version = "3.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3437,6 +3454,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fonttools" },
     { name = "jinja2" },
+    { name = "opendoc" },
     { name = "platformdirs" },
     { name = "pypdf" },
     { name = "pyyaml" },
@@ -3504,6 +3522,7 @@ requires-dist = [
     { name = "lxml", marker = "extra == 'pptx'", specifier = ">=5.0.0" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6.1,<2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
+    { name = "opendoc", path = "vendor/opendoc/opendoc-0.1.0-py3-none-any.whl" },
     { name = "paddleocr", marker = "extra == 'ocr'", specifier = ">=3.4.0" },
     { name = "paddlepaddle", marker = "python_full_version < '3.14' and extra == 'ocr'", specifier = ">=3.3.1" },
     { name = "pdf2docx", marker = "extra == 'pdf'", specifier = ">=0.2.0" },

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import math
 import re
 from html import escape
@@ -12,6 +11,11 @@ from urllib.parse import quote, urlsplit
 
 from textalchemy.convert.color_preflight import preflight_colors
 from textalchemy.convert.font_preflight import prepare_fonts
+from textalchemy.convert.html_layout import HtmlLayoutStage, geometry_styles
+from textalchemy.convert.html_normalize import HtmlNormalizeStage
+from textalchemy.convert.html_resources import HtmlResourceStage, image_data_uri
+from textalchemy.convert.html_verify import publish_verified_html
+from textalchemy.convert.stages import StageContext
 from textalchemy.core.color import ColorValue, color_to_css
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.document_model import (
@@ -22,7 +26,6 @@ from textalchemy.core.document_model import (
     FormulaFormat,
     Image,
     Paragraph,
-    Resource,
     Section,
     Table,
     TextRun,
@@ -80,7 +83,6 @@ _MATHML_ELEMENTS = {
     "semantics",
 }
 _COLOR_RE = re.compile(r"^(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]{1,24})$")
-_MEDIA_TYPE_RE = re.compile(r"^image/[a-zA-Z0-9.+-]+$")
 _HEADING_RE = re.compile(r"^(?:heading|заголовок)\s*([1-6])$", re.IGNORECASE)
 
 
@@ -90,9 +92,27 @@ def write_html_model(document: DocumentModel, output_path: str | Path) -> Conver
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
     report = ConversionReport(output)
+    normalized = HtmlNormalizeStage().execute(document, StageContext(output))
+    report.issues.extend(normalized.report.issues)
+    report.metrics.update(normalized.report.metrics)
+    if not report.success:
+        return report
+    document = normalized.value
+    prepared = HtmlResourceStage().execute(document, StageContext(output))
+    report.issues.extend(prepared.report.issues)
+    report.metrics.update(prepared.report.metrics)
+    if not report.success:
+        return report
+    document = prepared.value
     document = prepare_fonts(document, report)
     preflight_colors(document, report, target="html")
-    renderer = _HtmlRenderer(document, report)
+    layout = HtmlLayoutStage().execute(document, StageContext(output))
+    report.issues.extend(layout.report.issues)
+    report.metrics.update(layout.report.metrics)
+    if not report.success:
+        return report
+    document = layout.value
+    renderer = _HtmlRenderer(document, report, html_prepared=True)
     body = renderer.render()
     font_styles = embedded_font_stylesheet(document, report)
     title = escape(str(document.metadata.get("title") or "Document"))
@@ -105,9 +125,7 @@ def write_html_model(document: DocumentModel, output_path: str | Path) -> Conver
         f"</head>\n<body>\n{body}\n</body>\n</html>\n"
     )
     try:
-        from textalchemy.core.io import atomic_write_text
-
-        atomic_write_text(output, html, encoding="utf-8")
+        publish_verified_html(html, output, report)
     except OSError as error:
         report.add(IssueSeverity.ERROR, "html-write", str(error))
         return report
@@ -119,9 +137,10 @@ def write_html_model(document: DocumentModel, output_path: str | Path) -> Conver
 
 
 class _HtmlRenderer:
-    def __init__(self, document: DocumentModel, report: ConversionReport):
+    def __init__(self, document: DocumentModel, report: ConversionReport, *, html_prepared: bool = False):
         self.document = document
         self.report = report
+        self.html_prepared = html_prepared
         self.metrics = {"paragraphs": 0, "tables": 0, "images": 0, "formulas": 0}
         self.embedded_resources: set[str] = set()
 
@@ -182,6 +201,8 @@ class _HtmlRenderer:
         header = self._blocks(section.headers, f"sections[{index}].headers")
         main = self._blocks(section.blocks, f"sections[{index}].blocks")
         footer = self._blocks(section.footers, f"sections[{index}].footers")
+        header_html = f'<header class="ta-header">{header}</header>' if header else ""
+        footer_html = f'<footer class="ta-footer">{footer}</footer>' if footer else ""
         section_styles: list[str] = []
         background = _metadata_color(section.properties.get("background_color"), css=True) or color_to_css(
             section.properties.get("background_fill")
@@ -192,9 +213,9 @@ class _HtmlRenderer:
         anchor_attr = f' id="{escape(str(anchor), quote=True)}"' if anchor else ""
         return (
             f'<section class="ta-section ta-section-{index}"{anchor_attr}{_style_attribute(section_styles)}>'
-            f'<header class="ta-header">{header}</header>'
+            f"{header_html}"
             f'<main class="ta-main">{main}</main>'
-            f'<footer class="ta-footer">{footer}</footer>'
+            f"{footer_html}"
             "</section>"
         )
 
@@ -226,7 +247,7 @@ class _HtmlRenderer:
         shape = pptx_props.get("shape") if isinstance(pptx_props, dict) else None
         chart = pptx_props.get("chart") if isinstance(pptx_props, dict) else None
         if isinstance(shape, dict) and paragraph.box is not None:
-            if not (paragraph.box.x or paragraph.box.y):
+            if not self.html_prepared and not (paragraph.box.x or paragraph.box.y):
                 styles.extend(("position:absolute", "left:0pt", "top:0pt"))
             uri = _shape_svg_uri(shape)
             if uri is not None:
@@ -289,10 +310,15 @@ class _HtmlRenderer:
         content = escape(run.text)
         styles = self._text_style(run.style)
         attributes = _style_attribute(styles)
+        normalized = run.properties.get("html_normalize", {}) if self.html_prepared else {}
+        anchor = normalized.get("anchor_id")
+        link = normalized.get("link", run.link)
+        if anchor:
+            attributes += f' id="{escape(anchor, quote=True)}"'
         if run.style.language:
             attributes += f' lang="{escape(run.style.language, quote=True)}"'
-        if run.link:
-            href = _safe_link(run.link)
+        if link:
+            href = _safe_link(link)
             if href is None:
                 self.report.add(IssueSeverity.LOSS, "hyperlink", "unsafe hyperlink scheme was removed", location)
             else:
@@ -326,7 +352,7 @@ class _HtmlRenderer:
             self.report.add(IssueSeverity.ERROR, "image", f"resource {image.resource_id!r} not found", location)
             return escape(image.alt_text or f"[{image.resource_id}]")
         try:
-            uri = self._resource_uri(resource)
+            uri = image_data_uri(resource)
         except (OSError, ValueError) as error:
             self.report.add(IssueSeverity.ERROR, "image", str(error), location)
             return escape(image.alt_text or f"[{resource.filename or resource.id}]")
@@ -334,18 +360,6 @@ class _HtmlRenderer:
         styles = self._geometry_style(image.box, image.properties, positioned=block_level)
         tag = f'<img src="{uri}" alt="{escape(image.alt_text, quote=True)}"{_style_attribute(styles)} loading="eager">'
         return f'<div class="ta-image">{tag}</div>' if block_level else tag
-
-    def _resource_uri(self, resource: Resource) -> str:
-        if not _MEDIA_TYPE_RE.fullmatch(resource.media_type):
-            raise ValueError(f"resource {resource.id!r} is not an image ({resource.media_type})")
-        if resource.data is not None:
-            raw = resource.data
-        elif resource.source is not None:
-            raw = Path(resource.source).read_bytes()
-        else:
-            raise ValueError(f"resource {resource.id!r} has no content")
-        encoded = base64.b64encode(raw).decode("ascii")
-        return f"data:{resource.media_type};base64,{encoded}"
 
     def _table(self, table: Table, location: str) -> str:
         self.metrics["tables"] += 1
@@ -362,7 +376,9 @@ class _HtmlRenderer:
                 cells.append(f"<td{attributes}>{content}</td>")
             rows.append("<tr>" + "".join(cells) + "</tr>")
         styles = self._geometry_style(table.box, table.properties, positioned=True)
-        return f"<table{_style_attribute(styles)}><tbody>{''.join(rows)}</tbody></table>"
+        anchor = table.properties.get("anchor_id")
+        anchor_attr = f' id="{escape(str(anchor), quote=True)}"' if anchor else ""
+        return f"<table{anchor_attr}{_style_attribute(styles)}><tbody>{''.join(rows)}</tbody></table>"
 
     @staticmethod
     def _text_style(style: TextStyle) -> list[str]:
@@ -391,38 +407,10 @@ class _HtmlRenderer:
             values.append(f"background-color:{background}")
         return values
 
-    @staticmethod
-    def _box_style(box: Box | None, *, positioned: bool) -> list[str]:
-        if box is None:
-            return []
-        values: list[str] = []
-        if box.width > 0:
-            values.append(f"width:{box.width:g}pt")
-        if box.height > 0:
-            values.append(f"height:{box.height:g}pt")
-        if positioned and (box.x or box.y):
-            values.extend(("position:absolute", f"left:{box.x:g}pt", f"top:{box.y:g}pt"))
-        if box.rotation:
-            values.append(f"transform:rotate({box.rotation:g}deg)")
-            values.append("transform-origin:center")
-        return values
-
-    @staticmethod
-    def _geometry_style(box: Box | None, properties: Any, *, positioned: bool) -> list[str]:
-        affine = _pptx_affine(properties) if positioned else None
-        if affine is None:
-            return _HtmlRenderer._box_style(box, positioned=positioned)
-        matrix, width, height = affine
-        a, b, c, d, e, f = matrix
-        return [
-            f"width:{width:g}pt",
-            f"height:{height:g}pt",
-            "position:absolute",
-            "left:0pt",
-            "top:0pt",
-            f"transform:matrix({a:g},{b:g},{c:g},{d:g},{e:g},{f:g})",
-            "transform-origin:0 0",
-        ]
+    def _geometry_style(self, box: Box | None, properties: Any, *, positioned: bool) -> list[str]:
+        if self.html_prepared:
+            return list(properties["html_layout"]["styles"])
+        return geometry_styles(box, properties, positioned=positioned)
 
     def _report_missing_shape(self, shape: dict[str, Any], location: str) -> None:
         prst = shape.get("prst")
@@ -436,26 +424,6 @@ def _style_attribute(styles: list[str]) -> str:
     if not styles:
         return ""
     return f' style="{escape(";".join(styles), quote=True)}"'
-
-
-def _pptx_affine(properties: Any) -> tuple[list[float], float, float] | None:
-    if not hasattr(properties, "get"):
-        return None
-    pptx = properties.get("pptx")
-    transform = pptx.get("transform") if isinstance(pptx, dict) else None
-    if not isinstance(transform, dict):
-        return None
-    matrix = transform.get("matrix")
-    width = transform.get("width_pt")
-    height = transform.get("height_pt")
-    if not isinstance(matrix, list) or len(matrix) != 6:
-        return None
-    values = [float(value) for value in matrix if isinstance(value, (int, float))]
-    if len(values) != 6 or not all(math.isfinite(value) for value in values):
-        return None
-    if not isinstance(width, (int, float)) or not isinstance(height, (int, float)) or width <= 0 or height <= 0:
-        return None
-    return values, float(width), float(height)
 
 
 _CHART_COLORS = ("#4472C4", "#ED7D31", "#A5A5A5", "#FFC000", "#5B9BD5", "#70AD47")

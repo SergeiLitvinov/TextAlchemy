@@ -6,7 +6,7 @@
     <div>
         <p class="eyebrow">Библиотека</p>
         <h2>Свяжите записи с файлами</h2>
-        <p class="lead">TextAlchemy сравнит названия, авторов и метаданные, предложит понятные имена файлов и ничего не изменит без подтверждения.</p>
+        <p class="lead">Сначала проверьте совпадения с источниками. Затем сохраните отчёт или создайте копии с понятными именами.</p>
     </div>
 </section>
 {% include "partials/library_nav.html" %}
@@ -19,10 +19,9 @@
 
 <section class="card matching-workspace">
     <div class="card-head">
-        <div><p class="eyebrow">Безопасный предпросмотр</p><h3>Проверить предлагаемые связи</h3></div>
-        <span class="quality-badge good">Файлы пока не изменяются</span>
+        <div><h3>Сопоставление документов</h3></div>
     </div>
-    <p class="section-copy">Сначала запустите анализ. Вы увидите исходное имя, найденный источник, новое имя и уверенность совпадения.</p>
+    <p class="section-copy">«Показать предложения» проверяет файлы без изменений. Для копирования снимите флажок «Только проверить».</p>
     <form id="matchForm">
         <details class="advanced-settings matching-settings">
             <summary>Папки и точность сопоставления</summary>
@@ -36,8 +35,8 @@
         <div class="matching-actions">
             <label class="check-option"><input type="checkbox" id="dryRun" checked><span><strong>Только проверить</strong><small>Не копировать и не переименовывать файлы</small></span></label>
             <div class="form-actions">
-                <button type="button" id="previewBtn" class="btn-secondary">Показать предложения</button>
-                <button type="submit" id="runBtn">Выполнить выбранное <span aria-hidden="true">→</span></button>
+                <button type="button" id="previewBtn" class="btn-primary">Показать предложения</button>
+                <button type="submit" id="runBtn" class="btn-secondary">Составить отчёт</button>
             </div>
         </div>
     </form>

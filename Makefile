@@ -7,7 +7,7 @@ test:
 	uv run pytest tests/ -v --tb=short
 
 coverage:
-	uv run pytest tests/ --cov=textalchemy --cov-report=term-missing
+	uv run pytest tests/ --cov=textalchemy --cov=opendoc --cov-report=term-missing
 
 lint:
 	uv run ruff check

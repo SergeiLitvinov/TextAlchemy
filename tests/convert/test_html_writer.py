@@ -310,7 +310,7 @@ def test_write_html_model_uses_exact_pptx_affine_transform(tmp_path):
     assert report.lossless is True
     assert "width:72pt" in html
     assert "height:36pt" in html
-    assert "transform:matrix(0,-2,-2,0,180,180)" in html
+    assert "transform:matrix(0,-2,-2,0,240,240)" in html
     assert "transform-origin:0 0" in html
     assert "transform:rotate(90deg)" not in html
 

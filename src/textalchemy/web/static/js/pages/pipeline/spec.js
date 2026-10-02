@@ -1,9 +1,10 @@
 "use strict";
 
-function normalize(value) {
+function normalize(value, info = {}) {
     if (value === '' || value === undefined || value === null) return undefined;
     if (typeof value !== 'string') return value;
     const trimmed = value.trim();
+    if (!/list|dict|\[\]/i.test(info.annotation || '') && (/\bstr\b|Path/.test(info.annotation || '') || typeof info.default === 'string')) return value;
     if (/^-?\d+$/.test(trimmed)) return Number(trimmed);
     if (/^-?\d*\.\d+$/.test(trimmed)) return Number.parseFloat(trimmed);
     if (trimmed === 'true' || trimmed === 'false') return trimmed === 'true';
@@ -28,7 +29,7 @@ export function buildSpecification(state) {
         if (step.output) result.output = step.output;
         if (step.input) result.input = step.input;
         const params = Object.fromEntries(Object.entries(step.params).flatMap(([name, value]) => {
-            const normalized = normalize(value);
+            const normalized = normalize(value, state.operationMap?.get(step.op)?.params[name]);
             return normalized === undefined ? [] : [[name, normalized]];
         }));
         if (Object.keys(params).length) result.params = params;

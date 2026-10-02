@@ -1,46 +1,48 @@
-"""API извлечения текста/LaTeX из загруженных файлов."""
+"""HTTP-адаптер извлечения текста/LaTeX из загруженных файлов."""
+
 from __future__ import annotations
+
+from typing import Any
+from urllib.parse import quote
 
 from fastapi import File, Form, UploadFile
 from fastapi.responses import Response
 
-from textalchemy.extract import docx_to_latex
-from textalchemy.pipeline.extract import extract_text
-from textalchemy.pipeline.ingest import ingest_file
 from textalchemy.web.app import app
+from textalchemy.web.services.extraction import ExtractedDownload, ExtractionService
+from textalchemy.web.services.extraction import docx_to_latex as docx_to_latex
+from textalchemy.web.services.extraction import extract_text as extract_text
+from textalchemy.web.services.extraction import ingest_file as ingest_file
 from textalchemy.web.workspace import create_web_workspace, save_upload
 
 
+def _service() -> ExtractionService:
+    return ExtractionService(
+        workspace_factory=create_web_workspace,
+        saver=save_upload,
+        ingest=ingest_file,
+        read_text=extract_text,
+        latex_writer=docx_to_latex,
+    )
+
+
 @app.post("/api/extract/text")
-async def api_extract_text(file: UploadFile = File(...), fmt: str = Form("auto")):
-    fname = file.filename or "extracted.txt"
-    workspace = create_web_workspace()
-    try:
-        tmp = await save_upload(workspace, file, fallback=fname)
-        doc = ingest_file(path=tmp)
-        text = extract_text(doc=doc)
-        return {"success": True, "text": text.plain, "filename": file.filename}
-    except Exception as e:  # noqa: BLE001
-        return {"success": False, "error": str(e)}
-    finally:
-        workspace.cleanup()
+async def api_extract_text(file: UploadFile = File(...), fmt: str = Form("auto")) -> dict[str, Any]:
+    return await _service().text(file)
 
 
-@app.post("/api/extract/latex")
+@app.post("/api/extract/latex", response_model=None)
 async def api_extract_latex(
     file: UploadFile = File(...),
     doc_type: str = Form("manuscript"),
-):
-    fname = file.filename or "document.docx"
-    workspace = create_web_workspace()
-    try:
-        tmp = await save_upload(workspace, file, fallback=fname)
-        out = workspace.artifact_path(f"{tmp.stem}.tex")
-        docx_to_latex(tmp, out, doc_type)
-        content = out.read_text(encoding="utf-8")
-        return Response(content=content, media_type="text/plain; charset=utf-8",
-                        headers={"Content-Disposition": f"attachment; filename={out.name}"})
-    except Exception as e:  # noqa: BLE001
-        return {"success": False, "error": str(e)}
-    finally:
-        workspace.cleanup()
+) -> Response | dict[str, Any]:
+    result = await _service().latex(file, doc_type=doc_type)
+    if isinstance(result, ExtractedDownload):
+        return Response(
+            result.content,
+            media_type="text/plain; charset=utf-8",
+            headers={
+                "Content-Disposition": f"attachment; filename=extracted.tex; filename*=UTF-8''{quote(result.filename, safe='')}",
+            },
+        )
+    return result

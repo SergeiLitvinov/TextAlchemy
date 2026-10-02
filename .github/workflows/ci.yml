@@ -7,6 +7,26 @@ on:
     branches: [main, master]
 
 jobs:
+  document-core:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Verify bundled distribution provenance
+        run: python -c "import hashlib,json,pathlib; p=pathlib.Path('vendor/opendoc'); m=json.loads((p/'provenance.json').read_text()); assert hashlib.sha256((p/m['wheel']).read_bytes()).hexdigest()==m['sha256']"
+      - name: Install only the document wheel
+        run: |
+          uv venv --python "${{ matrix.python-version }}" .textalchemy/document-core-env
+          uv pip install --python .textalchemy/document-core-env/bin/python --no-deps --no-index vendor/opendoc/*.whl
+      - name: Verify independence and model contracts
+        run: uv run --no-project --python "${{ matrix.python-version }}" python tools/check_document_core.py --python .textalchemy/document-core-env/bin/python
+
   documentation:
     runs-on: ubuntu-latest
     steps:
@@ -77,7 +97,7 @@ jobs:
 
       - name: Test with pytest
         # Порог покрытия задан в pyproject.toml (`addopts = --cov-fail-under=80`).
-        run: uv run pytest tests/ --cov=textalchemy --cov-report=xml
+        run: uv run pytest tests/ --cov=textalchemy --cov=opendoc --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
@@ -102,4 +122,4 @@ jobs:
       - name: Install Chromium
         run: uv run playwright install --with-deps chromium
       - name: Run browser and accessibility tests
-        run: uv run pytest tests/test_browser_e2e.py -v --tb=short
+        run: uv run pytest tests/test_browser_e2e.py tests/test_web_bibliography_e2e.py tests/test_web_matching_e2e.py tests/test_web_documentation_e2e.py tests/test_web_preview_e2e.py tests/test_web_ingest_e2e.py tests/test_web_conversion_experience.py tests/test_web_pipeline_e2e.py tests/convert/test_html_layout_e2e.py tests/convert/test_html_normalize_e2e.py -v --tb=short

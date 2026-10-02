@@ -1,6 +1,6 @@
 "use strict";
 
-import {conversionApi, downloadResult} from './api.js';
+const {conversionApi, downloadResult} = await import('./api.js' + new URL(import.meta.url).search);
 
 const labels = {queued: 'В очереди…', running: 'Конвертация…', done: 'Готово', error: 'Ошибка', interrupted: 'Прервана', expired: 'Истёк срок'};
 labels.cancelled = 'Отменена';
@@ -29,6 +29,7 @@ export function createHistoryController($, {openPreview, pollJob}) {
     }
 
     function render(jobs) {
+        $('historyCount').textContent = jobs.length ? `· ${jobs.length}` : '· пока пусто';
         const container = $('historyList');
         container.innerHTML = '';
         if (!jobs.length) {
@@ -70,7 +71,7 @@ export function createHistoryController($, {openPreview, pollJob}) {
             const download = task.status === 'done' && task.result_url
                 ? `<button type="button" class="btn-link" data-download-url="${window.esc(task.result_url)}" data-filename="${window.esc(task.filename || task.name)}">Скачать</button>` : '';
             const preview = task.status === 'done' ? `<button type="button" class="btn-link" data-preview-task="${window.esc(task.task_id)}">Просмотр</button>` : '';
-            const error = ['error', 'interrupted'].includes(task.status) && task.error ? `<small>${window.esc(task.error)}</small>` : '';
+            const error = ['queued', 'error', 'interrupted'].includes(task.status) && task.error ? `<small>${window.esc(task.error)}</small>` : '';
             const settings = task.target_format ? `<small>${window.esc(task.target_format.toUpperCase())} · ${window.esc(modeLabels[task.mode] || task.mode || '')}</small>` : '';
             return `<li class="batch-progress-item ${window.esc(task.status)}">${select}<span class="file-name">${window.esc(task.name)}</span>` +
                 `<span class="job-state ${window.esc(task.status)}">${window.esc(labels[task.status] || task.status)}</span>${settings}${download}${preview}${error}</li>`;

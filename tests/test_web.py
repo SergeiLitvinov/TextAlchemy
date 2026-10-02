@@ -26,6 +26,9 @@ def _isolate_task_store(monkeypatch, tmp_path_factory):
     from textalchemy.web.tasks import TaskStore
 
     web_app = importlib.import_module("textalchemy.web.app")
+    data = tmp_path_factory.mktemp("web-data")
+    monkeypatch.setattr(web_app, "data_dir", data)
+    monkeypatch.setattr(web_app, "db", Database(db_path=data / "library.db"))
     store = TaskStore(tmp_path_factory.mktemp("web-tasks"))
     monkeypatch.setattr(web_app, "tasks_store", store)
     from textalchemy.web.routes import convert as convert_route
@@ -74,7 +77,7 @@ def test_dashboard():
     assert 'aria-label="Основная навигация"' in resp.text
     assert 'href="/generate"' in resp.text
     assert 'href="/reports"' in resp.text
-    assert "Проверить качество" in resp.text
+    assert "Состояние коллекции" in resp.text
     assert "Автоматизировать обработку" in resp.text
     assert 'data-task-center-open' in resp.text
     assert '/static/js/components/task-center.js' in resp.text
@@ -1732,6 +1735,7 @@ def test_api_recognize_pdf_unknown_scenario(tmp_path, monkeypatch):
 def test_api_generate_lists_templates(monkeypatch):
     from textalchemy.generate.template import DocumentTemplate
 
+    monkeypatch.setattr('textalchemy.web.routes.generate.custom_templates', lambda: [])
     monkeypatch.setattr(
         "textalchemy.web.routes.generate.list_templates",
         lambda: [DocumentTemplate(name="report", description="Отчёт")],

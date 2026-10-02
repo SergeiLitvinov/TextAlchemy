@@ -1,0 +1,29 @@
+{
+  "project": "OpenDoc",
+  "distribution": "opendoc",
+  "version": "0.1.0",
+  "wheel": "opendoc-0.1.0-py3-none-any.whl",
+  "sha256": "a1b608ff405776a02260b2d9077574a43263f7e481e7c5080a12bd28d9425c1f",
+  "modules": {
+    "opendoc/__init__.py": "7213ffd47e200678fac8a66dd6ac9abae256262f1c7bf7a5fb7d4044a85b71de",
+    "opendoc/color.py": "f0c77af942710df311647941327c10b9a07eb8b2eba114d40d288a4d51edf07f",
+    "opendoc/diagnostics.py": "e1e85ba247baf80e491057824a0a42ad7452736c370411583770c866968d44a9",
+    "opendoc/document_codec.py": "6d608fa00db9fbd8f25a37e4ff5ddf1e03383dfa29d3750b24476799f59a6b9d",
+    "opendoc/document_model.py": "984b3ff875a39686c4cdd5b84867faa92f0618da81d04d0c2dfb8565f10bdc00",
+    "opendoc/emphasis_quality.py": "550dd03b9b840072fa492d191aadd2197237fd42ecd80d72a28e16e086a37762",
+    "opendoc/formula_quality_policy.py": "d4dfcf01b6eb8bbcc0c121541799a682e2d741ee68ccfb0757652cce8c9ed7db",
+    "opendoc/inspection.py": "c272d56171aacd9aeb0c369baa316571defe308c9540ffe33fd39f1bab688d7b",
+    "opendoc/mathml.py": "fcd4306eda3d49c60b822837e3ea6e04bd4dd4af41d360260347b7bb7c0a15a0",
+    "opendoc/object_inventory.py": "e85ff81008cfdc62d91a04060584352e72d3a06ed0b846500aab03ff0f239d98",
+    "opendoc/object_matching.py": "65271b17ef5a8e12729e579b11610eab06888fdab91a46ec5b29bc8b097bd8fd",
+    "opendoc/object_quality_policy.py": "690f84ba637242ea5e85de5bd113dff5aef90706110e8bc5220f546834d146b0",
+    "opendoc/properties.py": "1910a2cd7969707dca254c050e61adc40fbf2685c2987ae193e3980638f3e7ef",
+    "opendoc/quality_policy.py": "8a3ac63cd83a5b0f3bb09dfda957a9a6420ef707660754b893cca53685a5b67f",
+    "opendoc/storage.py": "d8dd5136093203f97836e2ee3f8d23e5697459f73f9e8494352891b6a491cab6",
+    "opendoc/text_edit_budget.py": "8f9abf6817d6e4b2b4f6e1626bc7a601ce494e09469c6559dc4e75ae4baee819",
+    "opendoc/text_flow.py": "247ce20aa613bcabbe7807c8511f6da2f0a549e6a9cac7101bea460237c37e6b",
+    "opendoc/text_quality_policy.py": "26a1e8f61efeb7a784d4a89ee0528b72ef5915bad4cd68b66c746347e28a1e28",
+    "opendoc/units.py": "db16db372d44665270041fbb1a7a212205cec05106bfdf0f109a432141d9ae33"
+  },
+  "update": "uv run python -m tools.update_document_core --wheel path/to/opendoc.whl"
+}

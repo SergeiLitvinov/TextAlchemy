@@ -6,9 +6,12 @@
 Такая схема переживает перезапуск сервера и не держит байты результата
 в памяти процесса.
 """
+
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -22,6 +25,7 @@ from textalchemy.core.artifacts import safe_artifact_filename
 from textalchemy.core.io import atomic_copy, atomic_write_text
 
 DEFAULT_TASK_TTL_SECONDS = 3600
+logger = logging.getLogger(__name__)
 _IDENTIFIER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 
 
@@ -127,6 +131,30 @@ class TaskStore:
             directory.mkdir(parents=True, exist_ok=True)
             return directory
 
+    def preview_revision_dir(self, task_id: str, *, expected: dict[str, Any]) -> Path | None:
+        """Кэш конкретного готового результата создаётся только при актуальном состоянии."""
+        with self._lock:
+            if not _valid_identifier(task_id):
+                return None
+            current = self._read_meta_locked(task_id)
+            if current != expected or not current or current.get("status") != "done" or self._is_stale_locked(current):
+                return None
+            revision = hashlib.sha256(json.dumps(current, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+            directory = self._task_dir(task_id) / "preview" / revision
+            directory.mkdir(parents=True, exist_ok=True)
+            return directory
+
+    def discard_preview_revision(self, task_id: str, directory: Path) -> None:
+        """Убрать устаревший кэш, сохранив файлы и кэш нового результата."""
+        with self._lock:
+            root = (self._task_dir(task_id) / "preview").resolve()
+            candidate = directory.resolve()
+            if candidate.parent != root:
+                raise ValueError("preview revision is outside task cache")
+            shutil.rmtree(candidate, ignore_errors=True)
+            if self._read_meta_locked(task_id) is None:
+                self._delete_locked(task_id)
+
     def list_tasks(self, limit: int | None = 100) -> list[dict[str, Any]]:
         """Список задач (без протухших), свежие первыми; каждая содержит ``task_id``."""
         with self._lock:
@@ -165,9 +193,22 @@ class TaskStore:
             current = self._read_meta_locked(task_id)
             if current is None or current != expected or self._is_stale_locked(current):
                 return False
-            self._clear_result_locked(task_id)
             self._write_meta_locked(task_id, {**current, **updates, "status": "queued", "_ts": time.time()})
+            try:
+                self._clear_result_locked(task_id)
+            except OSError:
+                # Метаданные уже queued и не публикуют старый результат. Его замена/TTL завершит очистку.
+                logger.warning("Не удалось полностью очистить прежний результат задачи %s", task_id, exc_info=True)
             return True
+
+    def note_queue_failure(self, task_id: str, error: str) -> None:
+        """Пояснить отказ очереди, не перезаписывая уже запущенную или завершённую задачу."""
+        with self._lock:
+            if not _valid_identifier(task_id):
+                return
+            current = self._read_meta_locked(task_id)
+            if current is not None and current.get("status") == "queued":
+                self._write_meta_locked(task_id, {**current, "error": f"Ожидает перезапуска очереди: {error}"})
 
     def request_cancel(self, task_id: str, *, removed_from_queue: bool) -> str | None:
         """Do not overwrite a result completed between selection and cancellation."""
@@ -175,12 +216,13 @@ class TaskStore:
             if not _valid_identifier(task_id):
                 return None
             current = self._read_meta_locked(task_id)
-            if not current or self._is_stale_locked(current) or current.get('status') not in {'queued', 'running', 'cancelling'}:
+            if not current or self._is_stale_locked(current) or current.get("status") not in {"queued", "running", "cancelling"}:
                 return None
-            status = 'cancelled' if removed_from_queue or current['status'] == 'queued' else 'cancelling'
+            status = "cancelled" if removed_from_queue or current["status"] == "queued" else "cancelling"
             self._clear_result_locked(task_id)
-            self._write_meta_locked(task_id, {**current, 'status': status, 'error': None, 'report': None,
-                                             'artifact': None, '_ts': time.time()})
+            self._write_meta_locked(
+                task_id, {**current, "status": status, "error": None, "report": None, "artifact": None, "_ts": time.time()}
+            )
             return status
 
     def _clear_result_locked(self, task_id: str) -> None:

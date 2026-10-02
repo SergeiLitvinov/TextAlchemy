@@ -7,6 +7,20 @@ const stateLabels = {
 };
 
 export function createConversionView($) {
+    const disabled = new Map();
+    function busy(value) {
+        $('conversionWorkspace').dataset.processing = String(value);
+        $('dropZone').setAttribute('aria-disabled', String(value));
+        if (value) {
+            document.querySelectorAll('#conversionSetup select, #conversionSetup input, #conversionSetup button, .experience-switch button, #fileInput, #anotherBtn').forEach(control => {
+                disabled.set(control, control.disabled);
+                control.disabled = true;
+            });
+        } else {
+            for (const [control, previous] of disabled) control.disabled = previous;
+            disabled.clear();
+        }
+    }
     function status(message, type = 'info') {
         const element = $('status');
         element.hidden = !message;
@@ -31,6 +45,7 @@ export function createConversionView($) {
             `<div><span>${window.esc(label)}</span><strong>${window.esc(value)}</strong></div>`
         ).join('');
         const issues = data?.issues || [];
+        $('sourceInspection').open = Boolean(issues.length || data?.valid === false);
         $('inspectionMessage').textContent = issues.length
             ? `Найдено замечаний: ${issues.length}. Они будут учтены в итоговом отчёте.`
             : 'Критичных структурных проблем не найдено.';
@@ -43,7 +58,7 @@ export function createConversionView($) {
                 ? `<button type="button" class="btn-link" data-download-url="${window.esc(task.result_url)}" data-filename="${window.esc(task.filename || task.name)}">Скачать</button>` : '';
             const preview = task.status === 'done'
                 ? `<button type="button" class="btn-link" data-preview-task="${window.esc(task.task_id)}">Просмотр</button>` : '';
-            const error = ['error', 'interrupted'].includes(task.status) && task.error
+            const error = ['queued', 'error', 'interrupted'].includes(task.status) && task.error
                 ? `<small>${window.esc(task.error)}</small>` : '';
             return `<li class="batch-progress-item ${window.esc(task.status)}"><span class="file-name">${window.esc(task.name)}</span>` +
                 `<span class="job-state ${window.esc(task.status)}">${window.esc(label)}</span>${download}${preview}${error}</li>`;
@@ -95,5 +110,5 @@ export function createConversionView($) {
         }
     }
 
-    return {status, progress, inspection, batchProgress, comparison};
+    return {status, progress, inspection, batchProgress, comparison, busy};
 }

@@ -9,16 +9,14 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from opendoc.storage import ArtifactLimitError as ArtifactLimitError
+
 DEFAULT_ARTIFACT_QUOTA = 100 * 1024 * 1024
 _WINDOWS_RESERVED_NAMES = {
     "CON", "PRN", "AUX", "NUL",
     *(f"COM{index}" for index in range(1, 10)),
     *(f"LPT{index}" for index in range(1, 10)),
 }
-
-
-class ArtifactLimitError(ValueError):
-    """Raised when an artifact workspace exceeds its byte quota."""
 
 
 class ArtifactWorkspace:
