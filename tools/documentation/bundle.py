@@ -26,7 +26,8 @@ def site_archive(site: Path) -> bytes:
             entry.compress_type = ZIP_DEFLATED
             entry.external_attr = 0o644 << 16
             data = path.read_bytes()
-            if path.suffix in {".html", ".css", ".js", ".json", ".yaml", ".yml", ".toml", ".md", ".txt", ".svg", ".xml"}:
+            if (path.name in {"LICENSE", "NOTICE"} or
+                    path.suffix in {".html", ".css", ".js", ".json", ".yaml", ".yml", ".toml", ".md", ".txt", ".svg", ".xml"}):
                 data = data.replace(b"\r\n", b"\n")
             archive.writestr(entry, data)
     return output.getvalue()

@@ -41,7 +41,8 @@ print('Independent wheel: model, resources, extensions, persistence and comparis
 
 def verify(python: str) -> None:
     with tempfile.TemporaryDirectory(prefix="document-core-probe-") as directory:
-        subprocess.run([str(Path(python).resolve()), "-I", "-c", PROBE], cwd=directory, check=True)
+        # Resolving a venv symlink on Unix selects the base interpreter and loses installed wheels.
+        subprocess.run([str(Path(python).absolute()), "-I", "-c", PROBE], cwd=directory, check=True)
 
 
 if __name__ == "__main__":

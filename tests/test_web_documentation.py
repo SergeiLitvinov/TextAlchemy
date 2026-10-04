@@ -32,6 +32,15 @@ def test_bundle_is_deterministic_and_rejects_drift(tmp_path: Path, monkeypatch: 
     assert target.read_bytes() == original
 
 
+def test_bundle_normalizes_legal_text_endings_without_modifying_binary_assets(tmp_path: Path) -> None:
+    (tmp_path / "index.html").write_bytes(b"<h1>Guide</h1>\n")
+    (tmp_path / "LICENSE").write_bytes(b"MIT\r\nCopyright\r\n")
+    (tmp_path / "image.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    with ZipFile(__import__("io").BytesIO(bundle.site_archive(tmp_path))) as archive:
+        assert archive.read("LICENSE") == b"MIT\nCopyright\n"
+        assert archive.read("image.png") == b"\x89PNG\r\n\x1a\n"
+
+
 @pytest.mark.parametrize("path", ["../library.db", "/private", "doc/../../private", r"..\private", "\x00"])
 def test_documentation_rejects_paths_outside_bundle(tmp_path: Path, path: str) -> None:
     with pytest.raises(LookupError):
