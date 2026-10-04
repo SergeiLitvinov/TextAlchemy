@@ -39,8 +39,14 @@ def test_inventory_rejects_stale_or_incomplete_licence_evidence(tmp_path, mutati
 def test_ocr_profile_cannot_hide_unknown_licences_in_optional_branches():
     with pytest.raises(ValueError, match="aistudio-sdk.*cuda-toolkit"):
         dependencies.check_profile("ocr")
-    for name in ("base", "web", "docx", "pptx", "html", "docs", "build"):
+    for name in ("base", "web", "html", "docs", "build"):
         dependencies.check_profile(name)
+
+
+@pytest.mark.parametrize("profile", ["docx", "pptx", "pdf", "epub"])
+def test_release_blocks_unresolved_lxml_resources_before_archive_access(tmp_path, profile):
+    with pytest.raises(ValueError, match="Unresolved dependency licences: lxml"):
+        release.check(tmp_path, profile=profile)
 
 
 def test_profiles_include_library_extras_and_all_python_versions():

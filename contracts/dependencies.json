@@ -392,9 +392,24 @@
       "name": "lxml",
       "version": "6.1.1",
       "description": "XML и MathML в библиотеках",
-      "license": "BSD-3-Clause",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/lxml/6.1.1/json"
+      "license": "BSD-3-Clause / ElementTree; UNKNOWN (два XSL-ресурса)",
+      "status": "unresolved",
+      "evidence": "https://raw.githubusercontent.com/lxml/lxml/lxml-6.1.1/LICENSES.txt",
+      "review_notes": {
+        "scope": "Два ресурса присутствуют в установленном wheel; бинарники lxml не входят в релиз TextAlchemy",
+        "owner_request": "https://sergeilitvinov.github.io/opendoc-formats/development/todo/",
+        "owner_task": "OF16",
+        "resources": [
+          {
+            "name": "RNG2Schtrn.xsl",
+            "sha256": "832f84eb1476a77e522bdc1715386b68f24423d35da084cd1dde319aacbba316"
+          },
+          {
+            "name": "XSD2Schtrn.xsl",
+            "sha256": "430791ac820cfb315c820f7c19703609a59f21b8151345ca11e6127efbfaec0d"
+          }
+        ]
+      }
     },
     {
       "name": "markdown",

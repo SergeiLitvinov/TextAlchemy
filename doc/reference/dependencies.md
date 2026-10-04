@@ -8,19 +8,19 @@
 
 ## Профили
 
-| Профиль | Число записей вместе с базой |
-|---|---|
-| `base` | 10 |
-| `build` | 1 |
-| `dev` | 35 |
-| `docs` | 22 |
-| `docx` | 13 |
-| `epub` | 16 |
-| `html` | 15 |
-| `ocr` | 113 |
-| `pdf` | 27 |
-| `pptx` | 15 |
-| `web` | 27 |
+| Профиль | Число записей вместе с базой | Неподтверждённые разрешения |
+|---|---|---|
+| `base` | 10 | не выявлены |
+| `build` | 1 | не выявлены |
+| `dev` | 35 | не выявлены |
+| `docs` | 22 | не выявлены |
+| `docx` | 13 | lxml 6.1.1 |
+| `epub` | 16 | lxml 6.1.1 |
+| `html` | 15 | не выявлены |
+| `ocr` | 113 | aistudio-sdk 0.3.8, cuda-toolkit 13.0.2 |
+| `pdf` | 27 | lxml 6.1.1 |
+| `pptx` | 15 | lxml 6.1.1 |
+| `web` | 27 | не выявлены |
 
 Профили обходят все ветви зависимостей без вычисления маркеров текущего компьютера. `ocr` может включать платформенные CUDA-компоненты; `build` содержит только backend сборки.
 
@@ -76,7 +76,7 @@
 | `jinja2 3.1.6` | Рендеринг шаблонов документов и Web | BSD (metadata classifier) | [declared](https://pypi.org/pypi/jinja2/3.1.6/json) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
 | `lazy-loader 0.5` | Makes it easy to load subpackages and functions on demand. | BSD-3-Clause | [declared](https://pypi.org/pypi/lazy-loader/0.5/json) | ocr |
 | `librt 0.11.0` | Mypyc runtime library | MIT | [declared](https://pypi.org/pypi/librt/0.11.0/json) | dev |
-| `lxml 6.1.1` | XML и MathML в библиотеках | BSD-3-Clause | [declared](https://pypi.org/pypi/lxml/6.1.1/json) | docx, epub, pdf, pptx |
+| `lxml 6.1.1` | XML и MathML в библиотеках | BSD-3-Clause / ElementTree; UNKNOWN (два XSL-ресурса) | [unresolved](https://raw.githubusercontent.com/lxml/lxml/lxml-6.1.1/LICENSES.txt) | docx, epub, pdf, pptx |
 | `markdown 3.10.3` | Python implementation of John Gruber's Markdown. | BSD-3-Clause | [declared](https://pypi.org/pypi/markdown/3.10.3/json) | docs |
 | `markdown-it-py 4.2.0` | Python port of markdown-it. Markdown parsing, done right! | MIT | [declared](https://pypi.org/pypi/markdown-it-py/4.2.0/json) | ocr |
 | `markupsafe 3.0.3` | Safely add untrusted strings to HTML/XML markup. | BSD-3-Clause | [declared](https://pypi.org/pypi/markupsafe/3.0.3/json) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |

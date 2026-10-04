@@ -153,7 +153,7 @@ jobs:
 
       - name: Test with pytest
         # Порог покрытия задан в pyproject.toml (`addopts = --cov-fail-under=80`).
-        run: uv run pytest tests/ --cov=textalchemy --cov-report=xml
+        run: uv run --no-sync pytest tests/ --cov=textalchemy --cov-report=xml --tb=short -v -o faulthandler_timeout=120
 
       - name: Upload coverage
         uses: codecov/codecov-action@0fb7174895f61a3b6b78fc075e0cd60383518dac # v5

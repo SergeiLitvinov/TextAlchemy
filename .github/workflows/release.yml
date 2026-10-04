@@ -21,7 +21,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 55
     permissions:
       contents: write
       actions: read
@@ -70,7 +70,7 @@ jobs:
           if [ -z "$RUN_ID" ]; then
             echo 'Run CI on this main commit before publishing its current version' >&2; exit 1
           fi
-          for attempt in $(seq 1 100); do
+          for attempt in $(seq 1 180); do
             STATUS=$(gh run view "$RUN_ID" --json status --jq .status)
             if [ "$STATUS" = completed ]; then break; fi
             echo 'Waiting for required CI checks'; sleep 15
@@ -95,7 +95,7 @@ jobs:
         run: uv run --no-sync playwright install --with-deps chromium
       - name: Test application and real browser scenarios
         if: steps.version.outputs.changed == 'true'
-        run: uv run --no-sync pytest tests/ --cov=textalchemy --cov-report=xml --tb=short
+        run: uv run --no-sync pytest tests/ --cov=textalchemy --cov-report=xml --tb=short -v -o faulthandler_timeout=120
       - name: Build and validate immutable release assets
         if: steps.version.outputs.changed == 'true'
         env:
