@@ -22,7 +22,7 @@
 | [quality](#area-quality) | 2 |
 | [recognize](#area-recognize) | 4 |
 | [templating](#area-templating) | 5 |
-| [web](#area-web) | 71 |
+| [web](#area-web) | 72 |
 
 <a id="area-cli"></a>
 ## cli
@@ -2039,7 +2039,7 @@ Values accepted and returned by the document template engine.
 
 Импорты: [textalchemy.web.main](#textalchemy-web-main).
 
-Прямые импорты в тестах: [tests/test_web_preview.py](../../tests/test_web_preview.py).
+Прямые импорты в тестах: [tests/test_web_preview.py](../../tests/test_web_preview.py), [tests/test_web_runtime.py](../../tests/test_web_runtime.py).
 
 <a id="textalchemy-web-app"></a>
 ### textalchemy.web.app
@@ -2048,9 +2048,9 @@ Values accepted and returned by the document template engine.
 
 Общее состояние веб-приложения: app, templates, db, data_dir, helpers.
 
-Символы (строка): [matching_service (116)](../../src/textalchemy/web/app.py#L116), [conversion_task_service (167)](../../src/textalchemy/web/app.py#L167), [resume_conversion_task (182)](../../src/textalchemy/web/app.py#L182).
+Символы (строка): [matching_service (118)](../../src/textalchemy/web/app.py#L118), [conversion_task_service (169)](../../src/textalchemy/web/app.py#L169), [resume_conversion_task (184)](../../src/textalchemy/web/app.py#L184).
 
-Импорты: [textalchemy](#textalchemy), [textalchemy.core.database](#textalchemy-core-database), [textalchemy.core.inspection](#textalchemy-core-inspection), [textalchemy.core.io](#textalchemy-core-io), [textalchemy.organize.bibliography](#textalchemy-organize-bibliography), [textalchemy.web.queue](#textalchemy-web-queue), [textalchemy.web.services.bibliography](#textalchemy-web-services-bibliography), [textalchemy.web.services.conversion_tasks](#textalchemy-web-services-conversion_tasks), [textalchemy.web.services.matching](#textalchemy-web-services-matching), [textalchemy.web.tasks](#textalchemy-web-tasks), [textalchemy.web.workspace](#textalchemy-web-workspace).
+Импорты: [textalchemy](#textalchemy), [textalchemy.core.database](#textalchemy-core-database), [textalchemy.core.inspection](#textalchemy-core-inspection), [textalchemy.core.io](#textalchemy-core-io), [textalchemy.organize.bibliography](#textalchemy-organize-bibliography), [textalchemy.web.queue](#textalchemy-web-queue), [textalchemy.web.runtime](#textalchemy-web-runtime), [textalchemy.web.services.bibliography](#textalchemy-web-services-bibliography), [textalchemy.web.services.conversion_tasks](#textalchemy-web-services-conversion_tasks), [textalchemy.web.services.matching](#textalchemy-web-services-matching), [textalchemy.web.tasks](#textalchemy-web-tasks), [textalchemy.web.workspace](#textalchemy-web-workspace).
 
 Прямые импорты в тестах: [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_web_batch_archive.py](../../tests/test_web_batch_archive.py).
 
@@ -2298,6 +2298,17 @@ Visual rename of simple template variables.
 Символы (строка): [RenameInput (12)](../../src/textalchemy/web/routes/template_variables.py#L12), [ConditionInput (18)](../../src/textalchemy/web/routes/template_variables.py#L18), [conditions (26)](../../src/textalchemy/web/routes/template_variables.py#L26), [save_condition (41)](../../src/textalchemy/web/routes/template_variables.py#L41), [variables (58)](../../src/textalchemy/web/routes/template_variables.py#L58), [rename_variable (73)](../../src/textalchemy/web/routes/template_variables.py#L73).
 
 Импорты: [textalchemy.core.exceptions](#textalchemy-core-exceptions), [textalchemy.web.app](#textalchemy-web-app), [textalchemy.web.routes.generate](#textalchemy-web-routes-generate), [textalchemy.web.services.template_conditions](#textalchemy-web-services-template_conditions), [textalchemy.web.services.template_variables](#textalchemy-web-services-template_variables).
+
+<a id="textalchemy-web-runtime"></a>
+### textalchemy.web.runtime
+
+[src/textalchemy/web/runtime.py](../../src/textalchemy/web/runtime.py)
+
+Process startup policy for the threaded Web application.
+
+Символы (строка): [configure_worker_processes (6)](../../src/textalchemy/web/runtime.py#L6).
+
+Прямые импорты в тестах: [tests/test_web_runtime.py](../../tests/test_web_runtime.py).
 
 <a id="textalchemy-web-services"></a>
 ### textalchemy.web.services

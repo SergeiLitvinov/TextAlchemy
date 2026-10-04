@@ -22,6 +22,7 @@ from textalchemy import __version__
 from textalchemy.core.database import Database
 from textalchemy.organize.bibliography import BibItem
 from textalchemy.web.queue import recover_persisted_tasks, task_queue
+from textalchemy.web.runtime import configure_worker_processes
 from textalchemy.web.services.bibliography import BibliographyService
 from textalchemy.web.services.matching import MatchingService
 from textalchemy.web.tasks import TaskStore
@@ -33,6 +34,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(application: FastAPI) -> AsyncIterator[None]:
     del application
+    configure_worker_processes()
     recovery = recover_persisted_tasks(tasks_store, {"convert": resume_conversion_task})
     if recovery.resumed:
         logger.info("Возобновлено %d задач после перезапуска", recovery.resumed)
