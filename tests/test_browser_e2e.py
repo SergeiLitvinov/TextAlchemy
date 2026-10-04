@@ -653,7 +653,7 @@ def test_e2e_dropzone_is_keyboard_operable(e2e_server, page, tmp_path):
     dropzone.focus()
     assert page.evaluate("document.activeElement.id") == "dropZone"
     with page.expect_file_chooser() as chooser_info:
-        page.keyboard.press("Enter")
+        dropzone.press("Enter")
     chooser_info.value.set_files(str(pdf))
     page.wait_for_function("document.getElementById('sourceFilename').textContent === 'keyboard.pdf'")
 
