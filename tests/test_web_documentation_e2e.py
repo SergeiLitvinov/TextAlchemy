@@ -19,6 +19,7 @@ def test_help_from_application_search_code_and_return(e2e_server: str, page: Pag
     page.goto(e2e_server + "/generate")
     page.get_by_role("link", name="Открыть руководство", exact=True).click()
     expect(page.locator("#hero-title")).to_contain_text("TextAlchemy")
+    page.wait_for_load_state("networkidle")
     expect(page.locator("[data-app-return]")).to_be_visible()
     expect(page.locator("html")).to_have_attribute("data-theme", theme)
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -34,6 +35,7 @@ def test_help_from_application_search_code_and_return(e2e_server: str, page: Pag
     else:
         page.locator(".docs-top-nav").get_by_role("link", name="Код", exact=True).click()
     expect(page.locator(".docs-prose h1")).to_contain_text("Навигатор")
+    page.wait_for_load_state("networkidle")
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     page.get_by_role("link", name="Вернуться в программу", exact=True).click()
     expect(page.locator(".welcome-panel")).to_be_visible()
