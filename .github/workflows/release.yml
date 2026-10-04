@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 40
     permissions:
       contents: write
+      actions: read
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
@@ -46,6 +47,7 @@ jobs:
             echo 'Release dispatch must run on main' >&2; exit 1
           fi
           VERSION=$(python -m tools.versioning plan "$SELECTOR")
+          CURRENT=$(python -m tools.versioning plan current)
           if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
             echo 'Tag differs from application version' >&2; exit 1
           fi
@@ -54,7 +56,28 @@ jobs:
           fi
           rm -f existing-release.json
           echo "number=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$VERSION" = "$CURRENT" ]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
           python -m tools.versioning set "$VERSION"
+      - name: Use archives from successful CI on this exact commit
+        if: steps.version.outputs.changed == 'false'
+        run: |
+          set -euo pipefail
+          RUN_ID=$(gh api "repos/$GH_REPO/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&per_page=20" --jq '.workflow_runs | map(select(.head_branch == "main" and (.event == "push" or .event == "workflow_dispatch"))) | first | .id // empty')
+          if [ -z "$RUN_ID" ]; then
+            echo 'Run CI on this main commit before publishing its current version' >&2; exit 1
+          fi
+          for attempt in $(seq 1 100); do
+            STATUS=$(gh run view "$RUN_ID" --json status --jq .status)
+            if [ "$STATUS" = completed ]; then break; fi
+            echo 'Waiting for required CI checks'; sleep 15
+          done
+          test "$(gh run view "$RUN_ID" --json conclusion --jq .conclusion)" = success
+          gh run download "$RUN_ID" --name textalchemy-release-candidate --dir dist
+          gh run download "$RUN_ID" --name documentation-site --dir .textalchemy/docs-site
       - name: Install locked verification profile
         run: uv sync --frozen --extra dev --extra docs --extra web --extra pdf --extra docx --extra pptx --extra html --extra epub
       - name: Lint and validate libraries and dependency licences
@@ -63,29 +86,39 @@ jobs:
           uv run --no-sync python -m tools.check_library_contracts
           uv run --no-sync python -m tools.dependencies
       - name: Update versioned documentation
-        if: inputs.version != 'current' && github.event_name == 'workflow_dispatch'
+        if: steps.version.outputs.changed == 'true'
         run: uv run --no-sync python -m tools.docs generate
       - name: Check documentation, examples and offline bundle
         run: uv run --no-sync python -m tools.docs check
       - name: Install Chromium
+        if: steps.version.outputs.changed == 'true'
         run: uv run --no-sync playwright install --with-deps chromium
       - name: Test application and real browser scenarios
+        if: steps.version.outputs.changed == 'true'
         run: uv run --no-sync pytest tests/ --cov=textalchemy --cov-report=xml --tb=short
       - name: Build and validate immutable release assets
+        if: steps.version.outputs.changed == 'true'
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.number }}
         run: |
           uv build --out-dir dist
           uv run --no-sync python -m tools.release --dist dist --tag "v$RELEASE_VERSION"
           cp vendor/opendoc/*.whl vendor/opendoc-formats/*.whl dist/
+      - name: Recheck downloaded release archives against source
+        if: steps.version.outputs.changed == 'false'
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.number }}
+        run: uv run --no-sync python -m tools.release --dist dist --tag "v$RELEASE_VERSION"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: documentation-site
+          overwrite: true
           path: .textalchemy/docs-site
           include-hidden-files: true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-assets
+          overwrite: true
           path: dist/
       - name: Commit checked version and create release tag
         env:

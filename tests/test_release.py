@@ -97,9 +97,10 @@ def test_version_update_changes_only_application_lock_record(tmp_path):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes((ROOT / name).read_bytes())
     before = __import__("tomllib").loads((tmp_path / "uv.lock").read_text(encoding="utf-8"))["package"]
-    versioning.set_version("0.2.0", tmp_path)
+    next_version = versioning.select("patch", versioning.current(tmp_path))
+    versioning.set_version(next_version, tmp_path)
     after = __import__("tomllib").loads((tmp_path / "uv.lock").read_text(encoding="utf-8"))["package"]
-    assert versioning.current(tmp_path) == "0.2.0"
+    assert versioning.current(tmp_path) == next_version
     assert [item for item in before if item["name"] != "textalchemy"] == [
         item for item in after if item["name"] != "textalchemy"
     ]
