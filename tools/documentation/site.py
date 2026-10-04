@@ -51,6 +51,10 @@ def prepare():
     assets = {}
     outputs = {}
     for name, content in contents.items():
+        if name == "README.md":
+            # GitHub status images belong to the repository header, not the offline guide.
+            content = re.sub(r'<img\b[^>]*\bsrc=[\'"]https?://[^\'"]+[\'"][^>]*>', '', content)
+            content = re.sub(r'\[!\[([^\]]*)\]\(https?://[^)]+\)\]\(([^)]+)\)', r'[\1](\2)', content)
         content = rewrite_links(content, name, contents, assets)
         outputs[name] = content.encode("utf-8")
     for path in (ROOT / "doc/examples").iterdir():

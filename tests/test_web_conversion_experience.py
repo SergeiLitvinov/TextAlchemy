@@ -110,9 +110,9 @@ def test_conversion_submit_failure_preserves_input_and_locks_form(e2e_server, pa
     fixtures._wait_convert_ready(page)
     expect(page.locator("#conversionSetup")).to_be_hidden()
     assert not page.locator("#conversionHistory").evaluate("el => el.open")
-    page.locator("#dropZone").focus()
     with page.expect_file_chooser() as chooser:
-        page.keyboard.press("Enter")
+        # Keep the key press attached to the intended control in slow browser runs.
+        page.locator("#dropZone").press("Enter")
     chooser.value.set_files({"name": "retained.txt", "mimeType": "text/plain", "buffer": b"Retained input"})
     expect(page.locator("#filePickerWrap")).to_be_hidden()
     page.locator("#target").select_option("model")

@@ -13,6 +13,7 @@ browser, e2e_server, page = browser_fixtures.browser, browser_fixtures.e2e_serve
 @pytest.mark.parametrize("width", [375, 1280])
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_help_from_application_search_code_and_return(e2e_server: str, page: Page, width: int, theme: str) -> None:
+    page.route("https://**/*", lambda route: route.abort())
     page.set_viewport_size({"width": width, "height": 900})
     page.emulate_media(color_scheme=theme)
     page.goto(e2e_server + "/generate")
