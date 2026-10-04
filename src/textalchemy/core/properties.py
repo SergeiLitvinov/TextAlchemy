@@ -33,18 +33,6 @@ from opendoc.properties import (
 from opendoc.properties import (
     WrapPolygon as WrapPolygon,
 )
-from opendoc.properties import (
-    _optional_bool as _optional_bool,
-)
-from opendoc.properties import (
-    _optional_float as _optional_float,
-)
-from opendoc.properties import (
-    _optional_int as _optional_int,
-)
-from opendoc.properties import (
-    _optional_str as _optional_str,
-)
 
 __all__ = [
     "ImageProperties",

@@ -12,7 +12,6 @@ from urllib.parse import unquote
 from tools.documentation.generated import ROOT
 
 STAGE = ROOT / ".textalchemy/docs-source"
-SNAPSHOTS = {"todo-2026-09-13.md", "todo-before-milestones-2026-09-13.md"}
 
 
 def source_page(path, relative):
@@ -37,8 +36,7 @@ def write_changed(path, data):
 
 
 def prepare():
-    docs = sorted([*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md"), *(ROOT / "tests/corpus").rglob("README.md"),
-                   *(ROOT / "vendor/opendoc").glob("README.md")])
+    docs = sorted([ROOT / "README.md", *(ROOT / "doc").rglob("*.md")])
     contents = {path.relative_to(ROOT).as_posix(): path.read_text(encoding="utf-8") for path in docs}
     # A fresh interpreter sees edited CLI/operation modules during live rebuilds.
     reference = subprocess.run(
@@ -53,21 +51,12 @@ def prepare():
     assets = {}
     outputs = {}
     for name, content in contents.items():
-        if Path(name).name in SNAPSHOTS:
-            # Frozen snapshots retain original paths. Show as evidence, not live guidance.
-            assets[name + ".txt"] = (ROOT / name).read_bytes()
-            content = (
-                "# Архив: " + Path(name).stem + "\n\n"
-                "Исторический снимок, не текущие инструкции. [Скачать исходник](" + Path(name).name + ".txt).\n\n"
-                "````text\n" + content + "\n````\n"
-            )
-        else:
-            content = rewrite_links(content, name, contents, assets)
+        content = rewrite_links(content, name, contents, assets)
         outputs[name] = content.encode("utf-8")
-    for path in (ROOT / "docs/examples").iterdir():
+    for path in (ROOT / "doc/examples").iterdir():
         if path.is_file():
             assets[path.relative_to(ROOT).as_posix()] = path.read_bytes()
-    for path in (ROOT / "docs/assets").rglob("*"):
+    for path in (ROOT / "doc/assets").rglob("*"):
         if path.is_file():
             assets[path.relative_to(ROOT).as_posix()] = path.read_bytes()
     outputs.update(assets)
@@ -94,7 +83,7 @@ def rewrite_links(content, name, contents, assets):
         relative = target.relative_to(ROOT).as_posix()
         if relative in contents:
             destination = relative
-        elif relative.startswith("docs/examples/"):
+        elif relative.startswith("doc/examples/"):
             destination = relative
             assets[destination] = target.read_bytes()
         else:

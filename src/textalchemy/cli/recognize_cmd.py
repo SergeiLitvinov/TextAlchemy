@@ -14,6 +14,7 @@ def cmd_recognize(args: argparse.Namespace) -> int:
         return 1
 
     from textalchemy.recognize import OcrEngine
+
     engine = OcrEngine(languages=args.lang.split("+"), use_gpu=args.gpu, backend=args.backend)
 
     ext = input_path.suffix.lower()
@@ -49,37 +50,11 @@ def cmd_recognize(args: argparse.Namespace) -> int:
         pages = 1
 
     if args.output:
-        from textalchemy.core.io import atomic_write_bytes, atomic_write_text
-
         out_path = Path(args.output)
         fmt = out_path.suffix.lower().lstrip(".") or args.output_format
-        if fmt == "docx":
-            import io
+        from opendoc_formats.writers.extracted_text import write_extracted_text
 
-            from docx import Document as DocxDocument
-            docx = DocxDocument()
-            for paragraph in text.split("\n\n"):
-                if paragraph.strip():
-                    docx.add_paragraph(paragraph.strip())
-            buffer = io.BytesIO()
-            docx.save(buffer)
-            atomic_write_bytes(out_path, buffer.getvalue())
-        elif fmt == "tex":
-            from textalchemy.core.latex import escape_latex
-            latex = (
-                "\\documentclass[12pt,a4paper]{article}\n"
-                "\\usepackage[T2A]{fontenc}\n"
-                "\\usepackage[utf8]{inputenc}\n"
-                "\\usepackage[russian]{babel}\n"
-                "\\usepackage{geometry}\n"
-                "\\geometry{top=2cm,bottom=2cm,left=2cm,right=2cm}\n\n"
-                "\\begin{document}\n\n"
-                f"{escape_latex(text)}\n\n"
-                "\\end{document}\n"
-            )
-            atomic_write_text(out_path, latex, encoding="utf-8")
-        else:
-            atomic_write_text(out_path, text, encoding="utf-8")
+        write_extracted_text(text, out_path, format_id=fmt)
         if args.json:
             print(json.dumps({"saved": str(out_path), "pages": pages, "length": len(text)}))
         else:

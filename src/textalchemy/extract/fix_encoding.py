@@ -1,50 +1,5 @@
-from pathlib import Path
+"""Compatibility alias; implementation belongs to OpenDoc Formats."""
+import sys
+from importlib import import_module
 
-from textalchemy.core.exceptions import ExtractError
-from textalchemy.core.io import atomic_write_text
-
-REPLACEMENTS: dict[str, str] = {
-    "\u2014": "-",
-    "\u2013": "-",
-    "\u2026": "...",
-    "\u201c": '"',
-    "\u201d": '"',
-    "\u2018": "'",
-    "\u2019": "'",
-    "\u00ab": '"',
-    "\u00bb": '"',
-}
-
-
-def fix_encoding(file_path: str | Path, output_path: str | Path | None = None) -> str:
-    file_path = Path(file_path)
-    if not file_path.exists():
-        raise ExtractError(f"File not found: {file_path}")
-
-    try:
-        text = file_path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
-        text = file_path.read_text(encoding="cp1251")
-
-    issues: list[str] = []
-    for i, ch in enumerate(text):
-        try:
-            ch.encode("utf-8")
-        except UnicodeEncodeError:
-            issues.append(f"Position {i}: U+{ord(ch):04X}")
-
-    replaced = 0
-    for old, new in REPLACEMENTS.items():
-        count = text.count(old)
-        if count:
-            replaced += count
-            text = text.replace(old, new)
-
-    if output_path:
-        atomic_write_text(output_path, text, encoding="utf-8")
-
-    summary = f"Replaced {replaced} characters"
-    if issues:
-        summary += f"\nFound {len(issues)} non-encodable characters:\n" + "\n".join(issues[:20])
-
-    return summary
+sys.modules[__name__] = import_module("opendoc_formats.readers.fix_encoding")

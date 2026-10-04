@@ -1,102 +1,57 @@
 """Постраничный рендер документов для визуального preview.
 
-PDF рендерится напрямую через PyMuPDF; DOCX/PPTX/ODT и другие офисные
-форматы конвертируются в PDF через headless LibreOffice (если он доступен).
+Чтение PDF и офисная конвертация выполняются OpenDoc Formats.
 Кэш страниц и промежуточного PDF живёт в каталоге preview внутри задачи,
 поэтому удаляется вместе с задачей по TTL.
 """
 from __future__ import annotations
 
-import os
-import shutil
-import subprocess
-import tempfile
 from pathlib import Path
 from typing import Optional
 
-from textalchemy.core.io import atomic_copy, atomic_write_bytes, atomic_write_text
+from textalchemy.core.io import atomic_write_bytes, atomic_write_text
 
 DEFAULT_PREVIEW_DPI = 110
 MAX_PREVIEW_DPI = 200
 
-_LIBREOFFICE_CANDIDATES = (
-    r"C:\Program Files\LibreOffice\program\soffice.com",
-    r"C:\Program Files (x86)\LibreOffice\program\soffice.com",
-    r"C:\Program Files\LibreOffice\program\soffice.exe",
-    r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-    "/usr/bin/libreoffice",
-    "/usr/bin/soffice",
-    "/usr/local/bin/soffice",
-    "/opt/libreoffice/program/soffice",
-)
-
-
 def libreoffice_path() -> Optional[str]:
     """Путь к headless LibreOffice или ``None``, если он недоступен."""
-    for candidate in _LIBREOFFICE_CANDIDATES:
-        if os.path.isfile(candidate):
-            return candidate
-    return shutil.which("soffice") or shutil.which("libreoffice")
+    from opendoc_formats.office import find_libreoffice
+
+    executable = find_libreoffice()
+    return str(executable) if executable else None
 
 
 def convert_to_pdf(source: Path, output_pdf: Path) -> bool:
     """Конвертировать офисный документ в PDF через headless LibreOffice."""
-    executable = libreoffice_path()
-    if executable is None or not source.is_file():
-        return False
+    from opendoc_formats.errors import NativeAccessError
+    from opendoc_formats.office import convert_office_to_pdf
+
     try:
-        with tempfile.TemporaryDirectory(prefix="ta-lo-") as tmp:
-            profile = Path(tmp) / "profile"
-            profile.mkdir()
-            profile_url = f"file:///{profile.as_posix()}"
-            result = subprocess.run(
-                [
-                    executable,
-                    "--headless",
-                    f"-env:UserInstallation={profile_url}",
-                    "--convert-to",
-                    "pdf",
-                    "--outdir",
-                    tmp,
-                    str(source),
-                ],
-                capture_output=True,
-                timeout=180,
-            )
-            if result.returncode != 0:
-                return False
-            produced = Path(tmp) / f"{source.stem}.pdf"
-            if not produced.is_file():
-                return False
-            output_pdf.parent.mkdir(parents=True, exist_ok=True)
-            # ``tmp`` and the preview cache may live on different filesystems,
-            # where ``os.replace`` fails with EXDEV.  Copy through a sibling
-            # partial file so publishing the cached PDF remains atomic.
-            atomic_copy(produced, output_pdf)
-            return True
-    except (OSError, subprocess.SubprocessError):
+        convert_office_to_pdf(source, output_pdf)
+        return True
+    except (NativeAccessError, OSError):
         return False
 
 
 def pdf_page_count(pdf: Path) -> int:
     """Число страниц PDF-файла."""
-    import fitz
+    from opendoc_formats.pdf import PdfDocument
 
-    with fitz.open(pdf) as document:
+    with PdfDocument(pdf) as document:
         return document.page_count
 
 
 def render_pdf_page_png(pdf: Path, page_index: int, *, dpi: int = DEFAULT_PREVIEW_DPI) -> Optional[bytes]:
     """PNG-байты страницы PDF (0-based индекс) или ``None``."""
-    import fitz
+    from opendoc_formats.pdf import PdfDocument
 
     dpi = max(1, min(int(dpi), MAX_PREVIEW_DPI))
     try:
-        with fitz.open(pdf) as document:
+        with PdfDocument(pdf) as document:
             if page_index < 0 or page_index >= document.page_count:
                 return None
-            pixmap = document.load_page(page_index).get_pixmap(dpi=dpi, colorspace=fitz.csRGB, alpha=False)
-            return pixmap.tobytes("png")
+            return document.render_page(page_index, dpi=dpi).png
     except Exception:  # noqa: BLE001 - повреждённые PDF не должны ронять preview
         return None
 

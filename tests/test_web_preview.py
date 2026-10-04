@@ -96,23 +96,23 @@ def test_failed_office_conversion_does_not_cache_unavailability(tmp_path, monkey
     assert preview.cached_page_count(cache, source, "source") == 2
 
 
-def test_office_timeout_removes_profile_and_partial_files(tmp_path, monkeypatch):
-    import subprocess
+def test_office_failure_preserves_previous_preview(tmp_path, monkeypatch):
+    import opendoc_formats.office
+    from opendoc_formats.errors import OfficeTimeoutError
 
     source = tmp_path / "example.docx"
     source.write_bytes(b"office document")
-    profiles = []
-    monkeypatch.setattr(preview, "libreoffice_path", lambda: "test-office")
+    output = tmp_path / "result.pdf"
+    output.write_bytes(b"previous preview")
 
-    def timeout(command, **kwargs):
-        profile = next(arg.removeprefix("-env:UserInstallation=file:///") for arg in command if arg.startswith("-env:"))
-        profiles.append(preview.Path(profile))
-        raise subprocess.TimeoutExpired(command, kwargs["timeout"])
+    def timeout(source_path, output_path, **kwargs):
+        assert source_path == source and output_path == output
+        raise OfficeTimeoutError("timeout")
 
-    monkeypatch.setattr(preview.subprocess, "run", timeout)
-    assert not preview.convert_to_pdf(source, tmp_path / "result.pdf")
-    assert profiles and all(not profile.parent.exists() for profile in profiles)
-    assert source.read_bytes() == b"office document" and not (tmp_path / "result.pdf").exists()
+    monkeypatch.setattr(opendoc_formats.office, "convert_office_to_pdf", timeout)
+    assert not preview.convert_to_pdf(source, output)
+    assert source.read_bytes() == b"office document"
+    assert output.read_bytes() == b"previous preview"
 
 
 def test_convert_to_pdf_via_libreoffice(tmp_path):

@@ -3,6 +3,7 @@
 from textalchemy.extract.emails import (
     emails_to_docx,
     emails_to_text,
+    extract_emails_from_pdf,
     extract_emails_from_text,
     save_debug_text,
 )
@@ -57,6 +58,36 @@ class TestExtractEmailsFromText:
         assert len(result) == 2
 
 
+def test_pdf_text_pages_skip_ocr_and_scan_pages_use_rendered_bytes(tmp_path):
+    import io
+
+    import fitz
+    from PIL import Image
+
+    from textalchemy.recognize.ocr import OcrResult
+
+    path = tmp_path / "mixed.pdf"
+    with fitz.open() as document:
+        text = document.new_page(width=300, height=300)
+        text.insert_text((10, 30), "native@example.com " + "word " * 16)
+        document.new_page(width=120, height=240)
+        document.save(path)
+
+    class ImageEngine:
+        calls = []
+
+        def recognize_image_bytes(self, image, **options):
+            with Image.open(io.BytesIO(image)) as raster:
+                self.calls.append((raster.size, options))
+            return OcrResult("scan@example.com native@example.com")
+
+    engine = ImageEngine()
+    result = extract_emails_from_pdf(path, ocr_engine=engine, dpi=72, rotation=90, langs="eng", psm=11, timeout=7)
+    assert result.emails == ["native@example.com", "scan@example.com"]
+    assert (result.total_pages, result.text_pages, result.ocr_pages) == (2, 1, 1)
+    assert engine.calls == [((240, 120), {"langs": "eng", "psm": 11, "timeout": 7})]
+
+
 class TestEmailsToDocx:
     def test_creates_docx(self, tmp_path):
         out = tmp_path / "result.docx"
@@ -76,6 +107,18 @@ class TestEmailsToDocx:
         result = emails_to_docx(["a@b.com"], "test.pdf", out)
         assert result == out
         assert out.exists()
+
+    def test_report_content_and_heading_styles_survive_library_export(self, tmp_path):
+        from docx import Document
+
+        out = emails_to_docx(["z@b.com", "a@b.com"], "folder/source.pdf", tmp_path / "report.docx")
+        paragraphs = Document(out).paragraphs
+        assert paragraphs[0].text == "Email из файла: source.pdf"
+        assert paragraphs[0].style.name == "Title"
+        assert paragraphs[1].text == "Всего найдено уникальных адресов: 2"
+        assert paragraphs[3].text == "Список адресов:"
+        assert paragraphs[3].style.name == "Heading 1"
+        assert [paragraph.text for paragraph in paragraphs[4:]] == ["a@b.com", "z@b.com"]
 
 
 class TestEmailsToText:

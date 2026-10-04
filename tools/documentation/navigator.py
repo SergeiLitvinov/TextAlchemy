@@ -118,8 +118,8 @@ def code_pages(root: Path, notice: str):
                    '| Метод | Путь | Обработчик | Строка |', '|---|---|---|---|']
     for method, url, module, handler, line in sorted(endpoints):
         route_lines.append(f'| {method} | `{cell(url)}` | [{module}.{handler}](code.md#{anchor(module)}) | {line} |')
-    return {'docs/reference/code.md': notice + '\n'.join(lines) + '\n',
-            'docs/reference/web-routes.md': notice + '\n'.join(route_lines) + '\n'}
+    return {'doc/reference/code.md': notice + '\n'.join(lines) + '\n',
+            'doc/reference/web-routes.md': notice + '\n'.join(route_lines) + '\n'}
 
 
 def user_guide(root: Path, notice: str):
@@ -128,8 +128,9 @@ def user_guide(root: Path, notice: str):
     lines = ['# Руководство пользователя — навигация', '',
              'Выберите задачу. Содержание формируется из глав руководства; '
              'сами инструкции и ограничения поддерживаются в этих главах и проверяются на исполняемых примерах.', '']
-    for filename in ('index.md', 'formats.md', 'web-details.md'):
-        text = (root / 'docs/guide' / filename).read_text(encoding='utf-8')
+    for path in sorted((root / 'doc/guide').glob('*.md'), key=lambda path: (path.name != 'index.md', path.name)):
+        filename = path.name
+        text = path.read_text(encoding='utf-8')
         text = re.sub(r'^```.*?^```[^\n]*', '', text, flags=re.M | re.S)
         title = re.search(r'^# (.+)$', text, re.M)[1]
         lines += [f'## {title}', '']

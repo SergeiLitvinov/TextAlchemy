@@ -31,18 +31,17 @@ def load(store: TaskStore, draft_id: str) -> dict:
 
 
 def create(store: TaskStore, path: Path, name: str) -> dict:
-    import fitz
+    from opendoc_formats.pdf import PdfDocument
 
     from textalchemy.pipeline.extract import extract_pdf_model
 
     if path.suffix.lower() != ".pdf":
         raise ValueError("Выберите PDF с текстовым слоем")
     try:
-        with fitz.open(path) as pdf:
-            if not pdf.is_pdf or pdf.needs_pass:
-                raise ValueError("Нужен PDF без защиты паролем")
-    except fitz.FileDataError as error:
-        raise ValueError("Не удалось прочитать PDF") from error
+        with PdfDocument(path):
+            pass
+    except ValueError as error:
+        raise ValueError("Не удалось прочитать PDF. Нужен PDF без защиты паролем.") from error
     model = extract_pdf_model(doc=Document.from_path(path), mode="fast")
     if not model.sections:
         raise ValueError("Не удалось прочитать страницы PDF")
@@ -110,7 +109,7 @@ def reorder(store: TaskStore, draft_id: str, revision: int, order: list[list[str
 
 
 def page_image(store: TaskStore, draft_id: str, page: int) -> bytes:
-    import fitz
+    from opendoc_formats.pdf import PdfDocument
 
     value = load(store, draft_id)
     if not 0 <= page < len(value["order"]):
@@ -118,10 +117,8 @@ def page_image(store: TaskStore, draft_id: str, page: int) -> bytes:
     path = store.source_path(draft_id)
     if path is None:
         raise LookupError("Исходный PDF недоступен")
-    with fitz.open(path) as pdf:
-        source = pdf[page]
-        scale = min(1.5, 1400 / max(source.rect.width, source.rect.height))
-        return source.get_pixmap(matrix=fitz.Matrix(scale, scale)).tobytes("png")
+    with PdfDocument(path) as pdf:
+        return pdf.render_page(page, scale=1.5, max_dimension=1400).png
 
 
 def export(store: TaskStore, draft_id: str, revision: int, format: str) -> bytes:

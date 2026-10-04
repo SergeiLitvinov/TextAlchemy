@@ -1,5 +1,5 @@
-"""Compatibility entry point for the shared MathML-to-Office-Math structure converter."""
+"""Compatibility alias; implementation belongs to OpenDoc Formats."""
+import sys
+from importlib import import_module
 
-from textalchemy.core.mathml import MATHML, OMML, mathml_to_omml
-
-__all__ = ['MATHML', 'OMML', 'mathml_to_omml']
+sys.modules[__name__] = import_module('opendoc_formats.writers.mathml_to_omml')

@@ -3,6 +3,7 @@
 Не требует наличия .pptx — проверяет, что публичный API доступен
 и все внутренние модули импортируются без ошибок.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -34,15 +35,16 @@ def test_namespace_constants():
 def test_has_math_negative():
     """Пустой <a:p> не должен считаться содержащим формулы."""
     from lxml import etree
+
     p = etree.Element("{http://schemas.openxmlformats.org/drawingml/2006/main}p")
     assert has_math(p) is False
 
 
 def test_assets_present():
     """CSS и JS должны быть встроены в пакет."""
-    # tests/convert/test_pptx_to_html.py → parents[2] = TextAlchemy/
-    repo_root = Path(__file__).resolve().parents[2]
-    pptx_html = repo_root / "src" / "textalchemy" / "convert" / "pptx_to_html"
+    import opendoc_formats.writers.pptx_to_html as package
+
+    pptx_html = Path(package.__file__).parent
     assert (pptx_html / "assets" / "css" / "main.css").is_file()
     assert (pptx_html / "assets" / "js" / "main.js").is_file()
 

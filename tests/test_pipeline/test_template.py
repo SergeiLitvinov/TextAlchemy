@@ -43,4 +43,4 @@ def test_template_operation_runs_and_serializes_in_pipeline_result():
     assert result.final.sections[0].first_page_headers[0].plain_text == "First Pipeline"
     assert result.final.sections[0].even_page_footers[0].plain_text == "Even Pipeline"
     serialized = result.to_dict()["final"]
-    assert serialized["format"] == "textalchemy.document"
+    assert serialized["format"] == "opendoc.document"

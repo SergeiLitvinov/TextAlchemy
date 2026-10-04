@@ -123,6 +123,7 @@ def test_concurrent_orders_and_bad_uploads(pdf_draft):
                                             ('heading3', 'Heading 3', 3), ('paragraph', 'Normal', None)])
 def test_classification_survives_export_and_preserves_objects(pdf_draft, role, style, level):
     from docx import Document
+    from opendoc import DocumentModel, TextStyle, document_from_dict, document_to_dict, get_heading
 
     client, url, store, data = pdf_draft
     before = pdf_order.load(store, data['draft_id'])
@@ -132,16 +133,23 @@ def test_classification_survives_export_and_preserves_objects(pdf_draft, role, s
     response = client.put(url, json={'revision': 1, 'order': order, 'classifications': {block_id: role}})
     assert response.status_code == 200, response.text
     expected = copy.deepcopy(before['model'])
+    definition = TextStyle(properties={'style_name': style, 'style_type': 'paragraph'})
+    encoded_style = document_to_dict(DocumentModel(styles={style: definition}))['document']['styles'][style]
+    expected['document']['styles'].setdefault(style, encoded_style)
     block = expected['document']['sections'][0]['blocks'][0]
     block['style_id'] = style
     block['properties'].update(style_name=style, legacy_type='heading' if level else 'paragraph', pdf_editor_role=role)
     if level:
         block['properties'].update(heading_level=level, level=level)
+        block['properties']['opendoc.heading'] = {'format': 'opendoc.heading', 'version': 1, 'level': level}
     else:
         block['properties'].pop('heading_level', None)
         block['properties'].pop('level', None)
     expected['document']['sections'][0]['blocks'].reverse()
     assert client.get(url + '/export?revision=2&format=model').json() == expected
+    assert not document_from_dict(expected).validate()
+    heading = get_heading(document_from_dict(expected).sections[0].blocks[-1])
+    assert (heading.level if heading else None) == level
     restored = client.get(url).json()
     assert next(b for b in restored['pages'][0]['blocks'] if b['id'] == block_id)['classification'] == role
     exported = client.get(url + '/export?revision=2&format=docx')
@@ -158,6 +166,7 @@ def test_classification_survives_export_and_preserves_objects(pdf_draft, role, s
     model = client.get(url + '/export?revision=3&format=model').json()
     block = model['document']['sections'][0]['blocks'][-1]
     assert 'heading_level' not in block['properties']
+    assert 'opendoc.heading' not in block['properties']
     assert block['style_id'] == 'Normal'
 
 

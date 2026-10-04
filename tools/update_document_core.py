@@ -15,10 +15,18 @@ ROOT = Path(__file__).resolve().parents[1]
 BUNDLE = ROOT / "vendor/opendoc"
 
 
-def update(wheel: Path) -> Path:
+def update(
+    wheel: Path, *, sha256: str | None = None, source_url: str | None = None, source_ref: str | None = None,
+) -> Path:
     wheel = wheel.resolve(strict=True)
     if wheel.suffix != ".whl":
         raise ValueError("Expected an OpenDoc wheel")
+    wheel_bytes = wheel.read_bytes()
+    digest = hashlib.sha256(wheel_bytes).hexdigest()
+    if sha256 is not None and digest != sha256.lower():
+        raise ValueError("Wheel checksum does not match the published SHA-256")
+    if (source_url is None) != (source_ref is None):
+        raise ValueError("Source URL and immutable release reference must be supplied together")
     consumer = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
     with zipfile.ZipFile(wheel) as archive:
         metadata_names = [name for name in archive.namelist() if name.endswith(".dist-info/METADATA")]
@@ -70,15 +78,17 @@ def update(wheel: Path) -> Path:
         "distribution": metadata["Name"],
         "version": metadata["Version"],
         "wheel": wheel.name,
-        "sha256": hashlib.sha256(wheel.read_bytes()).hexdigest(),
+        "sha256": digest,
         "modules": modules,
         "update": "uv run python -m tools.update_document_core --wheel path/to/opendoc.whl",
     }
+    if source_url is not None:
+        manifest["source"] = {"url": source_url, "ref": source_ref, "checksum_verified": sha256 is not None}
     BUNDLE.mkdir(parents=True, exist_ok=True)
     # Close the source archive before replacing a bundled wheel on Windows.
     target = BUNDLE / wheel.name
     temporary = target.with_suffix(".whl.tmp")
-    temporary.write_bytes(wheel.read_bytes())
+    temporary.write_bytes(wheel_bytes)
     temporary.replace(target)
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     if previous is not None and previous != target and previous.exists():
@@ -89,7 +99,11 @@ def update(wheel: Path) -> Path:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheel", type=Path, required=True)
-    print(update(parser.parse_args().wheel))
+    parser.add_argument("--sha256", help="Expected checksum from the release SHA256SUMS")
+    parser.add_argument("--source-url", help="Published wheel URL")
+    parser.add_argument("--source-ref", help="Immutable upstream commit or release reference")
+    args = parser.parse_args()
+    print(update(args.wheel, sha256=args.sha256, source_url=args.source_url, source_ref=args.source_ref))
     subprocess.run(["uv", "lock", "--refresh-package", "opendoc"], cwd=ROOT, check=True)
     print("Lockfile updated; synchronize the environment before running checks.")
 

@@ -1,0 +1,82 @@
+{% macro doc_url(source) -%}
+{%- for item in nav.pages if item.file.src_uri == source -%}{{ item.url|url }}{%- endfor -%}
+{%- endmacro %}
+{% macro navigation(items) %}
+<ul>{% for item in items %}
+  {% if item.children %}
+  <li><details {% if item.active %}open{% endif %}><summary>{{ item.title }}</summary>{{ navigation(item.children) }}</details></li>
+  {% else %}
+  <li><a href="{{ item.url|url }}" {% if item.active %}aria-current="page"{% endif %}>{{ item.title }}</a></li>
+  {% endif %}
+{% endfor %}</ul>
+{% endmacro %}
+{% macro outline(items) %}
+<ul>{% for item in items %}<li><a href="{{ item.url }}">{{ item.title }}</a>{% if item.children %}{{ outline(item.children) }}{% endif %}</li>{% endfor %}</ul>
+{% endmacro %}
+<!doctype html>
+<html lang="ru" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="{{ config.site_description }}">
+  <title>{% if page and not page.is_homepage %}{{ page.title }} · {% endif %}TextAlchemy — документация</title>
+  <link rel="icon" type="image/svg+xml" href="{{ 'doc/assets/documentation-logo.svg'|url }}">
+  <script>try { document.documentElement.dataset.theme = localStorage.getItem('textalchemy.docs.theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); } catch (_) {}</script>
+  {% for path in config.extra_css %}<link rel="stylesheet" href="{{ path|url }}">{% endfor %}
+</head>
+<body {% if page and page.is_homepage %}class="docs-home"{% endif %}>
+<a class="skip-link" href="#main-content">Перейти к содержимому</a>
+<header class="docs-header">
+  <a class="docs-brand" href="{{ nav.homepage.url|url }}"><img src="{{ 'doc/assets/documentation-logo.svg'|url }}" width="32" height="32" alt=""><span>TextAlchemy<small>Документация · {{ config.extra.app_version }}</small></span></a>
+  <a class="docs-app-return" href="/" data-app-return hidden aria-label="Вернуться в программу"><span aria-hidden="true">←</span><span class="docs-app-return-text">В программу</span></a>
+  <button class="docs-search-button" type="button" data-open-search>Поиск <kbd>Ctrl K</kbd></button>
+  <nav class="docs-top-nav" aria-label="Основные разделы">
+    <a href="{{ doc_url('doc/reference/user-guide.md') }}">Руководство</a>
+    <a href="{{ doc_url('doc/reference/code.md') }}">Код</a>
+    <a href="{{ doc_url('doc/development/roadmap.md') }}">План</a>
+  </nav>
+  <button class="docs-theme-button" type="button" aria-label="Включить тёмную тему" title="Переключить тему">◐</button>
+  <button class="docs-menu-button" type="button" aria-expanded="false" aria-controls="docs-navigation">Разделы</button>
+</header>
+<div class="docs-layout">
+  <aside class="docs-sidebar" id="docs-navigation" aria-label="Разделы документации">
+    <nav>{{ navigation(nav) }}</nav>
+    <p class="docs-sidebar-note">Руководство и исходники<br>в одном месте</p>
+  </aside>
+  <main id="main-content" role="main" tabindex="-1">
+    {% if page and page.is_homepage %}
+    <section class="docs-hero" aria-labelledby="hero-title">
+      <div><p class="eyebrow">Работа с документами</p><h1 id="hero-title"><span>TextAlchemy</span><br>Документы в нужном формате.<br>Результат под контролем.</h1>
+      <p class="hero-description">Локальное приложение для конвертации, распознавания и шаблонов. Возможности, ограничения и примеры — рядом с кодом.</p>
+      <div class="hero-actions"><a class="docs-button" href="{{ doc_url('doc/guide/index.md') }}">Начать работу <span aria-hidden="true">→</span></a><a class="docs-button secondary" href="{{ doc_url('doc/reference/code.md') }}">Изучить код</a></div></div>
+      <div class="hero-art" aria-hidden="true"><div class="art-page back"></div><div class="art-page front"><span class="art-label">TA / DOCUMENT</span><strong>Aa</strong><i></i><i></i><i></i><div class="art-formula">x² + y²</div><span class="art-check">✓</span></div></div>
+    </section>
+    <section class="docs-cards" aria-label="Выберите задачу">
+      <a class="docs-card" href="{{ doc_url('doc/reference/user-guide.md') }}"><span class="card-number">01 / РУКОВОДСТВО</span><h2>Сделать задачу</h2><p>Конвертация, заполнение шаблонов, распознавание и автоматизация.</p><span class="card-link">Выбрать действие →</span></a>
+      <a class="docs-card" href="{{ doc_url('doc/guide/formats.md') }}"><span class="card-number">02 / ВОЗМОЖНОСТИ</span><h2>Понять границы</h2><p>Что сохраняют форматы и как читать предупреждения о потерях.</p><span class="card-link">Изучить форматы →</span></a>
+      <a class="docs-card" href="{{ doc_url('doc/reference/code.md') }}"><span class="card-number">03 / РАЗРАБОТКА</span><h2>Найти реализацию</h2><p>Модули, определения, тесты и маршруты, собранные из исходников.</p><span class="card-link">Открыть навигатор →</span></a>
+    </section>
+    <div class="docs-home-note"><strong>Документация рядом с кодом.</strong> Справочники обновляются автоматически. Статус будущих возможностей находится в <a href="{{ doc_url('doc/development/roadmap.md') }}">плане по вехам</a>.</div>
+    <details class="docs-overview"><summary>О проекте, установке и примерах</summary><article class="docs-prose">{{ page.content }}</article></details>
+    {% else %}
+    <article class="docs-prose">{{ page.content if page else '<h1>Страница не найдена</h1>' }}</article>
+    {% if page %}<nav class="docs-pagination" aria-label="Соседние страницы">
+      {% if page.previous_page %}<a href="{{ page.previous_page.url|url }}"><small>← Назад</small>{{ page.previous_page.title }}</a>{% endif %}
+      {% if page.next_page %}<a href="{{ page.next_page.url|url }}"><small>Далее →</small>{{ page.next_page.title }}</a>{% endif %}
+    </nav>{% endif %}
+    {% endif %}
+    <footer class="docs-footer">TextAlchemy · Руководство и справочник проекта · Собрано локально с MkDocs</footer>
+  </main>
+  {% if page and not page.is_homepage %}<aside class="docs-outline" aria-label="На странице"><strong>На странице</strong>{{ outline(page.toc) }}<a class="docs-back-top" href="#main-content">Наверх ↑</a></aside>{% endif %}
+</div>
+<dialog id="docs-search" aria-labelledby="docs-search-title">
+  <div class="search-heading"><h2 id="docs-search-title">Поиск в документации</h2><button type="button" data-close-search aria-label="Закрыть поиск">×</button></div>
+  <label for="mkdocs-search-query">Название, команда или возможность</label>
+  <input id="mkdocs-search-query" type="search" placeholder="Например, конвертация или шаблон" autocomplete="off">
+  <div id="mkdocs-search-results" role="status" aria-live="polite" data-no-results-text="Ничего не найдено"></div>
+  <p class="search-help">Локальный поиск · Esc закрывает окно</p>
+</dialog>
+<script>var base_url = {{ base_url|tojson }};</script>
+{% for script in config.extra_javascript %}{{ script|script_tag }}{% endfor %}
+</body>
+</html>

@@ -1,14 +1,15 @@
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools==81.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "textalchemy"
-version = "0.1.0"
-description = "Универсальный инструментарий обработки научно-учебных документов"
+version = "0.2.0rc1"
+description = "Локальная конвертация, распознавание и шаблоны документов с контролем результата"
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
+license = "MIT AND BSD-3-Clause AND MPL-1.1"
+license-files = ["doc/LICENSE", "doc/NOTICE", "doc/licenses/*"]
 authors = [
     { name = "TextAlchemy Contributors" },
 ]
@@ -16,36 +17,32 @@ authors = [
 dependencies = [
     # Core
     "opendoc==0.1.0",
+    "opendoc-formats[pdf-text,fonts]==0.3.0",
     "pyyaml>=6.0.1",
     "platformdirs>=4.0.0",
-    "pypdf>=4.0.0",
     "jinja2>=3.1.3",
     "tqdm>=4.65.0",
-    "fonttools>=4.50.0",
 ]
 
 [project.optional-dependencies]
 pdf = [
-    "pdf2docx>=0.2.0",
-    "pymupdf>=1.24.0",
+    "opendoc-formats[pdf]==0.3.0",
 ]
 docx = [
-    "python-docx>=1.1.0",
+    "opendoc-formats[docx]==0.3.0",
 ]
 pptx = [
     "Pillow>=10.0.0",
-    "lxml>=5.0.0",
-    "python-pptx>=1.0.2",
+    "opendoc-formats[pptx]==0.3.0",
 ]
 epub = [
-    "beautifulsoup4>=4.12.0",
-    "ebooklib>=0.18.0",
+    "opendoc-formats[epub]==0.3.0",
 ]
 html = [
-    "beautifulsoup4>=4.12.0",
-    "tinycss2>=1.5.0",
+    "opendoc-formats[html]==0.3.0",
 ]
 web = [
+    "Pillow>=10.0.0",
     "fastapi>=0.109.0",
     "python-multipart>=0.0.29",
     "sqlalchemy>=2.0.50",
@@ -72,8 +69,8 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/user/textalchemy"
-Documentation = "https://github.com/user/textalchemy#readme"
+Homepage = "https://github.com/SergeiLitvinov/TextAlchemy"
+Documentation = "https://SergeiLitvinov.github.io/TextAlchemy/"
 
 [project.scripts]
 textalchemy = "textalchemy.__main__:main"
@@ -95,8 +92,6 @@ target-version = "py311"
 select = ["E", "F", "I", "N", "W", "BLE"]
 
 [tool.ruff.lint.per-file-ignores]
-"src/textalchemy/convert/pptx_to_html/*" = ["N801", "N802", "N803", "N806", "W293", "E501", "BLE001"]
-"src/textalchemy/convert/pdf_to_docx.py" = ["BLE001"]
 "src/textalchemy/web/main.py" = ["BLE001", "E501"]
 "src/textalchemy/__main__.py" = ["N812", "BLE001"]
 
@@ -106,7 +101,8 @@ strict = false
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["textalchemy", "opendoc"]
+source = ["textalchemy"]
 
 [tool.uv.sources]
 opendoc = { path = "vendor/opendoc/opendoc-0.1.0-py3-none-any.whl" }
+opendoc-formats = { path = "vendor/opendoc-formats/opendoc_formats-0.3.0-py3-none-any.whl" }

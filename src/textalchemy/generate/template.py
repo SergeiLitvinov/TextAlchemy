@@ -1,9 +1,9 @@
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from textalchemy.core.exceptions import GenerateError
-from textalchemy.core.io import check_archive_safety
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 _BUILTIN_TEMPLATE_DESCRIPTIONS = {
@@ -12,37 +12,6 @@ _BUILTIN_TEMPLATE_DESCRIPTIONS = {
     "laboratory": "Отчёт по лабораторной работе",
     "report": "Универсальный отчёт",
 }
-
-
-def _replace_in_paragraph(paragraph, items):
-    """Подставить значения плейсхолдеров {{key}} в параграфе.
-
-    Текст собирается из всех runs (плейсхолдеры в docx часто разбиты между
-    несколькими runs), заменяется, и результат записывается в первый run с
-    сохранением его стиля; остальные runs очищаются. Это сохраняет базовое
-    форматирование параграфа (в отличие от перезаписи ``para.text``).
-    """
-    if not paragraph.runs:
-        if not items:
-            return
-        text = paragraph.text
-        replaced = text
-        for key, value in items:
-            replaced = replaced.replace("{{" + key + "}}", str(value))
-        if replaced != text:
-            paragraph.add_run(replaced)
-        return
-
-    text = "".join(run.text for run in paragraph.runs)
-    replaced = text
-    for key, value in items:
-        replaced = replaced.replace("{{" + key + "}}", str(value))
-    if replaced == text:
-        return
-    first_run = paragraph.runs[0]
-    first_run.text = replaced
-    for run in paragraph.runs[1:]:
-        run.text = ""
 
 
 @dataclass
@@ -102,34 +71,18 @@ class TemplateEngine:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            import io
+            from opendoc_formats.docx import DocxPackage, ReplaceTextSpan
 
-            from docx import Document
-
-            from textalchemy.core.io import atomic_write_bytes
-
-            check_archive_safety(template_path)
-            doc = Document(str(template_path))
             params = params or {}
-
-            # Заменяем по убыванию длины ключа, чтобы более длинные
-            # плейсхолдеры (возможно, содержащие префиксы других) не
-            # конфликтовали при подстановке.
-            items = sorted(params.items(), key=lambda kv: len(kv[0]), reverse=True)
-
-            for para in doc.paragraphs:
-                _replace_in_paragraph(para, items)
-
-            # Заменяем плейсхолдеры и внутри таблиц шаблона.
-            for table in doc.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        for para in cell.paragraphs:
-                            _replace_in_paragraph(para, items)
-
-            buffer = io.BytesIO()
-            doc.save(buffer)
-            atomic_write_bytes(output_path, buffer.getvalue())
+            values = {"{{" + key + "}}": str(value) for key, value in params.items()}
+            pattern = re.compile("|".join(re.escape(key) for key in sorted(values, key=len, reverse=True))) if values else None
+            with DocxPackage(template_path) as package:
+                patches = [
+                    ReplaceTextSpan(paragraph.id, *match.span(), values[match[0]])
+                    for paragraph in package.paragraphs
+                    for match in (pattern.finditer(paragraph.text) if pattern else ())
+                ]
+                package.write(output_path, patches)
         except Exception as e:
             raise GenerateError(f"Failed to generate document: {e}") from e
 

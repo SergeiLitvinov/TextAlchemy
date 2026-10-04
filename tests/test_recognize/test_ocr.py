@@ -4,9 +4,9 @@
 всех трёх бэкендов (tesseract/easyocr/paddle) без реальных OCR-моделей —
 внешние библиотеки подменяются фейками через ``sys.modules``.
 """
+
 from __future__ import annotations
 
-import builtins
 import sys
 
 import pytest
@@ -97,6 +97,26 @@ def _make_available_engine(backend: str) -> OcrEngine:
     engine._backend = backend
     engine._available = True
     return engine
+
+
+def test_rendered_image_ocr_preserves_tesseract_language_mode_and_timeout(monkeypatch):
+    import io
+
+    from PIL import Image
+
+    _install_pytesseract(monkeypatch)
+    calls = []
+
+    def text(image, *, lang, config, timeout):
+        calls.append((image.size, lang, config, timeout))
+        return "  scan@example.com  "
+
+    monkeypatch.setattr(sys.modules["pytesseract"], "image_to_string", text)
+    image = io.BytesIO()
+    Image.new("RGB", (40, 20), "white").save(image, format="PNG")
+    result = _make_available_engine("tesseract").recognize_image_bytes(image.getvalue(), langs="eng", psm=11, timeout=7)
+    assert result.text == "scan@example.com" and result.pages == 1
+    assert calls == [((40, 20), "eng", "--psm 11", 7)]
 
 
 # --------------------------------------------------------------------------- #
@@ -353,14 +373,8 @@ def tiny_pdf(tmp_path):
 def test_recognize_pdf_requires_pymupdf(monkeypatch, tmp_path):
     pdf_path = tmp_path / "x.pdf"
     pdf_path.write_bytes(b"dummy")
-    real_import = builtins.__import__
-
-    def fake_import(name, *args, **kwargs):
-        if name == "fitz":
-            raise ImportError("No module named 'fitz'")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setitem(sys.modules, "fitz", None)
+    monkeypatch.setitem(sys.modules, "pymupdf", None)
     engine = OcrEngine()
     with pytest.raises(RecognizeError, match="pymupdf"):
         engine.recognize_pdf(pdf_path)
@@ -372,9 +386,7 @@ def test_recognize_pdf_renders_pages(monkeypatch, tiny_pdf):
     monkeypatch.setattr(
         engine,
         "recognize",
-        lambda image_path, handwriting=False: type(
-            "R", (), {"text": "hi", "confidence": 0.9, "language": "rus", "pages": 1}
-        )(),
+        lambda image_path, handwriting=False: type("R", (), {"text": "hi", "confidence": 0.9, "language": "rus", "pages": 1})(),
     )
     results = engine.recognize_pdf(tiny_pdf, scale=2)
     assert len(results) == 1
@@ -388,9 +400,7 @@ def test_recognize_pdf_clamps_scale(monkeypatch, tiny_pdf):
     monkeypatch.setattr(
         engine,
         "recognize",
-        lambda image_path, handwriting=False: type(
-            "R", (), {"text": "x", "confidence": 0.0, "language": "rus", "pages": 1}
-        )(),
+        lambda image_path, handwriting=False: type("R", (), {"text": "x", "confidence": 0.0, "language": "rus", "pages": 1})(),
     )
     assert len(engine.recognize_pdf(tiny_pdf, scale=99)) == 1
     assert len(engine.recognize_pdf(tiny_pdf, scale=1)) == 1
@@ -415,17 +425,34 @@ def test_recognize_pdf_geometry_pages(monkeypatch, tiny_pdf):
     assert results[0].pages == 1
 
 
+def test_pdf_geometry_uses_bounded_render_scale(monkeypatch, tiny_pdf):
+    import opendoc_formats.pdf
+    from PIL import Image
+
+    document_type = opendoc_formats.pdf.PdfDocument
+    monkeypatch.setattr(
+        opendoc_formats.pdf,
+        "PdfDocument",
+        lambda path: document_type(path, limits=opendoc_formats.pdf.PdfLimits(max_dimension=100, max_pixels=10_000)),
+    )
+    engine = OcrEngine()
+
+    def geometry(image_path, scale=3, handwriting=False):
+        with Image.open(image_path) as image:
+            assert image.size == (100, 100)
+        assert scale == 0.5  # Native page is 200pt; requested scale 6 was bounded.
+        return OcrPageResult(blocks=[OcrBlockGeometry("word", (0, 0, 50 / scale, 50 / scale), 0.8)])
+
+    monkeypatch.setattr(engine, "recognize_with_geometry", geometry)
+    result = engine.recognize_pdf_geometry(tiny_pdf, scale=6)[0]
+    assert result.blocks[0].bbox == (0, 0, 100, 100)
+
+
 def test_recognize_pdf_geometry_requires_pymupdf(monkeypatch, tmp_path):
     pdf_path = tmp_path / "x.pdf"
     pdf_path.write_bytes(b"dummy")
-    real_import = builtins.__import__
-
-    def fake_import(name, *args, **kwargs):
-        if name == "fitz":
-            raise ImportError("No module named 'fitz'")
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setitem(sys.modules, "fitz", None)
+    monkeypatch.setitem(sys.modules, "pymupdf", None)
     engine = OcrEngine()
     with pytest.raises(RecognizeError, match="pymupdf"):
         engine.recognize_pdf_geometry(pdf_path)

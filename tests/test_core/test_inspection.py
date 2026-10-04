@@ -102,7 +102,8 @@ def test_inspect_document_model_reports_invalid_reference_and_geometry():
 
     assert report.valid is False
     assert any(issue.feature == "model-validation" for issue in report.issues)
-    assert any(issue.feature == "element-geometry" for issue in report.issues)
+    assert any(issue.feature == "model-validation" and "box.width" in issue.location for issue in report.issues)
+    assert not report.objects  # Invalid models have no trustworthy inventory.
 
 
 def test_inspect_pdf_reports_text_vector_fonts_and_page_geometry(tmp_path):
@@ -310,7 +311,7 @@ def test_compare_pageless_html_target_avoids_page_geometry_loss(tmp_path):
     assert comparison.retention["characters"]["ratio"] == 1.0
     assert comparison.page_geometry == []
     assert not any(issue.feature == "page-geometry" for issue in comparison.issues)
-    assert any(issue.feature == "page-geometry-n-a" for issue in comparison.issues)
+    assert comparison.geometry_summary["available"] is False
 
 
 def test_compare_latex_target_papersize_geometry(tmp_path):
@@ -322,8 +323,11 @@ def test_compare_latex_target_papersize_geometry(tmp_path):
     comparison = compare_inspections(inspect_document_model(source), inspect_path(target_file))
 
     assert comparison.retention["pages"]["ratio"] == 1.0
-    assert comparison.page_geometry[0]["same_size"] is True
-    assert comparison.geometry_summary["max_dimension_error_pt"] == 0
+    assert comparison.target.pages[0]["width_pt"] == 595.28
+    assert comparison.target.pages[0]["height_pt"] == 841.89
+    assert comparison.page_geometry == []
+    assert comparison.geometry_summary["available"] is False
+    assert comparison.geometry_summary["max_dimension_error_pt"] is None
 
 
 def test_compare_inspections_reports_exact_resource_and_font_losses():
@@ -370,7 +374,22 @@ def test_compare_inspections_reports_exact_resource_and_font_losses():
         fonts={"Arial": 2, "Liberation Sans": 3},
     )
 
-    comparison = compare_inspections(source, target)
+    # Complete public model inspection supplies the evidence required by OpenDoc.
+    def complete_inspection(report):
+        model = DocumentModel(sections=[Section()])
+        for resource in report.resources:
+            model.add_resource(Resource(
+                resource["id"], ResourceKind(resource["kind"]), resource["media_type"],
+                data=resource["sha256"][0].encode() * resource["size_bytes"],
+            ))
+            model.sections[0].blocks.append(Image(resource["id"], alt_text="Resource"))
+        for family, count in report.fonts.items():
+            model.sections[0].blocks.append(Paragraph([
+                TextRun("Text", TextStyle(font_family=family)) for _ in range(count)
+            ]))
+        return inspect_document_model(model)
+
+    comparison = compare_inspections(complete_inspection(source), complete_inspection(target))
 
     resources = comparison.resource_comparison
     assert resources["exact_hash_matches"] == 1

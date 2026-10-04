@@ -1,0 +1,1281 @@
+{
+  "audited_on": "2026-10-04",
+  "scope": "Exact versions in uv.lock; metadata and selected wheel licence files, not a binary/model licence certification",
+  "packages": [
+    {
+      "name": "aiohappyeyeballs",
+      "version": "2.7.1",
+      "description": "Happy Eyeballs for asyncio",
+      "license": "PSF-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/aiohappyeyeballs/2.7.1/json"
+    },
+    {
+      "name": "aiohttp",
+      "version": "3.14.1",
+      "description": "Async http client/server framework (asyncio)",
+      "license": "Apache-2.0 AND MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/aiohttp/3.14.1/json"
+    },
+    {
+      "name": "aiosignal",
+      "version": "1.4.0",
+      "description": "aiosignal: a list of registered asynchronous callbacks",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/aiosignal/1.4.0/json"
+    },
+    {
+      "name": "aistudio-sdk",
+      "version": "0.3.8",
+      "description": "Python client library for the AIStudio API",
+      "license": "UNKNOWN",
+      "status": "unresolved",
+      "evidence": "https://pypi.org/project/aistudio-sdk/0.3.8/",
+      "inspected_wheel_sha256": "bfc96af7243ac2ee3303014849aa4028717cce5afa622af8cfe3a1d44d1941d6"
+    },
+    {
+      "name": "annotated-doc",
+      "version": "0.0.4",
+      "description": "Document parameters, class attributes, return types, and variables inline, with Annotated.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/annotated-doc/0.0.4/json"
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.7.0",
+      "description": "Reusable constraint types to use with typing.Annotated",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/annotated-types/0.7.0/json"
+    },
+    {
+      "name": "anyio",
+      "version": "4.13.0",
+      "description": "High-level concurrency and networking framework on top of asyncio or Trio",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/anyio/4.13.0/json"
+    },
+    {
+      "name": "ast-serialize",
+      "version": "0.5.0",
+      "description": "Python bindings for mypy AST serialization",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/ast-serialize/0.5.0/json"
+    },
+    {
+      "name": "attrs",
+      "version": "26.1.0",
+      "description": "Classes Without Boilerplate",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/attrs/26.1.0/json"
+    },
+    {
+      "name": "axe-core-python",
+      "version": "0.1.0",
+      "description": "Проверки доступности интерфейса",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/axe-core-python/0.1.0/json"
+    },
+    {
+      "name": "bce-python-sdk",
+      "version": "0.9.72",
+      "description": "BCE SDK for python",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/bce-python-sdk/0.9.72/json"
+    },
+    {
+      "name": "beautifulsoup4",
+      "version": "4.15.0",
+      "description": "HTML в адаптере",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/beautifulsoup4/4.15.0/json"
+    },
+    {
+      "name": "certifi",
+      "version": "2026.5.20",
+      "description": "Python package for providing Mozilla's CA Bundle.",
+      "license": "MPL-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/certifi/2026.5.20/json"
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "description": "Foreign Function Interface for Python calling C code.",
+      "license": "MIT-0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/cffi/2.1.1/json"
+    },
+    {
+      "name": "chardet",
+      "version": "7.4.3",
+      "description": "Universal character encoding detector",
+      "license": "0BSD",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/chardet/7.4.3/json"
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.4.7",
+      "description": "The Real First Universal Charset Detector. Open, modern and actively maintained alternative to Chardet.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/charset-normalizer/3.4.7/json"
+    },
+    {
+      "name": "click",
+      "version": "8.4.1",
+      "description": "Composable command line interface toolkit",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/click/8.4.1/json"
+    },
+    {
+      "name": "colorama",
+      "version": "0.4.6",
+      "description": "Cross-platform colored terminal text.",
+      "license": "BSD (metadata classifier)",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/colorama/0.4.6/json"
+    },
+    {
+      "name": "colorlog",
+      "version": "6.10.1",
+      "description": "Add colours to the output of Python's logging module.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/colorlog/6.10.1/json"
+    },
+    {
+      "name": "coverage",
+      "version": "7.14.1",
+      "description": "Code coverage measurement for Python",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/coverage/7.14.1/json"
+    },
+    {
+      "name": "crc32c",
+      "version": "2.8",
+      "description": "A python package implementing the crc32c algorithm in hardware and software",
+      "license": "LGPL-2.1-or-later",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/crc32c/2.8/json"
+    },
+    {
+      "name": "cryptography",
+      "version": "50.0.2",
+      "description": "cryptography is a package which provides cryptographic recipes and primitives to Python developers.",
+      "license": "Apache-2.0 OR BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/cryptography/50.0.2/json"
+    },
+    {
+      "name": "cuda-bindings",
+      "version": "13.3.1",
+      "description": "Python bindings for CUDA",
+      "license": "LicenseRef-NVIDIA-SOFTWARE-LICENSE",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/cuda-bindings/13.3.1/json"
+    },
+    {
+      "name": "cuda-pathfinder",
+      "version": "1.5.5",
+      "description": "Pathfinder for CUDA components",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/cuda-pathfinder/1.5.5/json"
+    },
+    {
+      "name": "cuda-toolkit",
+      "version": "13.0.2",
+      "description": "CUDA Toolkit meta-package",
+      "license": "UNKNOWN (CUDA meta-package)",
+      "status": "unresolved",
+      "evidence": "https://pypi.org/project/cuda-toolkit/13.0.2/",
+      "inspected_wheel_sha256": "b198824cf2f54003f50d64ada3a0f184b42ca0846c1c94192fa269ecd97a66eb"
+    },
+    {
+      "name": "easyocr",
+      "version": "1.7.2",
+      "description": "OCR на PyTorch",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/easyocr/1.7.2/json"
+    },
+    {
+      "name": "ebooklib",
+      "version": "0.20",
+      "description": "Чтение EPUB через адаптер",
+      "license": "AGPL-3.0-or-later",
+      "status": "declared",
+      "evidence": "https://github.com/aerkalov/ebooklib"
+    },
+    {
+      "name": "fastapi",
+      "version": "0.136.3",
+      "description": "Маршруты Web/API",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/fastapi/0.136.3/json"
+    },
+    {
+      "name": "filelock",
+      "version": "3.29.1",
+      "description": "A platform independent file lock.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/filelock/3.29.1/json"
+    },
+    {
+      "name": "fire",
+      "version": "0.7.1",
+      "description": "A library for automatically generating command line interfaces.",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/fire/0.7.1/json"
+    },
+    {
+      "name": "fonttools",
+      "version": "4.63.0",
+      "description": "Поиск/анализ шрифтов в адаптере",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/fonttools/4.63.0/json"
+    },
+    {
+      "name": "frozenlist",
+      "version": "1.8.0",
+      "description": "A list-like structure which implements collections.abc.MutableSequence",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/frozenlist/1.8.0/json"
+    },
+    {
+      "name": "fsspec",
+      "version": "2026.4.0",
+      "description": "File-system specification",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/fsspec/2026.4.0/json"
+    },
+    {
+      "name": "future",
+      "version": "1.0.0",
+      "description": "Clean single-source support for Python 3 and 2",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/future/1.0.0/json"
+    },
+    {
+      "name": "ghp-import",
+      "version": "2.1.0",
+      "description": "Copy your docs directly to the gh-pages branch.",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/ghp-import/2.1.0/json"
+    },
+    {
+      "name": "greenlet",
+      "version": "3.5.1",
+      "description": "Lightweight in-process concurrent programming",
+      "license": "MIT AND PSF-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/greenlet/3.5.1/json"
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0",
+      "description": "A pure-Python, bring-your-own-I/O implementation of HTTP/1.1",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/h11/0.16.0/json"
+    },
+    {
+      "name": "hf-xet",
+      "version": "1.5.1",
+      "description": "Fast transfer of large files with the Hugging Face Hub.",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/hf-xet/1.5.1/json"
+    },
+    {
+      "name": "httpcore",
+      "version": "1.0.9",
+      "description": "A minimal low-level HTTP client.",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/httpcore/1.0.9/json"
+    },
+    {
+      "name": "httpx",
+      "version": "0.28.1",
+      "description": "HTTP-клиент и проверки Web",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/httpx/0.28.1/json"
+    },
+    {
+      "name": "huggingface-hub",
+      "version": "1.21.0",
+      "description": "Client library to download and publish models, datasets and other repos on the huggingface.co hub",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/huggingface-hub/1.21.0/json"
+    },
+    {
+      "name": "idna",
+      "version": "3.18",
+      "description": "Internationalized Domain Names in Applications (IDNA)",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/idna/3.18/json"
+    },
+    {
+      "name": "imageio",
+      "version": "2.37.3",
+      "description": "Read and write images and video across all major formats. Supports scientific and volumetric data.",
+      "license": "BSD-2-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/imageio/2.37.3/json"
+    },
+    {
+      "name": "imagesize",
+      "version": "2.0.0",
+      "description": "Get image size from headers (BMP/PNG/JPEG/JPEG2000/GIF/TIFF/SVG/Netpbm/WebP/AVIF/HEIC/HEIF)",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/imagesize/2.0.0/json"
+    },
+    {
+      "name": "iniconfig",
+      "version": "2.3.0",
+      "description": "brain-dead simple config-ini parsing",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/iniconfig/2.3.0/json"
+    },
+    {
+      "name": "jinja2",
+      "version": "3.1.6",
+      "description": "Рендеринг шаблонов документов и Web",
+      "license": "BSD (metadata classifier)",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/jinja2/3.1.6/json"
+    },
+    {
+      "name": "lazy-loader",
+      "version": "0.5",
+      "description": "Makes it easy to load subpackages and functions on demand.",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/lazy-loader/0.5/json"
+    },
+    {
+      "name": "librt",
+      "version": "0.11.0",
+      "description": "Mypyc runtime library",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/librt/0.11.0/json"
+    },
+    {
+      "name": "lxml",
+      "version": "6.1.1",
+      "description": "XML и MathML в библиотеках",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/lxml/6.1.1/json"
+    },
+    {
+      "name": "markdown",
+      "version": "3.10.3",
+      "description": "Python implementation of John Gruber's Markdown.",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/markdown/3.10.3/json"
+    },
+    {
+      "name": "markdown-it-py",
+      "version": "4.2.0",
+      "description": "Python port of markdown-it. Markdown parsing, done right!",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/markdown-it-py/4.2.0/json"
+    },
+    {
+      "name": "markupsafe",
+      "version": "3.0.3",
+      "description": "Safely add untrusted strings to HTML/XML markup.",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/markupsafe/3.0.3/json"
+    },
+    {
+      "name": "mdurl",
+      "version": "0.1.2",
+      "description": "Markdown URL utilities",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/mdurl/0.1.2/json"
+    },
+    {
+      "name": "mergedeep",
+      "version": "1.3.4",
+      "description": "A deep merge function for 🐍.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/mergedeep/1.3.4/json"
+    },
+    {
+      "name": "mkdocs",
+      "version": "1.6.1",
+      "description": "Сборка сайта и встроенной справки",
+      "license": "BSD (metadata classifier)",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/mkdocs/1.6.1/json"
+    },
+    {
+      "name": "mkdocs-get-deps",
+      "version": "0.2.2",
+      "description": "An extra command for MkDocs that infers required PyPI packages from `plugins` in mkdocs.yml",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/mkdocs-get-deps/0.2.2/json"
+    },
+    {
+      "name": "modelscope",
+      "version": "1.38.0",
+      "description": "ModelScope: bring the notion of Model-as-a-Service to life.",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/modelscope/1.38.0/json"
+    },
+    {
+      "name": "modelscope-hub",
+      "version": "0.1.6",
+      "description": "The official Python client to connect with ModelScope Hub.",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/modelscope-hub/0.1.6/json"
+    },
+    {
+      "name": "mpmath",
+      "version": "1.3.0",
+      "description": "Python library for arbitrary-precision floating-point arithmetic",
+      "license": "BSD",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/mpmath/1.3.0/json"
+    },
+    {
+      "name": "multidict",
+      "version": "6.7.1",
+      "description": "multidict implementation",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/multidict/6.7.1/json"
+    },
+    {
+      "name": "mypy",
+      "version": "2.1.0",
+      "description": "Необязательная статическая проверка типов",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/mypy/2.1.0/json"
+    },
+    {
+      "name": "mypy-extensions",
+      "version": "1.1.0",
+      "description": "Type system extensions for programs checked with the mypy type checker.",
+      "license": "MIT",
+      "status": "license-file",
+      "evidence": "https://github.com/python/mypy_extensions/blob/1.1.0/LICENSE",
+      "inspected_wheel_sha256": "1be4cccdb0f2482337c4743e60421de3a356cd97508abadd57d47403e94f5505"
+    },
+    {
+      "name": "networkx",
+      "version": "3.6.1",
+      "description": "Python package for creating and manipulating graphs and networks",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/networkx/3.6.1/json"
+    },
+    {
+      "name": "ninja",
+      "version": "1.13.0",
+      "description": "Ninja is a small build system with a focus on speed",
+      "license": "Apache Software License / BSD License",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/ninja/1.13.0/json"
+    },
+    {
+      "name": "numpy",
+      "version": "2.3.5",
+      "description": "Fundamental package for array computing in Python",
+      "license": "BSD-3-Clause + bundled notices",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/numpy/2.3.5/json"
+    },
+    {
+      "name": "nvidia-cublas",
+      "version": "13.1.1.3",
+      "description": "CUBLAS native runtime libraries",
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-cublas/13.1.1.3/json"
+    },
+    {
+      "name": "nvidia-cuda-cupti",
+      "version": "13.0.85",
+      "description": "CUDA profiling tools runtime libs.",
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-cuda-cupti/13.0.85/json"
+    },
+    {
+      "name": "nvidia-cuda-nvrtc",
+      "version": "13.0.88",
+      "description": "NVRTC native runtime libraries",
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-cuda-nvrtc/13.0.88/json"
+    },
+    {
+      "name": "nvidia-cuda-runtime",
+      "version": "13.0.96",
+      "description": "CUDA Runtime native Libraries",
+      "license": "NVIDIA CUDA EULA",
+      "status": "vendor-terms",
+      "evidence": "https://docs.nvidia.com/cuda/eula/index.html"
+    },
+    {
+      "name": "nvidia-cudnn-cu13",
+      "version": "9.20.0.48",
+      "description": "cuDNN runtime libraries",
+      "license": "NVIDIA cuDNN SLA",
+      "status": "vendor-terms",
+      "evidence": "https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/eula.html"
+    },
+    {
+      "name": "nvidia-cufft",
+      "version": "12.0.0.61",
+      "description": "CUFFT native runtime libraries",
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-cufft/12.0.0.61/json"
+    },
+    {
+      "name": "nvidia-cufile",
+      "version": "1.15.1.6",
+      "description": "cuFile GPUDirect libraries",
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-cufile/1.15.1.6/json"
+    },
+    {
+      "name": "nvidia-curand",
+      "version": "10.4.0.35",
+      "description": "CURAND native runtime libraries",
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-curand/10.4.0.35/json"
+    },
+    {
+      "name": "nvidia-cusolver",
+      "version": "12.0.4.66",
+      "description": "CUDA solver native runtime libraries",
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-cusolver/12.0.4.66/json"
+    },
+    {
+      "name": "nvidia-cusparse",
+      "version": "12.6.3.3",
+      "description": "CUSPARSE native runtime libraries",
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-cusparse/12.6.3.3/json"
+    },
+    {
+      "name": "nvidia-cusparselt-cu13",
+      "version": "0.8.1",
+      "description": "NVIDIA cuSPARSELt",
+      "license": "NVIDIA Proprietary Software",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-cusparselt-cu13/0.8.1/json"
+    },
+    {
+      "name": "nvidia-nccl-cu13",
+      "version": "2.29.7",
+      "description": "NVIDIA Collective Communication Library (NCCL) Runtime",
+      "license": "NVIDIA NCCL SLA (binary package)",
+      "status": "vendor-terms",
+      "evidence": "https://docs.nvidia.com/deeplearning/nccl/archives/nccl_2292/pdf/NCCL-SLA.pdf"
+    },
+    {
+      "name": "nvidia-nvjitlink",
+      "version": "13.0.88",
+      "description": "Nvidia JIT LTO Library",
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-nvjitlink/13.0.88/json"
+    },
+    {
+      "name": "nvidia-nvshmem-cu13",
+      "version": "3.4.5",
+      "description": "NVSHMEM creates a global address space that provides efficient and scalable communication for NVIDIA GPU clusters.",
+      "license": "NVIDIA NVSHMEM SLA",
+      "status": "vendor-terms",
+      "evidence": "https://docs.nvidia.com/nvshmem/api/sla.html"
+    },
+    {
+      "name": "nvidia-nvtx",
+      "version": "13.0.85",
+      "description": "NVIDIA Tools Extension",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/nvidia-nvtx/13.0.85/json"
+    },
+    {
+      "name": "opencv-contrib-python",
+      "version": "4.10.0.84",
+      "description": "Wrapper package for OpenCV python bindings.",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/opencv-contrib-python/4.10.0.84/json"
+    },
+    {
+      "name": "opencv-python-headless",
+      "version": "4.13.0.92",
+      "description": "Wrapper package for OpenCV python bindings.",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/opencv-python-headless/4.13.0.92/json"
+    },
+    {
+      "name": "opendoc",
+      "version": "0.1.0",
+      "description": "Модель документа, JSON, ресурсы, валидация и сравнение",
+      "license": "MIT",
+      "status": "license-file",
+      "evidence": "https://github.com/SergeiLitvinov/opendoc/releases/tag/v0.1.0"
+    },
+    {
+      "name": "opendoc-formats",
+      "version": "0.3.0",
+      "description": "Обработчики форматов, LaTeX и нативный доступ к документам",
+      "license": "MIT",
+      "status": "license-file",
+      "evidence": "https://github.com/SergeiLitvinov/opendoc-formats/releases/tag/v0.3.0"
+    },
+    {
+      "name": "opt-einsum",
+      "version": "3.3.0",
+      "description": "Optimizing numpys einsum function",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/opt-einsum/3.3.0/json"
+    },
+    {
+      "name": "packaging",
+      "version": "26.2",
+      "description": "Core utilities for Python packages",
+      "license": "Apache-2.0 OR BSD-2-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/packaging/26.2/json"
+    },
+    {
+      "name": "paddleocr",
+      "version": "3.7.0",
+      "description": "OCR на PaddlePaddle/PaddleX",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/paddleocr/3.7.0/json"
+    },
+    {
+      "name": "paddlepaddle",
+      "version": "3.3.1",
+      "description": "Вычислительный backend Paddle (Python < 3.14)",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/paddlepaddle/3.3.1/json"
+    },
+    {
+      "name": "paddlex",
+      "version": "3.7.2",
+      "description": "Low-code development tool based on PaddlePaddle.",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/paddlex/3.7.2/json"
+    },
+    {
+      "name": "pandas",
+      "version": "3.0.3",
+      "description": "Powerful data structures for data analysis, time series, and statistics",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pandas/3.0.3/json"
+    },
+    {
+      "name": "pathspec",
+      "version": "1.1.1",
+      "description": "Utility library for gitignore style pattern matching of file paths.",
+      "license": "Mozilla Public License 2.0 (MPL 2.0)",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pathspec/1.1.1/json"
+    },
+    {
+      "name": "pdf2docx",
+      "version": "0.5.13",
+      "description": "Специализированный PDF → DOCX через адаптер; зависит от PyMuPDF",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pdf2docx/0.5.13/json"
+    },
+    {
+      "name": "pdfminer-six",
+      "version": "20260107",
+      "description": "PDF parser and analyzer",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pdfminer-six/20260107/json"
+    },
+    {
+      "name": "pdfplumber",
+      "version": "0.11.10",
+      "description": "Plumb a PDF for detailed information about each char, rectangle, and line.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pdfplumber/0.11.10/json"
+    },
+    {
+      "name": "pillow",
+      "version": "12.2.0",
+      "description": "Изображения, OCR и визуальные измерения",
+      "license": "MIT-CMU",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pillow/12.2.0/json"
+    },
+    {
+      "name": "platformdirs",
+      "version": "4.10.1",
+      "description": "Пользовательские каталоги данных",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/platformdirs/4.10.1/json"
+    },
+    {
+      "name": "playwright",
+      "version": "1.62.0",
+      "description": "Браузерные проверки",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/playwright/1.62.0/json"
+    },
+    {
+      "name": "pluggy",
+      "version": "1.6.0",
+      "description": "plugin and hook calling mechanisms for python",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pluggy/1.6.0/json"
+    },
+    {
+      "name": "prettytable",
+      "version": "3.18.0",
+      "description": "A simple Python library for easily displaying tabular data in a visually appealing ASCII table format",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/prettytable/3.18.0/json"
+    },
+    {
+      "name": "propcache",
+      "version": "0.5.2",
+      "description": "Accelerated property cache",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/propcache/0.5.2/json"
+    },
+    {
+      "name": "protobuf",
+      "version": "7.35.1",
+      "description": "Сериализация Protocol Buffers для вычислительных зависимостей OCR",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/protobuf/7.35.1/json"
+    },
+    {
+      "name": "psutil",
+      "version": "7.2.2",
+      "description": "Cross-platform lib for process and system monitoring.",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/psutil/7.2.2/json"
+    },
+    {
+      "name": "py-cpuinfo",
+      "version": "9.0.0",
+      "description": "Get CPU info with pure Python",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/py-cpuinfo/9.0.0/json"
+    },
+    {
+      "name": "pyclipper",
+      "version": "1.4.0",
+      "description": "Cython wrapper for the C++ translation of the Angus Johnson's Clipper library (ver. 6.4.2)",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pyclipper/1.4.0/json"
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "description": "C parser in Python",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pycparser/3.0/json"
+    },
+    {
+      "name": "pycryptodome",
+      "version": "3.23.0",
+      "description": "Cryptographic library for Python",
+      "license": "BSD, Public Domain",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pycryptodome/3.23.0/json"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.13.4",
+      "description": "Data validation using Python type hints",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pydantic/2.13.4/json"
+    },
+    {
+      "name": "pydantic-core",
+      "version": "2.46.4",
+      "description": "Core functionality for Pydantic validation and serialization",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pydantic-core/2.46.4/json"
+    },
+    {
+      "name": "pyee",
+      "version": "13.0.1",
+      "description": "A rough port of Node.js's EventEmitter to Python with a few tricks of its own",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pyee/13.0.1/json"
+    },
+    {
+      "name": "pygments",
+      "version": "2.20.0",
+      "description": "Pygments is a syntax highlighting package written in Python.",
+      "license": "BSD-2-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pygments/2.20.0/json"
+    },
+    {
+      "name": "pymupdf",
+      "version": "1.27.2.3",
+      "description": "Геометрический анализ, изображения и PDF-конвертация через адаптер",
+      "license": "AGPL-3.0 / commercial",
+      "status": "declared",
+      "evidence": "https://pymupdf.readthedocs.io/en/latest/faq/index.html"
+    },
+    {
+      "name": "pypdf",
+      "version": "6.13.1",
+      "description": "Текстовый слой и страницы PDF",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pypdf/6.13.1/json"
+    },
+    {
+      "name": "pypdfium2",
+      "version": "5.11.0",
+      "description": "Python bindings to PDFium",
+      "license": "BSD-3-Clause, Apache-2.0, dependency licenses",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pypdfium2/5.11.0/json"
+    },
+    {
+      "name": "pytesseract",
+      "version": "0.3.13",
+      "description": "Обёртка внешнего Tesseract для OCR",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pytesseract/0.3.13/json"
+    },
+    {
+      "name": "pytest",
+      "version": "9.0.3",
+      "description": "Автоматические тесты",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pytest/9.0.3/json"
+    },
+    {
+      "name": "pytest-cov",
+      "version": "7.1.0",
+      "description": "Измерение покрытия",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pytest-cov/7.1.0/json"
+    },
+    {
+      "name": "python-bidi",
+      "version": "0.6.10",
+      "description": "Python Bidi layout wrapping the Rust crate unicode-bidi",
+      "license": "LGPL-3.0-or-later",
+      "status": "declared",
+      "evidence": "https://github.com/MeirKriheli/python-bidi/blob/v0.6.10/COPYING"
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0",
+      "description": "Extensions to the standard Python datetime module",
+      "license": "Dual License",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/python-dateutil/2.9.0.post0/json"
+    },
+    {
+      "name": "python-docx",
+      "version": "1.2.0",
+      "description": "Нативное чтение/запись DOCX в адаптере",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/python-docx/1.2.0/json"
+    },
+    {
+      "name": "python-multipart",
+      "version": "0.0.32",
+      "description": "Загрузка файлов и форм Web",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/python-multipart/0.0.32/json"
+    },
+    {
+      "name": "python-pptx",
+      "version": "1.0.2",
+      "description": "Нативное чтение/запись PPTX в адаптере",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/python-pptx/1.0.2/json"
+    },
+    {
+      "name": "pyyaml",
+      "version": "6.0.2",
+      "description": "Чтение YAML-конвейеров и схем",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pyyaml/6.0.2/json"
+    },
+    {
+      "name": "pyyaml-env-tag",
+      "version": "1.1",
+      "description": "A custom YAML tag for referencing environment variables in YAML files.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/pyyaml-env-tag/1.1/json"
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "description": "Python HTTP for Humans.",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/requests/2.34.2/json"
+    },
+    {
+      "name": "rich",
+      "version": "15.0.0",
+      "description": "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/rich/15.0.0/json"
+    },
+    {
+      "name": "ruamel-yaml",
+      "version": "0.19.1",
+      "description": "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/ruamel-yaml/0.19.1/json"
+    },
+    {
+      "name": "ruff",
+      "version": "0.15.16",
+      "description": "Линтер и форматирование",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/ruff/0.15.16/json"
+    },
+    {
+      "name": "safetensors",
+      "version": "0.8.0",
+      "description": "Безопасная сериализация тензоров OCR-моделей",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/safetensors/0.8.0/json"
+    },
+    {
+      "name": "scikit-image",
+      "version": "0.26.0",
+      "description": "Image processing in Python",
+      "license": "BSD-3-Clause, BSD-2-Clause, MIT + notices",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/scikit-image/0.26.0/json"
+    },
+    {
+      "name": "scipy",
+      "version": "1.17.1",
+      "description": "Fundamental algorithms for scientific computing in Python",
+      "license": "BSD-3-Clause + bundled notices",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/scipy/1.17.1/json"
+    },
+    {
+      "name": "setuptools",
+      "version": "81.0.0",
+      "description": "Backend сборки wheel/sdist, также транзитивная зависимость OCR",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/setuptools/81.0.0/json"
+    },
+    {
+      "name": "shapely",
+      "version": "2.1.2",
+      "description": "Manipulation and analysis of geometric objects",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/shapely/2.1.2/json"
+    },
+    {
+      "name": "shellingham",
+      "version": "1.5.4",
+      "description": "Tool to Detect Surrounding Shell",
+      "license": "ISC",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/shellingham/1.5.4/json"
+    },
+    {
+      "name": "six",
+      "version": "1.17.0",
+      "description": "Python 2 and 3 compatibility utilities",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/six/1.17.0/json"
+    },
+    {
+      "name": "soupsieve",
+      "version": "2.8.4",
+      "description": "A modern CSS selector implementation for Beautiful Soup.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/soupsieve/2.8.4/json"
+    },
+    {
+      "name": "sqlalchemy",
+      "version": "2.0.50",
+      "description": "SQLite-библиотека и хранилище задач",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/sqlalchemy/2.0.50/json"
+    },
+    {
+      "name": "starlette",
+      "version": "1.2.1",
+      "description": "The little ASGI library that shines.",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/starlette/1.2.1/json"
+    },
+    {
+      "name": "sympy",
+      "version": "1.14.0",
+      "description": "Computer algebra system (CAS) in Python",
+      "license": "BSD",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/sympy/1.14.0/json"
+    },
+    {
+      "name": "termcolor",
+      "version": "3.3.0",
+      "description": "ANSI color formatting for output in terminal",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/termcolor/3.3.0/json"
+    },
+    {
+      "name": "tifffile",
+      "version": "2026.3.3",
+      "description": "Read and write TIFF files",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/tifffile/2026.3.3/json"
+    },
+    {
+      "name": "tifffile",
+      "version": "2026.6.1",
+      "description": "Read and write TIFF files",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/tifffile/2026.6.1/json"
+    },
+    {
+      "name": "tinycss2",
+      "version": "1.5.1",
+      "description": "A tiny CSS parser",
+      "license": "BSD (metadata classifier)",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/tinycss2/1.5.1/json"
+    },
+    {
+      "name": "tomli",
+      "version": "2.4.1",
+      "description": "A lil' TOML parser",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/tomli/2.4.1/json"
+    },
+    {
+      "name": "torch",
+      "version": "2.12.0",
+      "description": "Tensors and Dynamic neural networks in Python with strong GPU acceleration",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/torch/2.12.0/json"
+    },
+    {
+      "name": "torchvision",
+      "version": "0.27.0",
+      "description": "image and video datasets and models for torch deep learning",
+      "license": "BSD",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/torchvision/0.27.0/json"
+    },
+    {
+      "name": "tqdm",
+      "version": "4.68.2",
+      "description": "Индикаторы выполнения в CLI",
+      "license": "MPL-2.0 AND MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/tqdm/4.68.2/json"
+    },
+    {
+      "name": "triton",
+      "version": "3.7.0",
+      "description": "A language and compiler for custom Deep Learning operations",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/triton/3.7.0/json"
+    },
+    {
+      "name": "typer",
+      "version": "0.25.1",
+      "description": "Typer, build great CLIs. Easy to code. Based on Python type hints.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/typer/0.25.1/json"
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.15.0",
+      "description": "Backported and Experimental Type Hints for Python 3.9+",
+      "license": "PSF-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/typing-extensions/4.15.0/json"
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.2",
+      "description": "Runtime typing introspection tools",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/typing-inspection/0.4.2/json"
+    },
+    {
+      "name": "tzdata",
+      "version": "2026.2",
+      "description": "Provider of IANA time zone data",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/tzdata/2026.2/json"
+    },
+    {
+      "name": "ujson",
+      "version": "5.13.0",
+      "description": "Ultra fast JSON encoder and decoder for Python",
+      "license": "BSD-3-Clause AND TCL",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/ujson/5.13.0/json"
+    },
+    {
+      "name": "urllib3",
+      "version": "2.7.0",
+      "description": "HTTP library with thread-safe connection pooling, file post, and more.",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/urllib3/2.7.0/json"
+    },
+    {
+      "name": "uvicorn",
+      "version": "0.49.0",
+      "description": "Локальный ASGI-сервер",
+      "license": "BSD-3-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/uvicorn/0.49.0/json"
+    },
+    {
+      "name": "watchdog",
+      "version": "6.0.0",
+      "description": "Filesystem events monitoring",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/watchdog/6.0.0/json"
+    },
+    {
+      "name": "wcwidth",
+      "version": "0.8.2",
+      "description": "Measures the displayed width of unicode strings in a terminal",
+      "license": "MIT",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/wcwidth/0.8.2/json"
+    },
+    {
+      "name": "webencodings",
+      "version": "0.6.1",
+      "description": "Character encoding aliases for legacy web content",
+      "license": "BSD (metadata classifier)",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/webencodings/0.6.1/json"
+    },
+    {
+      "name": "xlsxwriter",
+      "version": "3.2.9",
+      "description": "A Python module for creating Excel XLSX files.",
+      "license": "BSD-2-Clause",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/xlsxwriter/3.2.9/json"
+    },
+    {
+      "name": "yarl",
+      "version": "1.24.2",
+      "description": "Yet another URL library",
+      "license": "Apache-2.0",
+      "status": "declared",
+      "evidence": "https://pypi.org/pypi/yarl/1.24.2/json"
+    }
+  ]
+}

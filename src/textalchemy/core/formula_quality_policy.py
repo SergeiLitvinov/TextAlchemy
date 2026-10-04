@@ -7,8 +7,5 @@ from opendoc.formula_quality_policy import (
     FormulaLossPolicy as FormulaLossPolicy,
 )
 from opendoc.formula_quality_policy import (
-    _tree as _tree,
-)
-from opendoc.formula_quality_policy import (
     formula_fingerprint as formula_fingerprint,
 )

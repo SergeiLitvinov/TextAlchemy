@@ -741,8 +741,8 @@ class TestReadPptxModel:
 
         data = pptx_mod._read_chart_data(object(), "rId1")
         points = data["series"][0]["data_points"]
-        assert points[0]["color"] == "#70AD47"
-        assert ColorValue.from_dict(points[0]["color_value"]).to_hex() == "#70AD47"
+        assert points["0"]["color"] == "#70AD47"
+        assert ColorValue.from_dict(points["0"]["color_value"]).to_hex() == "#70AD47"
 
     def test_extracts_image_resource(self, tmp_path):
         path = tmp_path / "rich.pptx"

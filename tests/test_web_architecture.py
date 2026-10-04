@@ -113,10 +113,27 @@ def test_matching_and_pipeline_routes_only_adapt_http(name: str) -> None:
     assert ".rglob(" not in source and ".all_items(" not in source
 
 
-@pytest.mark.parametrize("name", ["matching", "pipeline_builder", "bibliography_export", "generator_catalog",
-                                  "generator_execution", "generator_sessions", "extraction", "recognition",
-                                  "upload_input", "documentation", "batch_submission", "batch_retry", "batch_history",
-                                  "conversion_preview", "conversion_inspection", "conversion_submission"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "matching",
+        "pipeline_builder",
+        "bibliography_export",
+        "generator_catalog",
+        "generator_execution",
+        "generator_sessions",
+        "extraction",
+        "recognition",
+        "upload_input",
+        "documentation",
+        "batch_submission",
+        "batch_retry",
+        "batch_history",
+        "conversion_preview",
+        "conversion_inspection",
+        "conversion_submission",
+    ],
+)
 def test_matching_pipeline_and_export_services_do_not_import_http_or_application_state(name: str) -> None:
     imports = _imports(ROOT / "services" / f"{name}.py")
     assert not any(item.startswith(("fastapi", "starlette", "textalchemy.web.app")) for item in imports)
@@ -150,13 +167,21 @@ def test_global_task_center_keeps_store_projection_out_of_http_adapter():
 
 
 def test_conversion_pipeline_has_typed_stage_and_extension_contracts():
-    stages = ROOT.parent / "convert" / "stages.py"
-    source = stages.read_text(encoding="utf-8")
-    assert "class StageKind" in source
-    stage_names = ("PARSE", "NORMALIZE", "LAYOUT", "RESOURCES", "SERIALIZE", "VERIFY")
-    assert all(f'{name} = "{name.lower()}"' in source for name in stage_names)
-    assert "class ConversionStage" in source
-    assert "class FormatExtension" in source
+    from opendoc_formats.writers import stages as library_stages
+
+    from textalchemy.convert import stages as application_stages
+
+    assert application_stages is library_stages
+    assert {stage.value for stage in application_stages.StageKind} == {
+        "parse",
+        "normalize",
+        "layout",
+        "resources",
+        "serialize",
+        "verify",
+    }
+    assert application_stages.ConversionStage is library_stages.ConversionStage
+    assert application_stages.FormatExtension is library_stages.FormatExtension
 
 
 def test_large_conversion_modules_have_documented_decomposition_budget():
@@ -171,18 +196,12 @@ def test_large_conversion_modules_have_documented_decomposition_budget():
         assert _lines(path) <= limit, f"{path.name}: orchestration module exceeds {limit} lines"
 
 
-def test_conversion_module_size_budget_has_explicit_legacy_allowlist():
+def test_conversion_modules_fit_application_budget_without_legacy_exceptions():
     source = ROOT.parent
-    legacy_limits = {
-        "convert/html_writer.py": 1900,  # chart renderers are pure serialization helpers
-        "convert/pptx_to_html/_renderer.py": 1800,  # compatibility renderer with embedded viewer assets
-        "formats/pptx.py": 1750,  # XML importer; new work must move behind stage adapters
-    }
     for folder in (source / "convert", source / "formats"):
         for path in folder.rglob("*.py"):
             relative = path.relative_to(source).as_posix()
-            limit = legacy_limits.get(relative, 600)
-            assert _lines(path) <= limit, f"{relative}: exceeds explicit module budget {limit}"
+            assert _lines(path) <= 600, f"{relative}: exceeds application module budget 600"
 
 
 def test_shared_shell_features_live_in_components():

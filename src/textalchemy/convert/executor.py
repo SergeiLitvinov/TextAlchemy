@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import importlib.util
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -189,12 +188,9 @@ class ConversionExecutor:
 
 def requirement_available(requirement: str) -> bool:
     if requirement == "libreoffice":
-        candidates = (
-            shutil.which("soffice"),
-            r"C:\Program Files\LibreOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-        )
-        return any(candidate and Path(candidate).is_file() for candidate in candidates)
+        from opendoc_formats.office import find_libreoffice
+
+        return find_libreoffice() is not None
     module = _MODULE_REQUIREMENTS.get(requirement, requirement.replace("-", "_"))
     return importlib.util.find_spec(module) is not None
 

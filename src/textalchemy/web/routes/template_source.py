@@ -55,7 +55,8 @@ async def import_template(file: UploadFile = File(...), field_schema: str = Form
         with create_web_workspace() as workspace:
             path = await save_upload(workspace, file, fallback='sample.docx')
             data = path.read_bytes()
-            checked_docx(data)
+            with checked_docx(data):
+                pass
             if field_schema:
                 raw_schema = json.loads(field_schema)
                 if not isinstance(raw_schema, dict):

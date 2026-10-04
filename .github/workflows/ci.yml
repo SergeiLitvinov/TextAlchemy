@@ -5,8 +5,45 @@ on:
     branches: [main, master]
   pull_request:
     branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
+  release-package:
+    needs: [test, documentation, minimal-install, document-core]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install locked release tooling
+        run: uv sync --frozen --extra docs --extra dev --extra html --extra docx --extra pdf
+      - name: Lint and verify release gates
+        run: |
+          uv run ruff check
+          uv run python -m tools.check_library_contracts
+          uv run python -m tools.dependencies
+          uv run pytest tests/test_release.py -q
+          uv run python -m tools.docs check
+      - name: Build and verify application archives
+        run: |
+          uv build --out-dir dist
+          uv run python -m tools.release --dist dist
+          cp vendor/opendoc/*.whl vendor/opendoc-formats/*.whl dist/
+      - name: Save candidate artifacts without publishing
+        uses: actions/upload-artifact@v4
+        with:
+          name: textalchemy-release-candidate
+          path: dist/
+
   document-core:
     runs-on: ubuntu-latest
     strategy:
@@ -63,7 +100,7 @@ jobs:
         with:
           python-version: "3.13"
       - name: Install core dependencies only
-        run: uv sync
+        run: uv sync --frozen
       - name: Verify core imports and CLI discovery
         run: |
           uv run python -c "import textalchemy, textalchemy.convert, textalchemy.pipeline"
@@ -90,14 +127,20 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --frozen --extra dev --extra docs --extra web --extra pdf --extra docx --extra pptx --extra html --extra epub
+
+      - name: Install Chromium for all browser and accessibility tests
+        run: uv run --no-sync playwright install --with-deps chromium
 
       - name: Lint with ruff
         run: uv run ruff check
 
+      - name: Verify immutable library releases and consumer boundary
+        run: uv run python -m tools.check_library_contracts
+
       - name: Test with pytest
         # Порог покрытия задан в pyproject.toml (`addopts = --cov-fail-under=80`).
-        run: uv run pytest tests/ --cov=textalchemy --cov=opendoc --cov-report=xml
+        run: uv run pytest tests/ --cov=textalchemy --cov-report=xml
 
       - name: Upload coverage
         uses: codecov/codecov-action@v5
@@ -105,21 +148,12 @@ jobs:
           file: ./coverage.xml
           fail_ci_if_error: false
 
-  browser-e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - name: Install dependencies
-        run: uv sync --all-extras
-      - name: Install Chromium
-        run: uv run playwright install --with-deps chromium
-      - name: Run browser and accessibility tests
-        run: uv run pytest tests/test_browser_e2e.py tests/test_web_bibliography_e2e.py tests/test_web_matching_e2e.py tests/test_web_documentation_e2e.py tests/test_web_preview_e2e.py tests/test_web_ingest_e2e.py tests/test_web_conversion_experience.py tests/test_web_pipeline_e2e.py tests/convert/test_html_layout_e2e.py tests/convert/test_html_normalize_e2e.py -v --tb=short
+  pages:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [release-package]
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write

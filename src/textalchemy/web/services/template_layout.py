@@ -1,19 +1,18 @@
-"""Validate disjoint simple controls so independent editors can coexist safely."""
+"""Validate application control strings over backend-independent document snapshots."""
 import re
 
-W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
 START = re.compile(r'^\s*{%\s*(if\s+(?:not\s+)?([A-Za-z_]\w*)|for\s+__ta_item\s+in\s+([A-Za-z_]\w*))\s*%}\s*$')
 
 
-def _text(node):
-    return ''.join(item.text or '' for item in node.iter(W + 't'))
+def _ids(item, table):
+    return item.paragraph_ids if table else ((item.paragraph_id,) if item.paragraph_id else ())
 
 
 def _scan(nodes, fields, controls, protected, table=False):
     index = 0
     while index < len(nodes):
         node = nodes[index]
-        match = START.fullmatch(_text(node))
+        match = START.fullmatch(node.text)
         if not match:
             index += 1
             continue
@@ -21,27 +20,27 @@ def _scan(nodes, fields, controls, protected, table=False):
         end = 'endif' if kind == 'condition' else 'endfor'
         expected = 'boolean' if kind == 'condition' else 'array'
         if (index + 2 >= len(nodes) or fields.get(field) != expected
-                or not re.fullmatch(r'\s*{%\s*' + end + r'\s*%}\s*', _text(nodes[index + 2]))
-                or (not table and any(n.tag != W + 'p' for n in nodes[index:index + 3]))
-                or (table and kind != 'loop') or '{%' in _text(nodes[index + 1])):
+                or not re.fullmatch(r'\s*{%\s*' + end + r'\s*%}\s*', nodes[index + 2].text)
+                or (not table and any(n.kind != 'paragraph' for n in nodes[index:index + 3]))
+                or (table and kind != 'loop') or '{%' in nodes[index + 1].text):
             raise ValueError('Поддержаны отдельные условия и циклы одного абзаца или строки без вложенности и else.')
         for marker in (node, nodes[index + 2]):
-            controls.update(marker.iter(W + 'p'))
-        for paragraph in nodes[index + 1].iter(W + 'p'):
-            protected[paragraph] = 'row' if table else kind
+            controls.update(_ids(marker, table))
+        for paragraph_id in _ids(nodes[index + 1], table):
+            protected[paragraph_id] = 'row' if table else kind
         index += 3
 
 
-def compatible_controls(parts, schema):
+def compatible_controls(package, schema):
+    if any(paragraph.has_nested_paragraphs for paragraph in package.paragraphs):
+        raise ValueError('Вложенные текстовые области пока не поддерживаются редактором переменных.')
     controls, protected = set(), {}
     fields = {field['name']: field['type'] for field in schema['fields']}
-    body = parts['word/document.xml'].find(W + 'body')
-    # A table's joined text is not a paragraph marker.
-    _scan(list(body), fields, controls, protected)
-    for table in body.findall(W + 'tbl'):
-        _scan(table.findall(W + 'tr'), fields, controls, protected, True)
-    for root in parts.values():
-        for paragraph in root.iter(W + 'p'):
-            if any(mark in _text(paragraph) for mark in ('{%', '%}')) and paragraph not in controls:
-                raise ValueError('Вложенные или неизвестные управляющие конструкции не поддерживаются редактором.')
+    _scan(package.body, fields, controls, protected)
+    for table in package.tables:
+        if table.is_body:
+            _scan(table.rows, fields, controls, protected, True)
+    for paragraph in package.paragraphs:
+        if any(mark in paragraph.text for mark in ('{%', '%}')) and paragraph.id not in controls:
+            raise ValueError('Вложенные или неизвестные управляющие конструкции не поддерживаются редактором.')
     return controls, protected

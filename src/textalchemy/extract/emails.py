@@ -58,7 +58,7 @@ def extract_emails_from_pdf(
     """Двухуровневое извлечение email из PDF: текстовый слой → OCR.
 
     Без OCR использует ``formats/pdf.read_pdf()`` (pdfplumber → pypdf → pymupdf).
-    C OCR — построчный обход через fitz + Tesseract для страниц без текстового слоя.
+    Для страниц без текста получает PNG через OpenDoc Formats и запускает OCR.
     """
     from textalchemy.formats.pdf import read_pdf
 
@@ -77,21 +77,19 @@ def extract_emails_from_pdf(
             ocr_pages=0,
         )
 
-    from textalchemy.recognize.ocr import OcrEngine
+    from opendoc_formats.pdf import PdfDocument
 
-    try:
-        import fitz
-    except ImportError as e:
-        raise RecognizeError("pymupdf (fitz) required for PDF OCR") from e
+    from textalchemy.recognize.ocr import OcrEngine
 
     engine = ocr_engine or OcrEngine(languages=langs.split("+"))
     all_emails: list[str] = []
     text_pages = 0
     ocr_pages = 0
 
-    with fitz.open(str(pdf_path)) as doc:
-        for i, page in enumerate(doc, 1):
-            text_layer = page.get_text()
+    with PdfDocument(pdf_path) as doc:
+        total_pages = doc.page_count
+        for index in range(total_pages):
+            text_layer = doc.page_info(index).text
 
             if len(text_layer.strip()) > min_text_length:
                 text_pages += 1
@@ -100,22 +98,16 @@ def extract_emails_from_pdf(
                 continue
 
             ocr_pages += 1
-            text, ok = engine.recognize_page_with_ocr(
-                page,
-                langs=langs,
-                dpi=dpi,
-                rotation=rotation,
-                psm=psm,
-                timeout_sec=timeout,
-            )
-            if ok and text:
-                page_emails = extract_emails_from_text(text)
+            png = doc.render_page(index, dpi=dpi, rotation=rotation).png
+            result = engine.recognize_image_bytes(png, langs=langs, psm=psm, timeout=timeout)
+            if result.text:
+                page_emails = extract_emails_from_text(result.text)
                 all_emails.extend(page_emails)
 
     return EmailResult(
         emails=sorted(set(all_emails)),
         source=str(pdf_path),
-        total_pages=len(doc),
+        total_pages=total_pages,
         text_pages=text_pages,
         ocr_pages=ocr_pages,
     )
@@ -161,29 +153,22 @@ def extract_emails_from_document(
 
 def emails_to_docx(emails: Sequence[str], source_name: str, output_path: str | Path) -> Path:
     """Сохранение списка email в Word документ."""
-    import io
-
-    from docx import Document as DocxDocument
-
-    from textalchemy.core.io import atomic_write_bytes
+    from opendoc import DocumentModel, Paragraph, Section, TextRun
+    from opendoc_formats.writers.docx_writer import write_docx_model
 
     out = Path(output_path)
-
-    doc = DocxDocument()
-    doc.add_heading(f"Email из файла: {Path(source_name).name}", 0)
-    doc.add_paragraph(f"Всего найдено уникальных адресов: {len(emails)}")
-    doc.add_paragraph(f"Дата обработки: {datetime.now().strftime('%d.%m.%Y %H:%M')}")
-    doc.add_heading("Список адресов:", level=1)
-
+    blocks = [
+        Paragraph([TextRun(f"Email из файла: {Path(source_name).name}")], properties={"style_name": "Title"}),
+        Paragraph([TextRun(f"Всего найдено уникальных адресов: {len(emails)}")]),
+        Paragraph([TextRun(f"Дата обработки: {datetime.now().strftime('%d.%m.%Y %H:%M')}")]),
+        Paragraph([TextRun("Список адресов:")], properties={"style_name": "Heading 1"}),
+        *(Paragraph([TextRun(email)]) for email in sorted(emails)),
+    ]
     if not emails:
-        doc.add_paragraph("❌ Email адреса не найдены.")
-    else:
-        for email in sorted(emails):
-            doc.add_paragraph(email)
-
-    buffer = io.BytesIO()
-    doc.save(buffer)
-    atomic_write_bytes(out, buffer.getvalue())
+        blocks.append(Paragraph([TextRun("❌ Email адреса не найдены.")]))
+    report = write_docx_model(DocumentModel(sections=[Section(blocks=blocks)]), out)
+    if not report.success:
+        raise RecognizeError("Не удалось сохранить список адресов в DOCX")
     logger.info("DOCX saved: %s", out)
     return out
 

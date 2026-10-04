@@ -1,17 +1,10 @@
-class TextAlchemyError(Exception):
-    """Base exception for all TextAlchemy errors."""
+from opendoc_formats.errors import ConvertError as ConvertError
+from opendoc_formats.errors import ExtractError as ExtractError
+from opendoc_formats.errors import FormatError as TextAlchemyError
 
 
 class ConfigError(TextAlchemyError):
     """Configuration-related errors."""
-
-
-class ExtractError(TextAlchemyError):
-    """Document extraction errors."""
-
-
-class ConvertError(TextAlchemyError):
-    """Document conversion errors."""
 
 
 class OrganizeError(TextAlchemyError):

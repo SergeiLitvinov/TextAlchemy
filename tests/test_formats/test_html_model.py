@@ -168,7 +168,7 @@ def test_optional_dependencies_unavailable(monkeypatch):
         return original(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", without_html)
-    assert read_html(CORPUS).warnings == ["Install textalchemy[html]"]
+    assert read_html(CORPUS).warnings == ["Install opendoc-formats[html]"]
     executor = ConversionExecutor(requirement_checker=lambda name: name not in {"beautifulsoup4", "tinycss2"})
     assert executor.plan(DocFormat.HTML, DocFormat.MODEL) is None
 

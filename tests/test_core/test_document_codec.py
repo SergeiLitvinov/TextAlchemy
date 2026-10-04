@@ -139,7 +139,7 @@ def test_json_roundtrip_preserves_structure_and_binary_resources():
 def test_serialized_document_has_explicit_format_and_version():
     payload = document_to_dict(_complex_document())
 
-    assert payload["format"] == "textalchemy.document"
+    assert payload["format"] == "opendoc.document"
     assert payload["version"] == 2
     assert payload["document"]["property_schema_version"] == 1
     json.dumps(payload)
@@ -183,6 +183,7 @@ def test_version_one_document_is_migrated_to_typed_properties():
 
 def test_legacy_ooxml_resources_are_migrated_to_package_graph():
     payload = document_to_dict(_complex_document())
+    payload["format"] = "textalchemy.document"
     payload["version"] = 1
     payload["document"].pop("property_schema_version")
     payload["document"]["package"] = None
@@ -243,7 +244,7 @@ def test_package_graph_rejects_broken_internal_relationship():
         ],
     )
 
-    assert graph.validate() == ["unknown relationship target '/word/missing.xml'"]
+    assert graph.validate() == ["package.relationships[0].target: unknown relationship target '/word/missing.xml'"]
 
 
 def test_broken_resource_reference_is_rejected_on_load():

@@ -13,107 +13,31 @@ from opendoc.document_codec import (
 from opendoc.document_codec import (
     SUPPORTED_FORMAT_VERSIONS as SUPPORTED_FORMAT_VERSIONS,
 )
-from opendoc.document_codec import (
-    _block_from_dict as _block_from_dict,
-)
-from opendoc.document_codec import (
-    _block_to_dict as _block_to_dict,
-)
-from opendoc.document_codec import (
-    _box_from_dict as _box_from_dict,
-)
-from opendoc.document_codec import (
-    _box_to_dict as _box_to_dict,
-)
-from opendoc.document_codec import (
-    _color_from_value as _color_from_value,
-)
-from opendoc.document_codec import (
-    _color_to_value as _color_to_value,
-)
-from opendoc.document_codec import (
-    _crop_from_dict as _crop_from_dict,
-)
-from opendoc.document_codec import (
-    _crop_to_dict as _crop_to_dict,
-)
-from opendoc.document_codec import (
-    _inline_from_dict as _inline_from_dict,
-)
-from opendoc.document_codec import (
-    _inline_to_dict as _inline_to_dict,
-)
-from opendoc.document_codec import (
-    _length_from_value as _length_from_value,
-)
-from opendoc.document_codec import (
-    _length_to_value as _length_to_value,
-)
-from opendoc.document_codec import (
-    _migrate_legacy_package_resources as _migrate_legacy_package_resources,
-)
-from opendoc.document_codec import (
-    _package_from_dict as _package_from_dict,
-)
-from opendoc.document_codec import (
-    _package_to_dict as _package_to_dict,
-)
-from opendoc.document_codec import (
-    _page_from_dict as _page_from_dict,
-)
-from opendoc.document_codec import (
-    _page_to_dict as _page_to_dict,
-)
-from opendoc.document_codec import (
-    _properties_to_dict as _properties_to_dict,
-)
-from opendoc.document_codec import (
-    _provenance_from_dict as _provenance_from_dict,
-)
-from opendoc.document_codec import (
-    _provenance_to_dict as _provenance_to_dict,
-)
-from opendoc.document_codec import (
-    _resource_from_dict as _resource_from_dict,
-)
-from opendoc.document_codec import (
-    _resource_to_dict as _resource_to_dict,
-)
-from opendoc.document_codec import (
-    _section_from_dict as _section_from_dict,
-)
-from opendoc.document_codec import (
-    _section_to_dict as _section_to_dict,
-)
-from opendoc.document_codec import (
-    _style_from_dict as _style_from_dict,
-)
-from opendoc.document_codec import (
-    _style_to_dict as _style_to_dict,
-)
-from opendoc.document_codec import (
-    _surrogate_from_dict as _surrogate_from_dict,
-)
-from opendoc.document_codec import (
-    _surrogate_to_dict as _surrogate_to_dict,
-)
 from opendoc.document_model import DocumentModel
 
-FORMAT_NAME = "textalchemy.document"
+FORMAT_NAME = _codec.FORMAT_NAME
+LEGACY_FORMAT_NAME = "textalchemy.document"
 
 
 def document_to_dict(document: DocumentModel) -> dict[str, Any]:
-    """Сохранить прежний идентификатор файлов приложения поверх модели OpenDoc."""
-    payload = _codec.document_to_dict(document)
-    payload["format"] = FORMAT_NAME
-    return payload
+    """Записать стандарт OpenDoc для чтения независимыми потребителями."""
+    return _codec.document_to_dict(document)
 
 
 def document_from_dict(payload: dict[str, Any]) -> DocumentModel:
     """Прочитать файлы приложения и OpenDoc без изменения исходного словаря."""
-    if payload.get("format") == FORMAT_NAME:
+    legacy = payload.get("format") == LEGACY_FORMAT_NAME and payload.get("version") == 1
+    if payload.get("format") == LEGACY_FORMAT_NAME:
         payload = {**payload, "format": _codec.FORMAT_NAME}
-    return _codec.document_from_dict(payload)
+    document = _codec.document_from_dict(payload)
+    if legacy:
+        from textalchemy.core.legacy_document import migrate_legacy_ooxml_resources
+
+        document = migrate_legacy_ooxml_resources(document)
+        errors = document.validate()
+        if errors:
+            raise ValueError("invalid legacy document model: " + "; ".join(errors))
+    return document
 
 
 def document_to_json(document: DocumentModel, *, indent: int | None = None) -> str:

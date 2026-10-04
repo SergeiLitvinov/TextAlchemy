@@ -856,7 +856,8 @@ def test_api_convert_compares_source_and_result_structure(monkeypatch):
     assert status["target_inspection"]["source_path"] == "source.pdf"
     assert status["comparison"]["retention"]["characters"]["ratio"] == 0.8
     assert status["comparison"]["retention"]["tables"]["ratio"] == 0
-    assert status["comparison"]["geometry_summary"]["max_dimension_error_pt"] == 0
+    assert status["comparison"]["geometry_summary"]["max_dimension_error_pt"] is None
+    assert status["comparison"]["geometry_summary"]["available"] is False
 
 
 def test_api_convert_rejects_unknown_mode():

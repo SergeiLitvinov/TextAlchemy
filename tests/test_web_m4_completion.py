@@ -44,6 +44,24 @@ def import_sample(client, content=None):
     return response.json()['name']
 
 
+def test_missing_docx_backend_returns_explanation_without_publishing(m4_client, monkeypatch):
+    from opendoc_formats.errors import BackendUnavailableError
+
+    from textalchemy.web.services import template_variables
+
+    client, _ = m4_client
+    before = client.get('/api/generate/templates').json()
+
+    def unavailable(*args, **kwargs):
+        raise BackendUnavailableError('missing optional engine')
+
+    monkeypatch.setattr(template_variables, 'DocxPackage', unavailable)
+    response = client.post('/api/generate/import', files={'file': ('sample.docx', sample_bytes())})
+    assert response.status_code == 422
+    assert 'Обработчик DOCX недоступен' in response.json()['detail']
+    assert client.get('/api/generate/templates').json() == before
+
+
 def test_sample_linked_occurrences_preserve_package(m4_client):
     client, _ = m4_client
     original = sample_bytes()

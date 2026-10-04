@@ -1,0 +1,38 @@
+TextAlchemy's own source code and documentation are Copyright (c) 2026
+TextAlchemy Contributors and licensed under the MIT License (doc/LICENSE).
+
+The bundled documentation search contains unchanged third-party source:
+
+* Lunr.js 2.3.9: Copyright (c) 2020 Oliver Nightingale, MIT.
+  https://github.com/olivernn/lunr.js/tree/v2.3.9
+  Licence: doc/licenses/lunr-MIT.txt
+* Lunr language modules (Russian, stemmer support and multilingual support):
+  Copyright 2014 Mihai Valentin; Snowball portions Copyright 2010 Oleg Mazko.
+  Mozilla Public License 1.1; UMD wrapper portions under MIT.
+  https://github.com/MihaiValentin/lunr-languages
+  Licences: doc/licenses/lunr-languages-MPL-1.1.txt and doc/licenses/umd-MIT.txt
+  These files are distributed as unmodified, readable source inside
+  textalchemy/web/assets/documentation.zip (search/lunr*.js).
+* MkDocs search integration: Copyright (c) 2014 Tom Christie, BSD-3-Clause.
+  https://github.com/mkdoc/mkdocs
+  Licence: doc/licenses/mkdocs-BSD-3-Clause.txt
+
+The distribution licence expression includes the bundled search components;
+it does not relicense TextAlchemy's own source or external dependencies.
+Keep these notices and licence texts when redistributing the archive/site.
+
+The four built-in DOCX templates were generated with python-docx and include
+its default document structure/styles. python-docx is Copyright (c) 2013
+Steve Canny, MIT. Licence: doc/licenses/python-docx-MIT.txt
+https://github.com/python-openxml/python-docx
+
+The source distribution includes the official OpenDoc 0.1.0 and OpenDoc
+Formats 0.3.0 wheels, each with its own MIT licence and notices. Preserve
+the original wheels and provenance files. No engine binaries are bundled.
+
+Other dependencies are installed separately. Their terms remain applicable,
+including optional AGPL/commercial PDF, AGPL EPUB, LGPL components and NVIDIA
+binary terms. The complete locked inventory and unresolved OCR licence
+evidence are documented in doc/reference/dependencies.md and
+doc/development/licenses.md. OCR model weights and external programs are
+separate downloads and are not covered by TextAlchemy's MIT licence.

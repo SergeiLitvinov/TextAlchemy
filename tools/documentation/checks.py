@@ -1,4 +1,4 @@
-"""Check maintained examples and the completeness of historical task migration."""
+"""Check current documentation, future milestones and executable examples."""
 
 import contextlib
 import io
@@ -29,14 +29,16 @@ def check_commands(text):
     return count
 
 
-def check_mapping():
-    source = (ROOT / "docs/history/todo-2026-09-13.md").read_text(encoding="utf-8")
-    expected = [index for index, line in enumerate(source.splitlines(), 1) if re.match(r"\s*- \[[ xX]\]", line)]
-    table = (ROOT / "docs/history/todo-milestone-map.md").read_text(encoding="utf-8")
-    mapped = [int(number) for number in re.findall(r"^\| L(\d+) \|", table, re.M)]
-    if sorted(mapped) != expected:
-        raise ValueError("Карта старого TODO содержит пропуски или дубликаты")
-    return len(mapped)
+def check_documentation_scope():
+    """Retired task archives must not reappear in the shipped documentation."""
+    historical = list((ROOT / "doc/history").glob("*.md"))
+    archived_plans = [path for path in (ROOT / "doc").rglob("*.md") if path.name.lower().startswith("todo")]
+    if historical or archived_plans:
+        raise ValueError("Старые планы и отчёты не входят в актуальную документацию")
+    unexpected = [path.name for path in ROOT.iterdir() if path.is_file() and path.name not in {"README.md", "TODO.md"}
+                  and (path.suffix.lower() in {".md", ".rst", ".txt"} or path.name in {"LICENSE", "NOTICE"})]
+    if unexpected:
+        raise ValueError("Корневые документы должны находиться в doc: " + ", ".join(sorted(unexpected)))
 
 
 def check_active_plan(text: str) -> int:
@@ -78,12 +80,12 @@ def check_examples(guide, directory):
 
     from textalchemy.pipeline.runner import run_pipeline
 
-    bibliography = json.loads(run(["run", ROOT / "docs/examples/bibliography-to-json.yaml", "--json"]))
+    bibliography = json.loads(run(["run", ROOT / "doc/examples/bibliography-to-json.yaml", "--json"]))
     entries = json.loads(bibliography["final"])
     if len(entries) != 1 or entries[0]["title"] != "Исследование электрических сетей" or entries[0]["year"] != 2020:
         raise ValueError("Библиографический конвейер изменил данные примера")
 
-    spec = yaml.safe_load((ROOT / "docs/examples/text-to-docx.yaml").read_text(encoding="utf-8"))
+    spec = yaml.safe_load((ROOT / "doc/examples/text-to-docx.yaml").read_text(encoding="utf-8"))
     for step in spec["steps"]:
         params = step.get("params", {})
         if "path" in params:
@@ -93,7 +95,7 @@ def check_examples(guide, directory):
     result = run_pipeline(spec)
     if not result.ok:
         raise ValueError(f"Ошибка примера конвейера: {result.error}")
-    original = (ROOT / "docs/examples/input.txt").read_text(encoding="utf-8").split()
+    original = (ROOT / "doc/examples/input.txt").read_text(encoding="utf-8").split()
     actual = " ".join(paragraph.text for paragraph in Document(directory / "pipeline.docx").paragraphs).split()
     if original != actual:
         raise ValueError("Конвейер изменил текст примера")
@@ -105,8 +107,8 @@ def check_examples(guide, directory):
         template.add_paragraph(line)
     template_path = directory / "template.docx"
     template.save(template_path)
-    data = ROOT / "docs/examples/template-data.json"
-    schema = ROOT / "docs/examples/template-schema.json"
+    data = ROOT / "doc/examples/template-data.json"
+    schema = ROOT / "doc/examples/template-schema.json"
     run(["template-check", template_path, "--schema", schema, "--data", data, "--json"])
     values = json.loads(data.read_text(encoding="utf-8"))
     expected = [values["title"], values["body"], *[f"{item['name']}: {item['value']}" for item in values["items"]]]
@@ -127,10 +129,10 @@ def check_examples(guide, directory):
 
 
 def check():
-    guide = (ROOT / "docs/guide/index.md").read_text(encoding="utf-8")
-    count = sum(check_commands(path.read_text(encoding="utf-8")) for path in (ROOT / "docs/guide").glob("*.md"))
-    mapped = check_mapping()
-    active = check_active_plan((ROOT / "TODO.md").read_text(encoding="utf-8"))
+    guide = "\n".join(path.read_text(encoding="utf-8") for path in sorted((ROOT / "doc/guide").glob("*.md")))
+    count = sum(check_commands(path.read_text(encoding="utf-8")) for path in (ROOT / "doc/guide").glob("*.md"))
+    check_documentation_scope()
+    active = check_active_plan((ROOT / "doc/development/roadmap.md").read_text(encoding="utf-8"))
     parent = ROOT / ".textalchemy/docs-check"
     parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=parent) as temporary:
@@ -141,7 +143,7 @@ def check():
             raise ValueError("Unexpected examples workspace")
         check_examples(guide, directory)
     print(
-        f"Checked {count} command examples, {mapped} migrated tasks, {active} active tasks, "
+        f"Checked {count} command examples, {active} active tasks, "
         "bibliography/text pipelines and DOCX/HTML/PDF generation",
         flush=True,
     )

@@ -1,0 +1,134 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: current, patch, minor, major or an exact version such as 0.2.0rc2
+        required: true
+        default: current
+        type: string
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      SELECTOR: ${{ inputs.version || 'current' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Plan immutable release
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo 'Release dispatch must run on main' >&2; exit 1
+          fi
+          VERSION=$(python -m tools.versioning plan "$SELECTOR")
+          if [ "$GITHUB_EVENT_NAME" = push ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo 'Tag differs from application version' >&2; exit 1
+          fi
+          if gh release view "v$VERSION" --json isDraft > existing-release.json 2>/dev/null; then
+            python -c 'import json; assert json.load(open("existing-release.json"))["isDraft"], "Published versions cannot be replaced"'
+          fi
+          rm -f existing-release.json
+          echo "number=$VERSION" >> "$GITHUB_OUTPUT"
+          python -m tools.versioning set "$VERSION"
+      - name: Install locked verification profile
+        run: uv sync --frozen --extra dev --extra docs --extra web --extra pdf --extra docx --extra pptx --extra html --extra epub
+      - name: Lint and validate libraries and dependency licences
+        run: |
+          uv run --no-sync ruff check
+          uv run --no-sync python -m tools.check_library_contracts
+          uv run --no-sync python -m tools.dependencies
+      - name: Update versioned documentation
+        if: inputs.version != 'current' && github.event_name == 'workflow_dispatch'
+        run: uv run --no-sync python -m tools.docs generate
+      - name: Check documentation, examples and offline bundle
+        run: uv run --no-sync python -m tools.docs check
+      - name: Install Chromium
+        run: uv run --no-sync playwright install --with-deps chromium
+      - name: Test application and real browser scenarios
+        run: uv run --no-sync pytest tests/ --cov=textalchemy --cov-report=xml --tb=short
+      - name: Build and validate immutable release assets
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          uv build --out-dir dist
+          uv run --no-sync python -m tools.release --dist dist --tag "v$RELEASE_VERSION"
+          cp vendor/opendoc/*.whl vendor/opendoc-formats/*.whl dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: documentation-site
+          path: .textalchemy/docs-site
+          include-hidden-files: true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: dist/
+      - name: Commit checked version and create release tag
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pyproject.toml uv.lock README.md doc/development/releases.md doc/reference src/textalchemy/web/assets/documentation.zip
+          if ! git diff --cached --quiet; then
+            if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ]; then
+              echo 'Tagged source must already contain the release version' >&2; exit 1
+            fi
+            git commit -m "release: prepare v$RELEASE_VERSION"
+          fi
+          if git show-ref --verify --quiet "refs/tags/v$RELEASE_VERSION"; then
+            test "$(git rev-parse "v$RELEASE_VERSION^{commit}")" = "$(git rev-parse HEAD)"
+          else
+            git tag -a "v$RELEASE_VERSION" -m "TextAlchemy $RELEASE_VERSION"
+          fi
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            git push --atomic origin HEAD:main "v$RELEASE_VERSION"
+          fi
+      - name: Publish verified GitHub release
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.number }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "v$RELEASE_VERSION" --json isDraft > existing-release.json 2>/dev/null; then
+            gh release create "v$RELEASE_VERSION" --verify-tag --draft --title "TextAlchemy $RELEASE_VERSION" --generate-notes
+          else
+            python -c 'import json; assert json.load(open("existing-release.json"))["isDraft"], "Published versions cannot be replaced"'
+          fi
+          gh release upload "v$RELEASE_VERSION" dist/* --clobber
+          if [[ "$RELEASE_VERSION" =~ (a|b|rc)[0-9]+$ ]]; then
+            gh release edit "v$RELEASE_VERSION" --draft=false --prerelease --latest=false
+          else
+            gh release edit "v$RELEASE_VERSION" --draft=false --prerelease=false --latest
+          fi
+
+  pages:
+    needs: [release]
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      actions: read
+      pages: write
+      id-token: write

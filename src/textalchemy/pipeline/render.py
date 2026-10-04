@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, Sequence, Union
 
 from textalchemy.core.document_model import DocumentModel
-from textalchemy.core.latex import escape_latex as _escape_latex
 from textalchemy.core.registry import operation
 from textalchemy.core.types import BibItem, Text
 
@@ -43,30 +42,6 @@ def _normalize_items(items: Sequence[Any]) -> list[BibItem]:
     return out
 
 
-_PREAMBLE = (
-    r"\documentclass[12pt,a4paper]{article}"
-    "\n"
-    r"\usepackage[T2A]{fontenc}"
-    "\n"
-    r"\usepackage[utf8]{inputenc}"
-    "\n"
-    r"\usepackage[russian]{babel}"
-    "\n"
-    r"\usepackage{amsmath,amssymb}"
-    "\n"
-    r"\usepackage{graphicx}"
-    "\n"
-    r"\usepackage{geometry}"
-    "\n"
-    r"\geometry{left=3cm,right=1.5cm,top=2cm,bottom=2cm}"
-    "\n"
-    r"\usepackage{setspace}"
-    "\n"
-    r"\onehalfspacing"
-    "\n"
-)
-
-
 @operation(
     "render.latex",
     input_type="Text",
@@ -76,66 +51,9 @@ _PREAMBLE = (
     tags=["render"],
 )
 def render_latex(*, text: Text, title: str = "Document", author: str = "Author") -> str:
-    """Минимальный LaTeX-рендер: заголовок, абзацы, таблицы.
+    from opendoc_formats.writers.text_render import render_latex as render
 
-    Сложная вёрстка (стили, списки, изображения) намеренно упрощена —
-    для научных текстов обычно достаточно. Если нужна полная конвертация,
-    используйте ``render.latex.pandoc`` (требует установленный ``pandoc``).
-    """
-    parts: list[str] = [_PREAMBLE, r"\begin{document}", ""]
-    parts.append(rf"\title{{{_escape_latex(title)}}}")
-    parts.append(rf"\author{{{_escape_latex(author)}}}")
-    parts.append(r"\date{\today}")
-    parts.append(r"\maketitle")
-    parts.append("")
-
-    in_list = False
-    for block in text.blocks:
-        if block.type.value == "heading":
-            if in_list:
-                parts.append(r"\end{itemize}")
-                parts.append("")
-                in_list = False
-            level = max(1, min(block.level or 1, 3))
-            cmd = ("section", "subsection", "subsubsection")[level - 1]
-            parts.append(rf"\{cmd}{{{_escape_latex(block.text)}}}")
-            parts.append("")
-        elif block.type.value == "list_item":
-            if not in_list:
-                parts.append(r"\begin{itemize}")
-                parts.append("")
-                in_list = True
-            parts.append(rf"\item {_escape_latex(block.text)}")
-        else:
-            if in_list:
-                parts.append(r"\end{itemize}")
-                parts.append("")
-                in_list = False
-            if block.type.value == "code" or block.type.value == "equation":
-                parts.append(block.text)
-            else:
-                parts.append(_escape_latex(block.text))
-            parts.append("")
-    if in_list:
-        parts.append(r"\end{itemize}")
-        parts.append("")
-
-    for table in text.tables:
-        if not table.rows:
-            continue
-        cols = max((len(r) for r in table.rows), default=0)
-        spec = "|" + "|".join(["c"] * cols) + "|"
-        parts.append(rf"\begin{{tabular}}{{{spec}}}")
-        parts.append(r"\hline")
-        for row in table.rows:
-            cells = [_escape_latex(c) for c in row]
-            parts.append(" & ".join(cells) + r" \\")
-            parts.append(r"\hline")
-        parts.append(r"\end{tabular}")
-        parts.append("")
-
-    parts.append(r"\end{document}")
-    return "\n".join(parts)
+    return render(text=text, title=title, author=author)
 
 
 @operation(
@@ -147,45 +65,9 @@ def render_latex(*, text: Text, title: str = "Document", author: str = "Author")
     tags=["render", "external"],
 )
 def render_latex_pandoc(*, text: Text, input_path: Union[str, Path, None] = None) -> str:
-    """Если есть ``input_path`` (DOCX), конвертирует pandoc-ом. Иначе fallback на ``render.latex``."""
-    import shutil
-    import subprocess
+    from opendoc_formats.writers.text_render import render_latex_pandoc as render
 
-    if not shutil.which("pandoc"):
-        logger.warning("pandoc не найден, fallback на render.latex")
-        return render_latex(text=text)
-
-    if input_path is None:
-        return render_latex(text=text)
-
-    from textalchemy.core.artifacts import ArtifactWorkspace
-
-    try:
-        with ArtifactWorkspace(prefix="textalchemy_pandoc_") as workspace:
-            out = workspace.artifact_path("output.tex")
-            subprocess.run(
-                [
-                    "pandoc",
-                    str(input_path),
-                    "-o",
-                    str(out),
-                    "--from",
-                    "docx",
-                    "--to",
-                    "latex",
-                    "--standalone",
-                    "--top-level-division=chapter",
-                ],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
-            workspace.validate_artifact(out)
-            return out.read_text(encoding="utf-8")
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError) as error:
-        logger.warning("pandoc failed: %s, fallback на render.latex", error)
-        return render_latex(text=text)
+    return render(text=text, input_path=input_path)
 
 
 @operation(
@@ -197,34 +79,9 @@ def render_latex_pandoc(*, text: Text, input_path: Union[str, Path, None] = None
     tags=["render"],
 )
 def render_docx(*, text: Text, output_path: Union[str, Path]) -> Path:
-    """Записать ``Text`` в DOCX. Возвращает путь к созданному файлу."""
-    import io
+    from opendoc_formats.writers.text_render import render_docx as render
 
-    from docx import Document
-
-    from textalchemy.core.io import atomic_write_bytes
-
-    out = Path(output_path)
-    d = Document()
-    for block in text.blocks:
-        if block.type.value == "heading":
-            level = max(1, min(block.level or 1, 3))
-            d.add_heading(block.text, level=level)
-        else:
-            d.add_paragraph(block.text)
-    for table in text.tables:
-        if not table.rows:
-            continue
-        cols = max((len(r) for r in table.rows), default=0)
-        t = d.add_table(rows=len(table.rows), cols=cols)
-        for i, row in enumerate(table.rows):
-            for j, cell in enumerate(row):
-                if j < cols:
-                    t.cell(i, j).text = cell
-    buffer = io.BytesIO()
-    d.save(buffer)
-    atomic_write_bytes(out, buffer.getvalue())
-    return out
+    return render(text=text, output_path=output_path)
 
 
 @operation(
@@ -322,8 +179,12 @@ def render_docx_model(*, document: DocumentModel, output_path: Union[str, Path])
 
 
 @operation(
-    "render.pptx_model", input_type="DocumentModel", output_type="dict", input_param="document",
-    description="Модель → редактируемый PPTX с отчётом о потерях.", tags=["render", "pptx", "document-model"],
+    "render.pptx_model",
+    input_type="DocumentModel",
+    output_type="dict",
+    input_param="document",
+    description="Модель → редактируемый PPTX с отчётом о потерях.",
+    tags=["render", "pptx", "document-model"],
 )
 def render_pptx_model(*, document: DocumentModel, output_path: Union[str, Path]) -> dict:
     from textalchemy.convert.pptx_writer import write_pptx_model
@@ -332,8 +193,12 @@ def render_pptx_model(*, document: DocumentModel, output_path: Union[str, Path])
 
 
 @operation(
-    "render.txt_model", input_type="DocumentModel", output_type="dict", input_param="document",
-    description="Модель → текст UTF-8 с отчётом о потерях.", tags=["render", "txt", "document-model"],
+    "render.txt_model",
+    input_type="DocumentModel",
+    output_type="dict",
+    input_param="document",
+    description="Модель → текст UTF-8 с отчётом о потерях.",
+    tags=["render", "txt", "document-model"],
 )
 def render_txt_model(*, document: DocumentModel, output_path: Union[str, Path]) -> dict:
     from textalchemy.convert.txt_writer import write_txt_model

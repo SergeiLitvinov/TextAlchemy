@@ -1,4 +1,6 @@
 """Supported semantic edits to PDF text blocks without rebuilding their contents."""
+from opendoc import HEADING_PROPERTY, DocumentModel, Heading, TextStyle, document_to_dict, set_heading
+
 from textalchemy.core.document_model import Paragraph, TextRun
 
 ROLES = {"paragraph": ("paragraph", "Normal", None),
@@ -24,11 +26,19 @@ def apply_classifications(value: dict, changes: dict[str, str]) -> None:
     for block_id, role in changes.items():
         block = blocks[block_id]
         kind, style, level = ROLES[role]
+        styles = value["model"]["document"].setdefault("styles", {})
+        if style not in styles:
+            definition = TextStyle(properties={"style_name": style, "style_type": "paragraph"})
+            styles[style] = document_to_dict(DocumentModel(styles={style: definition}))["document"]["styles"][style]
         block["style_id"] = style
         props = block["properties"]
         props.update(legacy_type=kind, style_name=style, pdf_editor_role=role)
         if level is None:
             props.pop("heading_level", None)
             props.pop("level", None)
+            props.pop(HEADING_PROPERTY, None)
         else:
             props.update(heading_level=level, level=level)
+            semantic = Paragraph()
+            set_heading(semantic, Heading(level))
+            props.update(semantic.properties)

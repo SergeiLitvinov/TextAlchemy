@@ -199,7 +199,7 @@ def chart_corpus() -> list[tuple[str, dict[str, Any]]]:
                         "name": "Series A",
                         "values": [12, 28, 19],
                         "color": "#4472C4",
-                        "data_points": {0: {"color": "#70AD47"}, 2: {"color": "#C00000"}},
+                        "data_points": {"0": {"color": "#70AD47"}, "2": {"color": "#C00000"}},
                     }
                 ],
             },

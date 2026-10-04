@@ -10,9 +10,6 @@ from opendoc.color import (
     ColorValue as ColorValue,
 )
 from opendoc.color import (
-    _validate_fraction as _validate_fraction,
-)
-from opendoc.color import (
     color_to_css as color_to_css,
 )
 

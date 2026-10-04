@@ -121,7 +121,30 @@ class OcrEngine:
 
         return OcrResult(text="")
 
-    def recognize_with_geometry(self, image_path: str | Path, scale: int = 3, handwriting: bool = False) -> OcrPageResult:
+    def recognize_image_bytes(self, image: bytes, *, langs: str = "rus+eng", psm: int = 6, timeout: int = 30) -> OcrResult:
+        """Recognise a rendered image; document formats stay outside the OCR engine."""
+        from textalchemy.core.artifacts import ArtifactWorkspace
+        from textalchemy.core.io import atomic_write_bytes
+
+        if not 0 <= psm <= 13 or timeout <= 0:
+            raise RecognizeError("Неверные параметры OCR: режим страницы или время ожидания")
+        with ArtifactWorkspace(prefix="textalchemy_ocr_") as workspace:
+            path = workspace.artifact_path("page.png")
+            atomic_write_bytes(path, image)
+            workspace.validate_artifact(path)
+            if self._available and self._backend == "tesseract":
+                import pytesseract
+                from PIL import Image
+
+                try:
+                    with Image.open(path) as source:
+                        text = pytesseract.image_to_string(source, lang=langs, config=f"--psm {psm}", timeout=timeout)
+                    return OcrResult(text=text.strip(), language=langs, pages=1)
+                except Exception as error:
+                    raise RecognizeError(f"OCR failed: {error}") from error
+            return self.recognize(path)
+
+    def recognize_with_geometry(self, image_path: str | Path, scale: float = 3, handwriting: bool = False) -> OcrPageResult:
         """Recognise text and return per-block results with bounding boxes.
 
         Uses the scale factor to transform image-space bboxes back to PDF
@@ -149,7 +172,7 @@ class OcrEngine:
 
         return OcrPageResult(warnings=["unable to run OCR"])
 
-    def _recognize_tesseract_geometry(self, image_path: Path, scale: int) -> OcrPageResult:
+    def _recognize_tesseract_geometry(self, image_path: Path, scale: float) -> OcrPageResult:
         import pytesseract
         from PIL import Image
 
@@ -191,7 +214,7 @@ class OcrEngine:
         merged = _merge_word_blocks(blocks)
         return OcrPageResult(blocks=merged, language=lang)
 
-    def _recognize_easyocr_geometry(self, image_path: Path, scale: int, handwriting: bool = False) -> OcrPageResult:
+    def _recognize_easyocr_geometry(self, image_path: Path, scale: float, handwriting: bool = False) -> OcrPageResult:
         import easyocr
         from PIL import Image
 
@@ -234,7 +257,7 @@ class OcrEngine:
 
         return OcrPageResult(blocks=blocks, language=",".join(self.languages))
 
-    def _recognize_paddle_geometry(self, image_path: Path, scale: int) -> OcrPageResult:
+    def _recognize_paddle_geometry(self, image_path: Path, scale: float) -> OcrPageResult:
         from paddleocr import PaddleOCR
         from PIL import Image
 
@@ -371,45 +394,32 @@ class OcrEngine:
         if not pdf_path.exists():
             raise RecognizeError(f"PDF not found: {pdf_path}")
 
-        try:
-            import fitz
-        except ImportError:
-            raise RecognizeError("pymupdf (fitz) required for PDF OCR")
+        from opendoc_formats.pdf import PdfDocument
 
         from textalchemy.core.artifacts import ArtifactWorkspace
+        from textalchemy.core.io import atomic_write_bytes
 
         scale = max(2, min(6, scale))
 
         results: list[OcrResult] = []
 
-        with fitz.open(str(pdf_path)) as doc:
-            with ArtifactWorkspace(prefix="textalchemy_ocr_") as ws:
-                for page_num in range(len(doc)):
-                    page = doc[page_num]
-                    mat = fitz.Matrix(scale, scale)
-                    pix = page.get_pixmap(matrix=mat)
-
-                    from PIL import Image
-
-                    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-
-                    if save_images:
-                        import io
-
-                        from textalchemy.core.io import atomic_write_bytes
-
-                        save_path = Path.cwd() / f"page_{page_num + 1}.png"
-                        buffer = io.BytesIO()
-                        img.save(buffer, format="PNG")
-                        atomic_write_bytes(save_path, buffer.getvalue())
-                    else:
-                        save_path = ws.artifact_path(f"page_{page_num}.png")
-                        img.save(save_path)
+        try:
+            with PdfDocument(pdf_path) as doc, ArtifactWorkspace(prefix="textalchemy_ocr_") as ws:
+                for page_num in range(doc.page_count):
+                    png = doc.render_page(page_num, scale=scale).png
+                    save_path = (
+                        Path.cwd() / f"page_{page_num + 1}.png" if save_images else ws.artifact_path(f"page_{page_num}.png")
+                    )
+                    atomic_write_bytes(save_path, png)
+                    if not save_images:
                         ws.validate_artifact(save_path)
                     result = self.recognize(save_path, handwriting=handwriting)
-
-                    result.pages = len(doc)
+                    result.pages = doc.page_count
                     results.append(result)
+        except ImportError as error:
+            raise RecognizeError(f"pymupdf required for PDF OCR: {error}") from error
+        except ValueError as error:
+            raise RecognizeError(f"Не удалось подготовить PDF для OCR: {error}") from error
 
         return results
 
@@ -423,35 +433,30 @@ class OcrEngine:
         if not pdf_path.exists():
             raise RecognizeError(f"PDF not found: {pdf_path}")
 
-        try:
-            import fitz
-        except ImportError:
-            raise RecognizeError("pymupdf (fitz) required for PDF OCR")
+        from opendoc_formats.pdf import PdfDocument
 
         from textalchemy.core.artifacts import ArtifactWorkspace
+        from textalchemy.core.io import atomic_write_bytes
 
         scale = max(2, min(6, scale))
         results: list[OcrPageResult] = []
 
-        with fitz.open(str(pdf_path)) as doc:
-            with ArtifactWorkspace(prefix="textalchemy_ocr_") as ws:
-                for page_num in range(len(doc)):
-                    page = doc[page_num]
-                    mat = fitz.Matrix(scale, scale)
-                    pix = page.get_pixmap(matrix=mat)
-
-                    from PIL import Image
-
-                    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-
+        try:
+            with PdfDocument(pdf_path) as doc, ArtifactWorkspace(prefix="textalchemy_ocr_") as ws:
+                for page_num in range(doc.page_count):
                     save_path = ws.artifact_path(f"page_{page_num}.png")
-                    img.save(save_path)
+                    rendered = doc.render_page(page_num, scale=scale)
+                    atomic_write_bytes(save_path, rendered.png)
                     ws.validate_artifact(save_path)
-                    page_result = self.recognize_with_geometry(save_path, scale=scale, handwriting=handwriting)
-                    page_result.pages = len(doc)
+                    page_result = self.recognize_with_geometry(save_path, scale=rendered.effective_scale, handwriting=handwriting)
+                    page_result.pages = doc.page_count
                     for block in page_result.blocks:
                         object.__setattr__(block, "page", page_num + 1)
                     results.append(page_result)
+        except ImportError as error:
+            raise RecognizeError(f"pymupdf required for PDF OCR: {error}") from error
+        except ValueError as error:
+            raise RecognizeError(f"Не удалось подготовить PDF для OCR: {error}") from error
 
         return results
 

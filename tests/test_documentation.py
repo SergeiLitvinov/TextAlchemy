@@ -33,10 +33,10 @@ def test_active_plan_accepts_only_remaining_milestone_tasks() -> None:
 
 def test_generated_reference_drift_requires_explicit_regeneration(tmp_path, monkeypatch):
     monkeypatch.setattr(generated, "ROOT", tmp_path)
-    monkeypatch.setattr(generated, "pages", lambda: {"docs/reference/cli.md": "# New command\n"})
+    monkeypatch.setattr(generated, "pages", lambda: {"doc/reference/cli.md": "# New command\n"})
     generated.sync()
     generated.sync(check=True)
-    path = tmp_path / "docs/reference/cli.md"
+    path = tmp_path / "doc/reference/cli.md"
     path.write_text("# Outdated command\n", encoding="utf-8")
     with pytest.raises(ValueError, match="Устарели справочники"):
         generated.sync(check=True)
@@ -50,11 +50,11 @@ def test_invalid_command_in_prose_is_rejected():
 
 def test_site_links_preserve_unicode_anchors_and_copy_linked_source(tmp_path, monkeypatch):
     monkeypatch.setattr(site, "ROOT", tmp_path)
-    (tmp_path / "docs").mkdir()
-    (tmp_path / "docs/next.md").write_text("# Пример", encoding="utf-8")
+    (tmp_path / "doc").mkdir()
+    (tmp_path / "doc/next.md").write_text("# Пример", encoding="utf-8")
     (tmp_path / "code.py").write_text("value = 1", encoding="utf-8")
     assets = {}
-    rendered = site.rewrite_links("[Глава](next.md#пример) [Код](../code.py)", "docs/start.md", {"docs/next.md": ""}, assets)
+    rendered = site.rewrite_links("[Глава](next.md#пример) [Код](../code.py)", "doc/start.md", {"doc/next.md": ""}, assets)
     assert rendered == "[Глава](next.md#пример) [Код](../files/code.py.html)"
     assert b'id="L1"' in assets["files/code.py.html"]
     assert b"value = 1" in assets["files/code.py.html"]
@@ -77,17 +77,26 @@ def test_site_rejects_links_outside_repository(tmp_path, monkeypatch):
         site.rewrite_links("[File](../private.txt)", "README.md", {}, {})
 
 
-def test_duplicate_or_missing_migration_entry_fails(tmp_path, monkeypatch):
+@pytest.mark.parametrize("relative", ["doc/history/changes.md", "doc/development/todo-old.md"])
+def test_archived_plans_and_progress_reports_are_not_shipped(tmp_path, monkeypatch, relative):
     monkeypatch.setattr(checks, "ROOT", tmp_path)
-    history = tmp_path / "docs/history"
-    history.mkdir(parents=True)
-    (history / "todo-2026-09-13.md").write_text("- [x] First\n- [ ] Second\n", encoding="utf-8")
-    mapping = history / "todo-milestone-map.md"
-    mapping.write_text("| L1 | done |\n| L1 | done |", encoding="utf-8")
-    with pytest.raises(ValueError, match="пропуски или дубликаты"):
-        checks.check_mapping()
-    mapping.write_text("| L2 | open |\n| L1 | done |", encoding="utf-8")
-    assert checks.check_mapping() == 2
+    path = tmp_path / relative
+    path.parent.mkdir(parents=True)
+    checks.check_documentation_scope()
+    path.write_text("# Старый план", encoding="utf-8")
+    with pytest.raises(ValueError, match="Старые планы"):
+        checks.check_documentation_scope()
+
+
+@pytest.mark.parametrize("name", ["AGENTS.md", "notes.txt", "LICENSE", "old.rst"])
+def test_documentation_scope_rejects_extra_root_documents(tmp_path, monkeypatch, name):
+    monkeypatch.setattr(checks, "ROOT", tmp_path)
+    (tmp_path / "README.md").write_text("# Приложение", encoding="utf-8")
+    (tmp_path / "TODO.md").write_text("[План](doc/development/roadmap.md)", encoding="utf-8")
+    checks.check_documentation_scope()
+    (tmp_path / name).write_text("Old material", encoding="utf-8")
+    with pytest.raises(ValueError, match="Корневые документы"):
+        checks.check_documentation_scope()
 
 
 def test_code_navigator_uses_static_sources_and_tracks_new_routes(tmp_path):
@@ -105,21 +114,22 @@ def test_code_navigator_uses_static_sources_and_tracks_new_routes(tmp_path):
     tests.mkdir()
     (tests / "test_example.py").write_text("from textalchemy.model import Document\n", encoding="utf-8")
     result = code_pages(tmp_path, "")
-    assert "textalchemy.model](#textalchemy-model)" in result["docs/reference/code.md"]
-    assert "test_example.py" in result["docs/reference/code.md"]
-    assert "| GET | `/example`" in result["docs/reference/web-routes.md"]
+    assert "textalchemy.model](#textalchemy-model)" in result["doc/reference/code.md"]
+    assert "test_example.py" in result["doc/reference/code.md"]
+    assert "| GET | `/example`" in result["doc/reference/web-routes.md"]
     assert code_pages(tmp_path, "") == result
     routes.write_text(routes.read_text(encoding="utf-8").replace("/example", "/changed"), encoding="utf-8")
-    assert "| GET | `/changed`" in code_pages(tmp_path, "")["docs/reference/web-routes.md"]
+    assert "| GET | `/changed`" in code_pages(tmp_path, "")["doc/reference/web-routes.md"]
 
 
 def test_manual_navigation_follows_real_headings_only(tmp_path):
-    guide = tmp_path / "docs/guide"
+    guide = tmp_path / "doc/guide"
     guide.mkdir(parents=True)
-    for name in ("index.md", "formats.md", "web-details.md"):
+    for name in ("index.md", "formats.md", "web-details.md", "templates.md"):
         (guide / name).write_text("# Руководство\n## Создать документ\n```text\n## Не глава\n```\n", encoding="utf-8")
     content = user_guide(tmp_path, "")
     assert "../guide/index.md#создать-документ" in content
+    assert "../guide/templates.md#создать-документ" in content
     assert "Не глава" not in content
 
 
@@ -160,3 +170,25 @@ def test_cleanup_rejects_tracked_files_before_deleting(tmp_path, monkeypatch):
     assert (tmp_path / ".pytest_cache").exists()
     with pytest.raises(ValueError, match="Outside cleanup scope"):
         clean.safe_tree(tmp_path.parent, tmp_path)
+
+
+def test_cleanup_development_artifacts_preserves_user_data_and_repositories(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from tools import clean
+
+    monkeypatch.setattr(clean.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(stdout=b""))
+    scratch = tmp_path / ".textalchemy"
+    old = scratch / "formats-extraction-original"
+    old.mkdir(parents=True)
+    (old / "copied.py").write_text("old", encoding="utf-8")
+    protected = scratch / "library.db"
+    protected.write_bytes(b"user")
+    clean.clean(tmp_path, apply=True, development_artifacts=True)
+    assert not old.exists()
+    assert protected.read_bytes() == b"user"
+    old.mkdir()
+    (old / ".git").mkdir()
+    with pytest.raises(ValueError, match="Embedded repository"):
+        clean.clean(tmp_path, apply=True, development_artifacts=True)
+    assert (old / ".git").is_dir()

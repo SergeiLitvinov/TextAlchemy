@@ -32,7 +32,7 @@ def test_bundle_is_deterministic_and_rejects_drift(tmp_path: Path, monkeypatch: 
     assert target.read_bytes() == original
 
 
-@pytest.mark.parametrize("path", ["../library.db", "/private", "docs/../../private", r"..\private", "\x00"])
+@pytest.mark.parametrize("path", ["../library.db", "/private", "doc/../../private", r"..\private", "\x00"])
 def test_documentation_rejects_paths_outside_bundle(tmp_path: Path, path: str) -> None:
     with pytest.raises(LookupError):
         DocumentationService(tmp_path / "unused.zip").read(path)
@@ -59,13 +59,22 @@ def test_actual_help_site_guide_search_assets_and_source_links() -> None:
         home = client.get("/help/")
         assert home.status_code == 200 and "TextAlchemy" in home.text
         assert "text/html" in home.headers["content-type"]
-        assert client.get("/help/docs/guide/", follow_redirects=False).status_code == 200
-        assert client.get("/help/docs/guide", follow_redirects=False).headers["location"] == "/help/docs/guide/"
-        assert client.get("/help/docs/assets/documentation.css").headers["content-type"].startswith("text/css")
+        assert client.get("/help/doc/guide/", follow_redirects=False).status_code == 200
+        assert client.get("/help/doc/guide", follow_redirects=False).headers["location"] == "/help/doc/guide/"
+        assert client.get("/help/doc/assets/documentation.css").headers["content-type"].startswith("text/css")
         assert client.get("/help/search/search_index.json").json()["docs"]
-        assert client.get("/help/docs/reference/code/").status_code == 200
+        assert client.get("/help/doc/reference/code/").status_code == 200
         assert client.get("/help/files/src/textalchemy/web/routes/extract.py.html").status_code == 200
         assert client.get("/help/nonexistent").status_code == 404
+
+
+def test_previous_help_bookmarks_redirect_only_to_existing_safe_pages() -> None:
+    with TestClient(app) as client:
+        result = client.get("/help/docs/guide/", follow_redirects=False)
+        assert result.status_code == 308
+        assert result.headers["location"] == "/help/doc/guide/"
+        assert client.get("/help/docs/missing/", follow_redirects=False).status_code == 404
+        assert client.get("/help/docs/%2E%2E/private", follow_redirects=False).status_code == 404
 
 
 def test_missing_bundle_has_readable_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

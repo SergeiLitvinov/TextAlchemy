@@ -19,7 +19,7 @@ def operations():
     lines = [
         "# Операции конвейера",
         "",
-        "Справочник формируется из реестра и сигнатур. [Работа с конвейером](../guide/index.md#автоматизация).",
+        "Справочник формируется из реестра и сигнатур. [Работа с конвейером](../guide/automation.md#автоматизация).",
         "",
         "Имя входа ниже — фактический контракт реестра; параметры Python приведены отдельно. "
         "Пути/модели сериализуются runner. Возможные несоответствия явно отмечены.",
@@ -63,9 +63,9 @@ def cli():
         "# Справочник CLI",
         "",
         "Сформирован из парсера команд. Префикс: `uv run textalchemy`. "
-        "[Сценарии и ограничения](../guide/index.md#справочник-команд). "
+        "[Сценарии и ограничения](../guide/automation.md#справочник-команд). "
         "Наличие аргумента в парсере не подтверждает его поддержку; "
-        "поведение описано в [руководстве](../guide/index.md#справочник-команд).",
+        "поведение описано в [руководстве](../guide/automation.md#справочник-команд).",
         "",
     ]
     for name, current in [("Глобальные параметры", parser), *sorted(sub.choices.items())]:
@@ -88,12 +88,14 @@ def cli():
 
 
 def pages():
+    from tools.dependencies import reference
     from tools.documentation.navigator import code_pages, user_guide
 
     return {
-        "docs/reference/operations.md": operations(),
-        "docs/reference/cli.md": cli(),
-        "docs/reference/user-guide.md": user_guide(ROOT, NOTICE),
+        "doc/reference/operations.md": operations(),
+        "doc/reference/cli.md": cli(),
+        "doc/reference/user-guide.md": user_guide(ROOT, NOTICE),
+        "doc/reference/dependencies.md": NOTICE + reference(ROOT),
         **code_pages(ROOT, NOTICE),
     }
 

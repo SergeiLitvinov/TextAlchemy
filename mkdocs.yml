@@ -1,19 +1,19 @@
 site_name: TextAlchemy — документация
-site_description: Руководство, справочники и план проекта
+site_description: Документы в нужном формате. Результат под контролем.
 docs_dir: .textalchemy/docs-source
 site_dir: .textalchemy/docs-site
 theme:
   name: mkdocs
-  custom_dir: docs/theme
+  custom_dir: doc/theme
   locale: ru
   highlightjs: false
 plugins:
   - search:
       lang: [ru, en]
 extra_css:
-  - docs/assets/documentation.css
+  - doc/assets/documentation.css
 extra_javascript:
-  - docs/assets/documentation.js
+  - doc/assets/documentation.js
 markdown_extensions:
   - tables
   - fenced_code
@@ -22,13 +22,13 @@ markdown_extensions:
 hooks:
   - tools/documentation/hook.py
 watch:
-  - docs
+  - doc
   - src/textalchemy
   - tests
   - TODO.md
   - README.md
-  - AGENTS.md
-  - CODING_STANDARDS.md
+  - doc/development/AGENTS.md
+  - doc/development/CODING_STANDARDS.md
 validation:
   nav:
     omitted_files: warn
@@ -40,33 +40,37 @@ validation:
 nav:
   - Главная: README.md
   - Руководство:
-      - Выбрать задачу: docs/reference/user-guide.md
-      - Начать работу: docs/guide/index.md
-      - Подробности форматов: docs/guide/formats.md
-      - Контракты Web/API: docs/guide/web-details.md
-  - План по вехам: TODO.md
+      - Выбрать задачу: doc/reference/user-guide.md
+      - Начать работу: doc/guide/index.md
+      - Конвертация: doc/guide/conversion.md
+      - Распознавание: doc/guide/recognition.md
+      - Шаблоны: doc/guide/templates.md
+      - Библиография: doc/guide/bibliography.md
+      - Автоматизация: doc/guide/automation.md
+      - Хранение: doc/guide/storage.md
+      - Проверка качества: doc/guide/verification.md
+      - Подробности форматов: doc/guide/formats.md
+      - Контракты Web/API: doc/guide/web-details.md
+  - План по вехам: doc/development/roadmap.md
   - Справочники:
-      - Команды CLI: docs/reference/cli.md
-      - Операции конвейера: docs/reference/operations.md
+      - Команды CLI: doc/reference/cli.md
+      - Операции конвейера: doc/reference/operations.md
+      - Зависимости и лицензии: doc/reference/dependencies.md
+  - Выпуск:
+      - Версии и релизы: doc/development/releases.md
+      - Лицензионный аудит: doc/development/licenses.md
   - Разработка:
-      - Навигатор по коду: docs/reference/code.md
-      - Web-маршруты: docs/reference/web-routes.md
-      - Система документации: docs/development/documentation.md
-      - Библиотека документов: docs/development/document-library.md
-      - Интерфейс шаблонизатора: docs/development/templating.md
-      - Собранная зависимость OpenDoc: vendor/opendoc/README.md
-      - Устройство проекта: AGENTS.md
-      - Стандарты: CODING_STANDARDS.md
-      - Корпус: tests/corpus/README.md
-      - Происхождение Office-файлов: tests/corpus/office/README.md
-  - Архив и приёмка:
-      - История изменений: docs/history/changes.md
-      - Приёмка PPTX: docs/history/pptx-acceptance.md
-      - Приёмка HTML: docs/history/html-acceptance.md
-      - Аудит документации: docs/history/documentation-audit.md
-      - Аудит старого TODO: docs/history/todo-audit.md
-      - Старые ID: docs/history/legacy-ids.md
-      - Карта миграции: docs/history/todo-milestone-map.md
-      - Старый TODO: docs/history/todo-2026-09-13.md
-      - Короткий TODO: docs/history/todo-before-milestones-2026-09-13.md
-  - Карта документации: docs/README.md
+      - Навигатор по коду: doc/reference/code.md
+      - Web-маршруты: doc/reference/web-routes.md
+      - Система документации: doc/development/documentation.md
+      - Библиотека документов: doc/development/document-library.md
+      - Запросы к OpenDoc: doc/development/library-requests/opendoc.md
+      - Контракты и план OpenDoc Formats: doc/development/library-requests/opendoc-formats.md
+      - Интерфейс шаблонизатора: doc/development/templating.md
+      - Собранная зависимость OpenDoc: doc/development/vendor-opendoc.md
+      - Собранные адаптеры: doc/development/vendor-opendoc-formats.md
+      - Устройство проекта: doc/development/AGENTS.md
+      - Стандарты: doc/development/CODING_STANDARDS.md
+      - Корпус: doc/development/corpus.md
+      - Происхождение Office-файлов: doc/development/office-corpus.md
+  - Карта документации: doc/README.md

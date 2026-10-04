@@ -112,3 +112,27 @@ def test_manifest_cannot_retire_an_artifact_outside_the_bundle(release: ReleaseF
     with pytest.raises(ValueError, match="inside"):
         updater.update(wheel)
     assert outside.read_bytes() == b"preserve"
+
+
+def test_published_checksum_and_reference_are_recorded(release: ReleaseFixture) -> None:
+    build, bundle = release
+    wheel = build()
+    digest = hashlib.sha256(wheel.read_bytes()).hexdigest()
+    updater.update(wheel, sha256=digest.upper(), source_url="https://example.org/opendoc.whl", source_ref="commit-id")
+    manifest = json.loads((bundle / "provenance.json").read_text(encoding="utf-8"))
+    assert manifest["sha256"] == digest
+    assert manifest["source"] == {
+        "url": "https://example.org/opendoc.whl", "ref": "commit-id", "checksum_verified": True,
+    }
+    original = (bundle / "provenance.json").read_bytes()
+    with pytest.raises(ValueError, match="checksum"):
+        updater.update(wheel, sha256="0" * 64)
+    assert (bundle / "provenance.json").read_bytes() == original
+    assert (bundle / wheel.name).read_bytes() == wheel.read_bytes()
+
+
+def test_incomplete_release_reference_is_rejected(release: ReleaseFixture) -> None:
+    build, bundle = release
+    with pytest.raises(ValueError, match="together"):
+        updater.update(build(), source_url="https://example.org/opendoc.whl")
+    assert not bundle.exists()
