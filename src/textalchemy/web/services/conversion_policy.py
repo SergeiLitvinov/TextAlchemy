@@ -1,5 +1,6 @@
 """Restore independently selected checks from durable task metadata."""
 
+from textalchemy.convert.heading_budget import HeadingBudget
 from textalchemy.core.emphasis_quality import EmphasisLossPolicy
 from textalchemy.core.formula_quality_policy import FormulaLossPolicy
 from textalchemy.core.object_quality_policy import ObjectLossPolicy
@@ -8,10 +9,13 @@ from textalchemy.core.text_quality_policy import resolve_text_policy
 
 
 def request_policy_fields(task: dict) -> dict:
+    heading_limit = task.get("max_changed_headings")
     emphasis_limit = task.get("max_changed_emphasis")
     formula_limit = task.get("max_changed_formulas")
     limit, object_limit = task.get("max_loss_issues"), task.get("max_lost_objects")
     return {
+        "txt_encoding": task.get("txt_encoding", "auto"),
+        "heading_loss_policy": HeadingBudget(heading_limit) if heading_limit is not None else None,
         "emphasis_loss_policy": EmphasisLossPolicy(emphasis_limit) if emphasis_limit is not None else None,
         "formula_loss_policy": FormulaLossPolicy(formula_limit) if formula_limit is not None else None,
         "quality_policy": QualityPolicy(limit) if limit is not None else None,
@@ -26,8 +30,15 @@ def request_policy_fields(task: dict) -> dict:
 def stored_policy_fields(
     quality, objects, required: bool, mode: str | None,
     max_text_edits: int | None = None, max_changed_formulas: int | None = None, max_changed_emphasis: int | None = None,
+    max_changed_headings: int | None = None,
+    txt_encoding: str = "auto",
 ) -> dict:
+    from opendoc_formats.text_profile import TextProfile
+
+    TextProfile(txt_encoding)
     text_policy = resolve_text_policy(required, mode, max_text_edits)
+    if max_changed_headings is not None:
+        HeadingBudget(max_changed_headings)
     if max_changed_emphasis is not None:
         EmphasisLossPolicy(max_changed_emphasis)
     if max_changed_formulas is not None:
@@ -40,4 +51,6 @@ def stored_policy_fields(
         "max_text_edits": max_text_edits,
         "max_changed_formulas": max_changed_formulas,
         "max_changed_emphasis": max_changed_emphasis,
+        "max_changed_headings": max_changed_headings,
+        "txt_encoding": txt_encoding,
     }

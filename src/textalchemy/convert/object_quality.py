@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from textalchemy.convert.heading_budget import HeadingBudget
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
 from textalchemy.core.emphasis_quality import EmphasisLossPolicy
 from textalchemy.core.formula_quality_policy import FormulaLossPolicy
@@ -14,10 +15,13 @@ def check_object_quality(
     source: Path, target: Path, report: ConversionReport, policy: ObjectLossPolicy | None,
     text_policy: TextPreservationPolicy | None = None,
     formula_policy: FormulaLossPolicy | None = None, emphasis_policy: EmphasisLossPolicy | None = None,
+    heading_policy: HeadingBudget | None = None, txt_encoding: str = "auto",
 ) -> None:
     comparison = None
     try:
-        comparison = compare_inspections(inspect_path(source), inspect_path(target))
+        from textalchemy.convert.library_import import inspect_source
+
+        comparison = compare_inspections(inspect_source(source, txt_encoding), inspect_path(target))
     except Exception as error:  # noqa: BLE001 - inspection failure must fail the gate, not publish unchecked output
         report.add(IssueSeverity.WARNING, "object-inspection", f"Проверка объектов недоступна: {error}")
     if policy is not None:
@@ -28,3 +32,5 @@ def check_object_quality(
         formula_policy.evaluate(report, comparison)
     if emphasis_policy is not None:
         emphasis_policy.evaluate(report, comparison)
+    if heading_policy is not None:
+        heading_policy.evaluate(report, comparison)

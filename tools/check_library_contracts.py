@@ -81,6 +81,8 @@ def check_source_boundary(root: Path, contract: dict) -> tuple[int, int]:
                 else []
             )
             for name in names:
+                if name == "opendoc" or name.startswith("opendoc."):
+                    raise ValueError(f"Legacy model import would mix library types: {relative}")
                 if name.startswith("opendoc_formats.native.") or name == "opendoc_formats.native":
                     raise ValueError(f"Private library import is not a stable contract: {relative}")
                 if name == "xml" or name.startswith("xml."):
@@ -100,6 +102,8 @@ def check_source_boundary(root: Path, contract: dict) -> tuple[int, int]:
                 )
             ):
                 dynamic_name = node.args[0].value
+                if dynamic_name == "opendoc" or dynamic_name.startswith("opendoc."):
+                    raise ValueError(f"Legacy model import would mix library types: {relative}")
                 if dynamic_name == "opendoc_formats.native" or dynamic_name.startswith("opendoc_formats.native."):
                     raise ValueError(f"Private library import is not a stable contract: {relative}")
                 if dynamic_name == "xml" or dynamic_name.startswith("xml."):
@@ -123,7 +127,7 @@ def check_source_boundary(root: Path, contract: dict) -> tuple[int, int]:
             if isinstance(node, ast.ImportFrom) and node.module == "opendoc_formats":
                 if any(alias.name == "native" for alias in node.names):
                     raise ValueError(f"Private library import is not a stable contract: {relative}")
-            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(("opendoc.", "opendoc_formats.")):
+            if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(("opendoc_model.", "opendoc_formats.")):
                 if any(alias.name.startswith("_") for alias in node.names):
                     raise ValueError(f"Private library import is not a stable contract: {relative}")
     if aliases != contract["compatibility_aliases"]:
@@ -137,7 +141,7 @@ def check_source_boundary(root: Path, contract: dict) -> tuple[int, int]:
 def main() -> None:
     contract = json.loads((ROOT / "contracts/libraries.json").read_text(encoding="utf-8"))
     counts = {}
-    for name in ("opendoc", "opendoc-formats"):
+    for name in ("opendoc-model", "opendoc-formats"):
         module = importlib.import_module(name.replace("-", "_"))
         package = Path(module.__file__).parent
         if package.resolve().is_relative_to((ROOT / "src").resolve()):

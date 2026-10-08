@@ -34,6 +34,21 @@ def _profile(
 def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
     return (
         ConverterCapabilities(
+            "pdf.model", DocFormat.PDF, DocFormat.MODEL,
+            frozenset({ConversionMode.BALANCED, ConversionMode.EDITABLE}),
+            _features(text=S.EDITABLE, styles=S.PARTIAL, raster_images=S.PARTIAL,
+                      vector_graphics=S.PARTIAL, page_geometry=S.PARTIAL, sections=S.PARTIAL),
+            requirements=("pymupdf",),
+            description="PDF text, page geometry and supported graphics through the public model reader",
+        ),
+        ConverterCapabilities(
+            "djvu.model", DocFormat.DJVU, DocFormat.MODEL,
+            frozenset({ConversionMode.BALANCED, ConversionMode.EDITABLE}),
+            _features(text=S.PARTIAL),
+            requirements=("djvutxt",),
+            description="DjVu text layer only; no page geometry, images or OCR",
+        ),
+        ConverterCapabilities(
             "html.model", DocFormat.HTML, DocFormat.MODEL,
             frozenset({ConversionMode.BALANCED, ConversionMode.EDITABLE}),
             _features(text=S.EDITABLE, styles=S.PARTIAL, tables=S.EDITABLE, formulas=S.PARTIAL,
@@ -63,7 +78,7 @@ def built_in_capabilities() -> tuple[ConverterCapabilities, ...]:
             DocFormat.MODEL,
             ALL_MODES,
             _features(text=S.EXACT, styles=S.EDITABLE, raster_images=S.EXACT, vector_graphics=S.EXACT, sections=S.EDITABLE),
-            requirements=("ebooklib", "beautifulsoup4"),
+            requirements=("beautifulsoup4",),
             description="EPUB spine, links, media, and basic CSS as an editable model",
         ),
         ConverterCapabilities(

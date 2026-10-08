@@ -156,6 +156,16 @@ def _wait_convert_ready(current: Page) -> None:
     )
 
 
+def _generator_step(current: Page, step: int = 1) -> None:
+    """Перейти к нужному этапу через видимую навигацию пользователя."""
+    from playwright.sync_api import expect
+
+    expect(current.locator('#genBtn')).to_be_enabled(timeout=30000)
+    current.locator(f'[data-generator-step="{step}"]').click()
+    panel = ('documentBasis', 'documentFields', 'documentOutput')[step]
+    expect(current.locator(f'#{panel}')).to_be_visible()
+
+
 def _open_batch_history(current: Page, job_id: str | None = None) -> None:
     history = current.locator("#conversionHistory")
     if not history.evaluate("element => element.open"):
@@ -235,9 +245,9 @@ def test_e2e_global_task_center_explains_storage(e2e_server, page):
     page.goto(f"{e2e_server}/")
     page.wait_for_load_state("networkidle")
 
-    page.get_by_role("button", name="Задачи").click()
+    page.get_by_role("button", name="Открыть задачи", exact=True).click()
 
-    center = page.get_by_role("complementary", name="Задачи и результаты")
+    center = page.get_by_role("dialog", name="Задачи и результаты")
     assert center.get_attribute("inert") is None
     assert "Файлы не отправляются" in center.text_content()
     assert "автоматически очищаются через 1 час" in center.text_content()
@@ -262,6 +272,7 @@ def test_e2e_mobile_navigation_opens_and_closes(e2e_server, page):
 
 def test_e2e_generate_document_from_template(e2e_server, page):
     page.goto(f"{e2e_server}/generate")
+    _generator_step(page)
     page.wait_for_selector("#field-title", timeout=30000)
 
     page.fill("#field-title", "Проверка шаблона")
@@ -269,7 +280,9 @@ def test_e2e_generate_document_from_template(e2e_server, page):
     page.fill("#field-body", "Документ создан через пользовательский сценарий.")
 
     with page.expect_download(timeout=60000) as download_info:
+        _generator_step(page, 2)
         page.click("#genBtn")
+        _generator_step(page)
     data = download_info.value.path().read_bytes()
     assert data[:4] == b"PK\x03\x04"
     assert page.locator("#status").text_content() == "Документ сгенерирован и загружен."
@@ -309,10 +322,10 @@ def test_e2e_library_navigation_and_editor(e2e_server, page):
     assert page.locator("#bibEditor").get_attribute("open") is not None
     assert page.locator("#title").evaluate("element => element === document.activeElement") is True
 
-    tabs.get_by_role("link", name="Связать файлы").click()
+    tabs.get_by_role("link", name="Поиск источников").click()
     page.wait_for_url(f"{e2e_server}/matching")
     library_tabs = page.get_by_role("navigation", name="Разделы библиотеки")
-    assert library_tabs.get_by_role("link", name="Связать файлы").get_attribute("aria-current") == "page"
+    assert library_tabs.get_by_role("link", name="Поиск источников").get_attribute("aria-current") == "page"
     assert page.locator("#dryRun").is_checked()
 
 
@@ -1386,29 +1399,37 @@ def test_e2e_generator_draft_restores_and_generates(e2e_server, page, width):
 
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(f'{e2e_server}/generate')
+    _generator_step(page)
     expect(page.locator('#field-title')).to_be_visible(timeout=30000)
     page.locator('#field-title').fill('Сохранённый заголовок')
     page.locator('#field-author').fill('Автор черновика')
     page.locator('#field-body').fill('Текст после восстановления')
+    _generator_step(page, 2)
     page.locator('#output').fill('мой-документ.docx')
+    _generator_step(page)
     expect(page.locator('#draftStatus')).to_contain_text('сохранён')
     page.reload()
+    _generator_step(page)
     expect(page.locator('#field-title')).to_have_value('')
     page.locator('#restoreDraft').click()
     expect(page.locator('#field-title')).to_have_value('Сохранённый заголовок')
     expect(page.locator('#output')).to_have_value('мой-документ.docx')
     expect(page.locator('#draftStatus')).to_contain_text('восстановлен')
     with page.expect_download(timeout=60000) as event:
+        _generator_step(page, 2)
         page.locator('#genBtn').click()
+        _generator_step(page)
     doc = Document(io.BytesIO(event.value.path().read_bytes()))
     assert 'Сохранённый заголовок' in '\n'.join(p.text for p in doc.paragraphs)
     assert 'Текст после восстановления' in '\n'.join(p.text for p in doc.paragraphs)
     # A second tab in the same browser session must not overwrite the first tab's draft.
     other = page.context.new_page()
     other.goto(f'{e2e_server}/generate')
+    _generator_step(other)
     expect(other.locator('#field-title')).to_be_visible(timeout=30000)
     other.locator('#field-title').fill('Другая вкладка')
     page.reload()
+    _generator_step(page)
     page.locator('#restoreDraft').click()
     expect(page.locator('#field-title')).to_have_value('Сохранённый заголовок')
     other.close()
@@ -1417,6 +1438,7 @@ def test_e2e_generator_draft_restores_and_generates(e2e_server, page, width):
     page.locator('#clearDraft').click()
     expect(page.locator('#field-title')).to_have_value('')
     page.reload()
+    _generator_step(page)
     expect(page.locator('#field-title')).to_have_value('')
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     assert page.e2e_errors == []
@@ -1431,19 +1453,26 @@ def test_e2e_generator_invalid_json_draft(e2e_server, page):
         json={'schema': schema, 'description': 'Test', 'source': 'sidecar'}))
     page.route('**/api/generate/templates/draft-test/preview/meta', lambda route: route.fulfill(json={'available': False}))
     page.goto(f'{e2e_server}/generate')
+    _generator_step(page)
     page.locator('[data-field-name=items]').get_by_role('button', name='JSON', exact=True).click()
     page.locator('#field-items').fill('[unfinished')
     page.locator('#field-enabled').uncheck()
+    _generator_step(page, 2)
     page.locator('[data-format="html"]').click()
+    _generator_step(page)
     page.reload()
+    _generator_step(page)
     page.locator('#restoreDraft').click()
     expect(page.locator('#field-items')).to_have_value('[unfinished')
     expect(page.locator('#field-enabled')).not_to_be_checked()
     expect(page.locator('[data-format="html"]')).to_have_class('format-option active')
     expect(page.locator('#output')).to_have_value('output.html')
+    _generator_step(page, 2)
     page.locator('#genBtn').click()
+    _generator_step(page)
     expect(page.locator('#field-error-items')).to_contain_text('некорректный JSON')
     page.reload()
+    _generator_step(page)
     page.locator('#restoreDraft').click()
     expect(page.locator('#field-items')).to_have_value('[unfinished')
     assert page.e2e_errors == []
@@ -1460,19 +1489,25 @@ def test_e2e_generator_template_isolation_images_and_schema_change(e2e_server, p
         json={'schema': schema, 'description': 'Test', 'source': 'sidecar'}))
     page.route('**/api/generate/templates/*/preview/meta', lambda route: route.fulfill(json={'available': False}))
     page.goto(f'{e2e_server}/generate')
+    _generator_step(page)
     page.locator('#field-title').fill('Template A')
     image = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1EAAAAASUVORK5CYII=')
     page.locator('#field-picture').set_input_files({'name': 'pixel.png', 'mimeType': 'image/png', 'buffer': image})
     expect(page.locator('#draftStatus')).to_contain_text('Черновик сохранён')
+    _generator_step(page, 0)
     page.locator('#template').select_option('B')
+    _generator_step(page)
     expect(page.locator('#field-title')).to_have_value('')
     page.locator('#field-title').fill('Template B')
     page.reload()
+    _generator_step(page)
     expect(page.locator('#template')).to_have_value('B')
     expect(page.locator('#field-title')).to_have_value('')
     page.locator('#restoreDraft').click()
     expect(page.locator('#field-title')).to_have_value('Template B')
+    _generator_step(page, 0)
     page.locator('#template').select_option('A')
+    _generator_step(page)
     expect(page.locator('#field-title')).to_have_value('')
     assert not page.locator('#field-picture').evaluate('e => e.dataset.imageData')
     page.locator('#restoreDraft').click()
@@ -1482,6 +1517,7 @@ def test_e2e_generator_template_isolation_images_and_schema_change(e2e_server, p
     saved = page.evaluate("sessionStorage.getItem('textalchemy.generator-draft.v1.A')")
     schema['fields'][0]['type'] = 'integer'
     page.reload()
+    _generator_step(page)
     page.locator('#restoreDraft').click()
     expect(page.locator('#draftStatus')).to_contain_text('схема шаблона изменилась')
     page.locator('#field-title').fill('42')
@@ -1498,6 +1534,7 @@ def test_e2e_generator_storage_failure_keeps_input(e2e_server, page):
             return original.call(this, key, value);
         };""")
     page.goto(f'{e2e_server}/generate')
+    _generator_step(page)
     page.locator('#field-title').fill('Не потерять ввод')
     expect(page.locator('#draftStatus')).to_contain_text('Черновик не сохранён')
     expect(page.locator('#field-title')).to_have_value('Не потерять ввод')
@@ -1516,10 +1553,13 @@ def test_e2e_generator_named_dataset(e2e_server, page, tmp_path, monkeypatch, wi
     monkeypatch.setattr(importlib.import_module('textalchemy.web.app'), 'data_dir', tmp_path)
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(f'{e2e_server}/generate')
+    _generator_step(page)
     page.locator('#field-title').fill('Сохранённый набор')
     page.locator('#field-author').fill('Автор набора')
     page.locator('#field-body').fill('Содержимое набора')
+    _generator_step(page, 2)
     page.locator('#output').fill('dataset.docx')
+    _generator_step(page)
     page.locator('#savedData > summary').click()
     page.locator('#datasetName').fill('Исследование')
     page.locator('#datasetCreate').click()
@@ -1529,6 +1569,7 @@ def test_e2e_generator_named_dataset(e2e_server, page, tmp_path, monkeypatch, wi
     # Fresh tab has no session draft but can load the persistent server dataset.
     other = page.context.new_page()
     other.goto(f'{e2e_server}/generate')
+    _generator_step(other)
     expect(other.locator('#field-title')).to_have_value('')
     expect(other.locator('#datasetList option')).to_have_count(2)
     other.locator('#savedData > summary').click()
@@ -1542,7 +1583,9 @@ def test_e2e_generator_named_dataset(e2e_server, page, tmp_path, monkeypatch, wi
     other.locator('#datasetUpdate').click()
     expect(other.locator('#datasetStatus')).to_contain_text('версия 2')
     with other.expect_download(timeout=60000) as event:
+        _generator_step(other, 2)
         other.locator('#genBtn').click()
+        _generator_step(other)
     doc = Document(io.BytesIO(event.value.path().read_bytes()))
     assert 'Обновлённый набор' in '\n'.join(p.text for p in doc.paragraphs)
     other.close()
@@ -1574,6 +1617,7 @@ def test_e2e_template_variable_copy(e2e_server, page, tmp_path, monkeypatch, wid
     monkeypatch.setattr(importlib.import_module('textalchemy.web.app'), 'data_dir', tmp_path)
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(f'{e2e_server}/generate')
+    _generator_step(page)
     expect(page.locator('#field-title')).to_be_visible()
     page.locator('#editMode').click()
     page.get_by_text('Изменить переменную шаблона', exact=True).click()
@@ -1587,12 +1631,15 @@ def test_e2e_template_variable_copy(e2e_server, page, tmp_path, monkeypatch, wid
     copied = page.locator('#template').input_value()
     assert copied.startswith('edited-')
     page.reload()
+    _generator_step(page)
     expect(page.locator('#template')).to_have_value(copied)
     page.locator('#field-subject').fill('Изменённая переменная')
     page.locator('#field-author').fill('Автор')
     page.locator('#field-body').fill('Текст')
     with page.expect_download(timeout=60000) as event:
+        _generator_step(page, 2)
         page.locator('#genBtn').click()
+        _generator_step(page)
     doc = Document(io.BytesIO(event.value.path().read_bytes()))
     assert 'Изменённая переменная' in '\n'.join(p.text for p in doc.paragraphs)
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -1610,6 +1657,7 @@ def test_e2e_template_condition_copy(e2e_server, page, tmp_path, monkeypatch, wi
     monkeypatch.setattr(importlib.import_module('textalchemy.web.app'), 'data_dir', tmp_path)
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(f'{e2e_server}/generate')
+    _generator_step(page)
     expect(page.locator('#field-title')).to_be_visible()
     page.locator('#editMode').click()
     page.get_by_text('Настроить условный абзац', exact=True).click()
@@ -1622,6 +1670,7 @@ def test_e2e_template_condition_copy(e2e_server, page, tmp_path, monkeypatch, wi
     expect(page.locator('#field-show_section')).to_be_visible()
     name = page.locator('#template').input_value()
     page.reload()
+    _generator_step(page)
     expect(page.locator('#template')).to_have_value(name)
     page.locator('#field-title').fill('Условный документ')
     page.locator('#field-author').fill('Автор')
@@ -1629,7 +1678,9 @@ def test_e2e_template_condition_copy(e2e_server, page, tmp_path, monkeypatch, wi
     for enabled in (False, True):
         page.locator('#field-show_section').set_checked(enabled)
         with page.expect_download(timeout=60000) as event:
+            _generator_step(page, 2)
             page.locator('#genBtn').click()
+            _generator_step(page)
         doc = Document(io.BytesIO(event.value.path().read_bytes()))
         assert ('Текст по условию' in '\n'.join(p.text for p in doc.paragraphs)) is enabled
     page.locator('#editMode').click()
@@ -1654,6 +1705,7 @@ def test_e2e_template_loop_copy(e2e_server, page, tmp_path, monkeypatch, width):
     monkeypatch.setattr(importlib.import_module('textalchemy.web.app'), 'data_dir', tmp_path)
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(f'{e2e_server}/generate')
+    _generator_step(page)
     expect(page.locator('#field-title')).to_be_visible()
     page.locator('#editMode').click()
     page.get_by_text('Повторять абзац по списку', exact=True).click()
@@ -1666,6 +1718,7 @@ def test_e2e_template_loop_copy(e2e_server, page, tmp_path, monkeypatch, width):
     expect(page.locator('[data-field-name=items] .list-editor')).to_be_visible()
     name = page.locator('#template').input_value()
     page.reload()
+    _generator_step(page)
     expect(page.locator('#template')).to_have_value(name)
     page.locator('#field-title').fill('Документ со списком')
     page.locator('#field-author').fill('Автор')
@@ -1674,7 +1727,9 @@ def test_e2e_template_loop_copy(e2e_server, page, tmp_path, monkeypatch, width):
         page.locator('[data-field-name=items]').get_by_role('button', name='JSON', exact=True).click()
         page.locator('#field-items').fill(data)
         with page.expect_download(timeout=60000) as event:
+            _generator_step(page, 2)
             page.locator('#genBtn').click()
+            _generator_step(page)
         doc = Document(io.BytesIO(event.value.path().read_bytes()))
         values = [p.text for p in doc.paragraphs]
         assert [value for value in values if value in {'Первый', 'Второй'}] == expected
@@ -1710,6 +1765,7 @@ def test_e2e_template_row_copy(e2e_server, page, tmp_path, monkeypatch, width):
     monkeypatch.setattr(importlib.import_module('textalchemy.web.app'), 'data_dir', tmp_path / 'data')
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(f'{e2e_server}/generate')
+    _generator_step(page)
     expect(page.locator('#field-title')).to_be_visible()
     page.locator('#editMode').click()
     page.get_by_text('Повторять строку таблицы', exact=True).click()
@@ -1723,13 +1779,16 @@ def test_e2e_template_row_copy(e2e_server, page, tmp_path, monkeypatch, width):
     expect(page.locator('[data-field-name=items] .list-editor')).to_be_visible()
     name = page.locator('#template').input_value()
     page.reload()
+    _generator_step(page)
     expect(page.locator('#template')).to_have_value(name)
     page.locator('#field-title').fill('Global')
     for data, expected in [('[]', []), ('["A", "B", "A"]', [['A', 'kg'], ['B', 'kg'], ['A', 'kg']])]:
         page.locator('[data-field-name=items]').get_by_role('button', name='JSON', exact=True).click()
         page.locator('#field-items').fill(data)
         with page.expect_download(timeout=60000) as event:
+            _generator_step(page, 2)
             page.locator('#genBtn').click()
+            _generator_step(page)
         doc = Document(io.BytesIO(event.value.path().read_bytes()))
         assert [[c.text for c in row.cells] for row in doc.tables[0].rows] == [['Name', 'Unit'], *expected, ['Total', 'End']]
     page.locator('#editMode').click()

@@ -48,8 +48,8 @@ export function createListEditor(input, label) {
                 [values[index], values[target]] = [values[target], values[index]];
                 commit(); render(target);
             };
-            const up = button('↑', () => move(-1), `Строка ${index + 1}: выше`); up.disabled = index === 0;
-            const down = button('↓', () => move(1), `Строка ${index + 1}: ниже`); down.disabled = index === values.length - 1;
+            const up = button('Выше', () => move(-1), `Строка ${index + 1}: выше`); up.disabled = index === 0;
+            const down = button('Ниже', () => move(1), `Строка ${index + 1}: ниже`); down.disabled = index === values.length - 1;
             const remove = button('Удалить', () => {
                 values.splice(index, 1); commit(); render(Math.min(index, values.length - 1));
                 if (!values.length) add.focus();

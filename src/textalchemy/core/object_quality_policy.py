@@ -1,5 +1,5 @@
-"""Compatibility imports; document implementation lives in opendoc."""
+"""Compatibility imports; document implementation lives in opendoc_model."""
 
-from opendoc.object_quality_policy import (
+from opendoc_model.object_quality_policy import (
     ObjectLossPolicy as ObjectLossPolicy,
 )

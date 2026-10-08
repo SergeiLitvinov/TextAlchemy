@@ -153,8 +153,8 @@ def extract_emails_from_document(
 
 def emails_to_docx(emails: Sequence[str], source_name: str, output_path: str | Path) -> Path:
     """Сохранение списка email в Word документ."""
-    from opendoc import DocumentModel, Paragraph, Section, TextRun
     from opendoc_formats.writers.docx_writer import write_docx_model
+    from opendoc_model import DocumentModel, Paragraph, Section, TextRun
 
     out = Path(output_path)
     blocks = [

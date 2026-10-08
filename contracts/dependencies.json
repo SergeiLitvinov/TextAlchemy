@@ -1,5 +1,5 @@
 {
-  "audited_on": "2026-10-04",
+  "audited_on": "2026-10-07",
   "scope": "Exact versions in uv.lock; metadata and selected wheel licence files, not a binary/model licence certification",
   "packages": [
     {
@@ -28,12 +28,24 @@
     },
     {
       "name": "aistudio-sdk",
-      "version": "0.3.8",
+      "version": "0.3.9",
       "description": "Python client library for the AIStudio API",
-      "license": "UNKNOWN",
-      "status": "unresolved",
-      "evidence": "https://pypi.org/project/aistudio-sdk/0.3.8/",
-      "inspected_wheel_sha256": "bfc96af7243ac2ee3303014849aa4028717cce5afa622af8cfe3a1d44d1941d6"
+      "license": "Apache-2.0",
+      "status": "license-file",
+      "evidence": "https://pypi.org/project/aistudio-sdk/0.3.9/",
+      "inspected_wheel_sha256": "41621d052ddb7a58643438a7ca541f58ef0ab94a2acdfff0a71db81bf68dc027",
+      "audited_on": "2026-10-08",
+      "license_file": {
+        "path": "doc/licenses/aistudio-sdk-Apache-2.0.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "wheel_path": "aistudio_sdk-0.3.9.dist-info/licenses/LICENSE"
+      },
+      "review_notes": {
+        "previous_version": "0.3.8",
+        "previous_wheel_sha256": "bfc96af7243ac2ee3303014849aa4028717cce5afa622af8cfe3a1d44d1941d6",
+        "runtime_comparison": "All non-dist-info files unchanged except aistudio_sdk/constant/version.py version string; required dependencies unchanged",
+        "scope": "Official package licence and SDK code compatibility; full OCR/model/binary acceptance remains separate"
+      }
     },
     {
       "name": "annotated-doc",
@@ -181,11 +193,16 @@
     },
     {
       "name": "cuda-bindings",
-      "version": "13.3.1",
+      "version": "12.9.4",
       "description": "Python bindings for CUDA",
       "license": "LicenseRef-NVIDIA-SOFTWARE-LICENSE",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/cuda-bindings/13.3.1/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/a9/c1/dabe88f52c3e3760d861401bb994df08f672ec893b8f7592dc91626adcf3/cuda_bindings-12.9.4-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/cuda-bindings-12.9.4.txt",
+        "sha256": "25a91d6edfb64fb780a013dc1c400c2249aa6998c8c8b94dffac95d99e5dbf0c"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
       "name": "cuda-pathfinder",
@@ -196,29 +213,12 @@
       "evidence": "https://pypi.org/pypi/cuda-pathfinder/1.5.5/json"
     },
     {
-      "name": "cuda-toolkit",
-      "version": "13.0.2",
-      "description": "CUDA Toolkit meta-package",
-      "license": "UNKNOWN (CUDA meta-package)",
-      "status": "unresolved",
-      "evidence": "https://pypi.org/project/cuda-toolkit/13.0.2/",
-      "inspected_wheel_sha256": "b198824cf2f54003f50d64ada3a0f184b42ca0846c1c94192fa269ecd97a66eb"
-    },
-    {
       "name": "easyocr",
       "version": "1.7.2",
       "description": "OCR на PyTorch",
       "license": "Apache-2.0",
       "status": "declared",
       "evidence": "https://pypi.org/pypi/easyocr/1.7.2/json"
-    },
-    {
-      "name": "ebooklib",
-      "version": "0.20",
-      "description": "Чтение EPUB через адаптер",
-      "license": "AGPL-3.0-or-later",
-      "status": "declared",
-      "evidence": "https://github.com/aerkalov/ebooklib"
     },
     {
       "name": "fastapi",
@@ -541,124 +541,199 @@
       "evidence": "https://pypi.org/pypi/numpy/2.3.5/json"
     },
     {
-      "name": "nvidia-cublas",
-      "version": "13.1.1.3",
+      "name": "nvidia-cublas-cu12",
+      "version": "12.8.4.1",
       "description": "CUBLAS native runtime libraries",
       "license": "LicenseRef-NVIDIA-Proprietary",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-cublas/13.1.1.3/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/dc/61/e24b560ab2e2eaeb3c839129175fb330dfcfc29e5203196e5541a4c44682/nvidia_cublas_cu12-12.8.4.1-py3-none-manylinux_2_27_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cublas-cu12-12.8.4.1.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-cuda-cupti",
-      "version": "13.0.85",
+      "name": "nvidia-cuda-cupti-cu12",
+      "version": "12.8.90",
       "description": "CUDA profiling tools runtime libs.",
       "license": "LicenseRef-NVIDIA-Proprietary",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-cuda-cupti/13.0.85/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/f8/02/2adcaa145158bf1a8295d83591d22e4103dbfd821bcaf6f3f53151ca4ffa/nvidia_cuda_cupti_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cuda-cupti-cu12-12.8.90.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-cuda-nvrtc",
-      "version": "13.0.88",
+      "name": "nvidia-cuda-nvrtc-cu12",
+      "version": "12.8.93",
       "description": "NVRTC native runtime libraries",
       "license": "LicenseRef-NVIDIA-Proprietary",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-cuda-nvrtc/13.0.88/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/05/6b/32f747947df2da6994e999492ab306a903659555dddc0fbdeb9d71f75e52/nvidia_cuda_nvrtc_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cuda-nvrtc-cu12-12.8.93.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-cuda-runtime",
-      "version": "13.0.96",
+      "name": "nvidia-cuda-runtime-cu12",
+      "version": "12.8.90",
       "description": "CUDA Runtime native Libraries",
-      "license": "NVIDIA CUDA EULA",
-      "status": "vendor-terms",
-      "evidence": "https://docs.nvidia.com/cuda/eula/index.html"
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/0d/9b/a997b638fcd068ad6e4d53b8551a7d30fe8b404d6f1804abf1df69838932/nvidia_cuda_runtime_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cuda-runtime-cu12-12.8.90.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-cudnn-cu13",
-      "version": "9.20.0.48",
+      "name": "nvidia-cudnn-cu12",
+      "version": "9.10.2.21",
       "description": "cuDNN runtime libraries",
-      "license": "NVIDIA cuDNN SLA",
-      "status": "vendor-terms",
-      "evidence": "https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/eula.html"
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/ba/51/e123d997aa098c61d029f76663dedbfb9bc8dcf8c60cbd6adbe42f76d049/nvidia_cudnn_cu12-9.10.2.21-py3-none-manylinux_2_27_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cudnn-cu12-9.10.2.21.txt",
+        "sha256": "49cf79bdb35734b52fe6203013b3bd759f81e998cd32aa2c65c51db9a88c61d2"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-cufft",
-      "version": "12.0.0.61",
+      "name": "nvidia-cufft-cu12",
+      "version": "11.3.3.83",
       "description": "CUFFT native runtime libraries",
       "license": "LicenseRef-NVIDIA-Proprietary",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-cufft/12.0.0.61/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/1f/13/ee4e00f30e676b66ae65b4f08cb5bcbb8392c03f54f2d5413ea99a5d1c80/nvidia_cufft_cu12-11.3.3.83-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cufft-cu12-11.3.3.83.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-cufile",
-      "version": "1.15.1.6",
+      "name": "nvidia-cufile-cu12",
+      "version": "1.13.1.3",
       "description": "cuFile GPUDirect libraries",
       "license": "LicenseRef-NVIDIA-Proprietary",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-cufile/1.15.1.6/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/bb/fe/1bcba1dfbfb8d01be8d93f07bfc502c93fa23afa6fd5ab3fc7c1df71038a/nvidia_cufile_cu12-1.13.1.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cufile-cu12-1.13.1.3.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-curand",
-      "version": "10.4.0.35",
+      "name": "nvidia-curand-cu12",
+      "version": "10.3.9.90",
       "description": "CURAND native runtime libraries",
       "license": "LicenseRef-NVIDIA-Proprietary",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-curand/10.4.0.35/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/fb/aa/6584b56dc84ebe9cf93226a5cde4d99080c8e90ab40f0c27bda7a0f29aa1/nvidia_curand_cu12-10.3.9.90-py3-none-manylinux_2_27_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-curand-cu12-10.3.9.90.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-cusolver",
-      "version": "12.0.4.66",
+      "name": "nvidia-cusolver-cu12",
+      "version": "11.7.3.90",
       "description": "CUDA solver native runtime libraries",
       "license": "LicenseRef-NVIDIA-Proprietary",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-cusolver/12.0.4.66/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/85/48/9a13d2975803e8cf2777d5ed57b87a0b6ca2cc795f9a4f59796a910bfb80/nvidia_cusolver_cu12-11.7.3.90-py3-none-manylinux_2_27_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cusolver-cu12-11.7.3.90.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-cusparse",
-      "version": "12.6.3.3",
+      "name": "nvidia-cusparse-cu12",
+      "version": "12.5.8.93",
       "description": "CUSPARSE native runtime libraries",
       "license": "LicenseRef-NVIDIA-Proprietary",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-cusparse/12.6.3.3/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/c2/f5/e1854cb2f2bcd4280c44736c93550cc300ff4b8c95ebe370d0aa7d2b473d/nvidia_cusparse_cu12-12.5.8.93-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cusparse-cu12-12.5.8.93.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-cusparselt-cu13",
-      "version": "0.8.1",
+      "name": "nvidia-cusparselt-cu12",
+      "version": "0.7.1",
       "description": "NVIDIA cuSPARSELt",
-      "license": "NVIDIA Proprietary Software",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-cusparselt-cu13/0.8.1/json"
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/56/79/12978b96bd44274fe38b5dde5cfb660b1d114f70a65ef962bcbbed99b549/nvidia_cusparselt_cu12-0.7.1-py3-none-manylinux2014_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-cusparselt-cu12-0.7.1.txt",
+        "sha256": "e8d158885a681b95ec7a6fc06dd8d4a52989f374cb1380c8a4c8fb27fd3d5d5e"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-nccl-cu13",
-      "version": "2.29.7",
+      "name": "nvidia-nccl-cu12",
+      "version": "2.27.5",
       "description": "NVIDIA Collective Communication Library (NCCL) Runtime",
-      "license": "NVIDIA NCCL SLA (binary package)",
-      "status": "vendor-terms",
-      "evidence": "https://docs.nvidia.com/deeplearning/nccl/archives/nccl_2292/pdf/NCCL-SLA.pdf"
+      "license": "BSD-3-Clause",
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/6e/89/f7a07dc961b60645dbbf42e80f2bc85ade7feb9a491b11a1e973aa00071f/nvidia_nccl_cu12-2.27.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-nccl-cu12-2.27.5.txt",
+        "sha256": "0f0174a6b4e0b33ac26375bf729533075b32f4c51a5b6802a3d742d7dcdc9a76"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-nvjitlink",
-      "version": "13.0.88",
+      "name": "nvidia-nvjitlink-cu12",
+      "version": "12.8.93",
       "description": "Nvidia JIT LTO Library",
       "license": "LicenseRef-NVIDIA-Proprietary",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-nvjitlink/13.0.88/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/f6/74/86a07f1d0f42998ca31312f998bd3b9a7eff7f52378f4f270c8679c77fb9/nvidia_nvjitlink_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-nvjitlink-cu12-12.8.93.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-nvshmem-cu13",
+      "name": "nvidia-nvshmem-cu12",
       "version": "3.4.5",
       "description": "NVSHMEM creates a global address space that provides efficient and scalable communication for NVIDIA GPU clusters.",
-      "license": "NVIDIA NVSHMEM SLA",
-      "status": "vendor-terms",
-      "evidence": "https://docs.nvidia.com/nvshmem/api/sla.html"
+      "license": "LicenseRef-NVIDIA-Proprietary",
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/b5/09/6ea3ea725f82e1e76684f0708bbedd871fc96da89945adeba65c3835a64c/nvidia_nvshmem_cu12-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-nvshmem-cu12-3.4.5.txt",
+        "sha256": "ad6f5853fba0ca0d159d0f58d49ae49830c2f8c93f7a92648b9ce90adb4c6ccd"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
-      "name": "nvidia-nvtx",
-      "version": "13.0.85",
+      "name": "nvidia-nvtx-cu12",
+      "version": "12.8.90",
       "description": "NVIDIA Tools Extension",
       "license": "Apache-2.0",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/nvidia-nvtx/13.0.85/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/a2/eb/86626c1bbc2edb86323022371c39aa48df6fd8b0a1647bc274577f72e90b/nvidia_nvtx_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/nvidia-nvtx-cu12-12.8.90.txt",
+        "sha256": "9e45e856bedccee9f67254082ca11851d954de2fed7448c4bed19ad9aab99a91"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
       "name": "opencv-contrib-python",
@@ -677,20 +752,22 @@
       "evidence": "https://pypi.org/pypi/opencv-python-headless/4.13.0.92/json"
     },
     {
-      "name": "opendoc",
-      "version": "0.1.0",
-      "description": "Модель документа, JSON, ресурсы, валидация и сравнение",
-      "license": "MIT",
-      "status": "license-file",
-      "evidence": "https://github.com/SergeiLitvinov/opendoc/releases/tag/v0.1.0"
-    },
-    {
       "name": "opendoc-formats",
-      "version": "0.3.0",
+      "version": "0.17.0",
       "description": "Обработчики форматов, LaTeX и нативный доступ к документам",
       "license": "MIT",
       "status": "license-file",
-      "evidence": "https://github.com/SergeiLitvinov/opendoc-formats/releases/tag/v0.3.0"
+      "evidence": "https://github.com/SergeiLitvinov/opendoc-formats/releases/tag/v0.17.0",
+      "audited_on": "2026-10-08"
+    },
+    {
+      "name": "opendoc-model",
+      "version": "0.7.2",
+      "description": "Модель документа, JSON, ресурсы, валидация и сравнение",
+      "license": "MIT",
+      "status": "license-file",
+      "evidence": "https://github.com/SergeiLitvinov/opendoc-model/releases/tag/v0.7.2",
+      "audited_on": "2026-10-08"
     },
     {
       "name": "opt-einsum",
@@ -1166,19 +1243,35 @@
     },
     {
       "name": "torch",
-      "version": "2.12.0",
+      "version": "2.10.0",
       "description": "Tensors and Dynamic neural networks in Python with strong GPU acceleration",
       "license": "BSD-3-Clause",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/torch/2.12.0/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/b3/7a/abada41517ce0011775f0f4eacc79659bc9bc6c361e6bfe6f7052a6b9363/torch-2.10.0-3-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/torch-2.10.0.txt",
+        "sha256": "2e311cbf8c7646e764a54621ab15663bbfcfeb5bb94f1d634d79adfd49ae3191"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed",
+      "notice_files": [
+        {
+          "path": "doc/licenses/torch-2.10.0-NOTICE.txt",
+          "sha256": "c2cc7bf0caec7652c2b460a8a470bea1677f241e4ab8e431df34cf17f5a9fec0"
+        }
+      ]
     },
     {
       "name": "torchvision",
-      "version": "0.27.0",
+      "version": "0.25.0",
       "description": "image and video datasets and models for torch deep learning",
-      "license": "BSD",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/torchvision/0.27.0/json"
+      "license": "BSD-3-Clause",
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/68/2f/f24b039169db474e8688f649377de082a965fbf85daf4e46c44412f1d15a/torchvision-0.25.0-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/torchvision-0.25.0.txt",
+        "sha256": "6502f676851cfe25f8af75531dfb32375b7325b73c37e7b43741fa422893e71d"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
       "name": "tqdm",
@@ -1190,11 +1283,16 @@
     },
     {
       "name": "triton",
-      "version": "3.7.0",
+      "version": "3.6.0",
       "description": "A language and compiler for custom Deep Learning operations",
       "license": "MIT",
-      "status": "declared",
-      "evidence": "https://pypi.org/pypi/triton/3.7.0/json"
+      "status": "license-file",
+      "evidence": "https://files.pythonhosted.org/packages/ab/a8/cdf8b3e4c98132f965f88c2313a4b493266832ad47fb52f23d14d4f86bb5/triton-3.6.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "license_file": {
+        "path": "doc/licenses/triton-3.6.0.txt",
+        "sha256": "92640fb97222fd0a698ff28ce0c3782c172623f8d6c609b557636a80f28fb946"
+      },
+      "inspection": "Exact license member via HTTP range and ZIP CRC; archive SHA declared by PyPI, not recomputed"
     },
     {
       "name": "typer",

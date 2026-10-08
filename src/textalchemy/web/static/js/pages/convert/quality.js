@@ -107,3 +107,25 @@ export function renderEmphasisGate($, report) {
         : 'Выделение не проверено: текст не сопоставим или представление недоступно. Результат не выдан.';
     if (!gate.accepted) $('qualityBadge').textContent = gate.verified ? 'Превышен допуск выделения' : 'Выделение не проверено';
 }
+
+export function renderHeadingGate($, report) {
+    const gate = report.metrics?.heading_quality_gate;
+    const summary = $('headingGateSummary');
+    summary.hidden = !gate;
+    if (!gate) return;
+    summary.textContent = gate.verified
+        ? `Изменённых или удалённых ролей заголовков: ${gate.changed_headings}; допустимо: ${gate.max_changed_headings}. ` +
+            (gate.accepted ? 'Допуск соблюдён.' : 'Результат не выдан.')
+        : 'Сохранность заголовков не проверена: данные неполные или сопоставление неоднозначно. Результат не выдан.';
+    if (!gate.accepted) $('qualityBadge').textContent = gate.verified ? 'Превышен допуск заголовков' : 'Заголовки не проверены';
+}
+
+
+export function renderPdfVectors($, report) {
+    const vectors = report.metrics?.step_metrics?.['model.pdf']?.pdf_vectors;
+    const summary = $('pdfVectorsSummary');
+    const verified = report.success === true && Number.isInteger(vectors?.native) && vectors.native >= 0;
+    summary.hidden = !verified || vectors.native === 0;
+    summary.textContent = verified
+        ? `Нативно записано PDF-векторов: ${vectors.native}. Они сохраняются линиями и контурами; удобство правки в целевой программе отдельно не проверено.` : '';
+}

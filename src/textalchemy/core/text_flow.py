@@ -2,6 +2,6 @@
 
 import sys
 
-from opendoc import text_flow as _implementation
+from opendoc_model import text_flow as _implementation
 
 sys.modules[__name__] = _implementation

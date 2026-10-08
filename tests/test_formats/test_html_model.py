@@ -136,13 +136,13 @@ def test_external_assets_opt_in_and_svg_sanitizing(tmp_path):
         '<rect width="3" height="3" onclick="run()"/><image href="https://example.org/a"/></svg>'
     )
     path.write_text('<p><img src="asset.svg"></p>')
-    assert not read_html_model(path).resources
+    assert all(r.kind.value == "attachment" for r in read_html_model(path).resources.values())
     model = read_html_model(path, resource_root=tmp_path)
-    data = next(iter(model.resources.values())).data.decode()
+    data = next(r for r in model.resources.values() if r.kind.value == "vector_image").data.decode()
     assert "script" not in data and "onclick" not in data and "https://example.org/a" not in data
     assert model.metadata["html"]["warnings"]
     path.write_text('<p><img src="../outside.png"></p>')
-    assert not read_html_model(path, resource_root=tmp_path).resources
+    assert all(r.kind.value == "attachment" for r in read_html_model(path, resource_root=tmp_path).resources.values())
 
 
 def test_cli_pipeline_and_web_catalog(tmp_path):

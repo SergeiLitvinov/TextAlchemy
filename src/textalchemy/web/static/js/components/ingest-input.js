@@ -47,5 +47,7 @@ export function createIngestInput($, setStatus, {extensions, onSelected = () => 
     });
     input.addEventListener('change', () => select(input.files[0]));
     setBusy(false);
+    // Выбор, сделанный до завершения загрузки модуля, тоже становится текущим файлом.
+    if (input.files.length) select(input.files[0]);
     return {getFile: () => file, setBusy};
 }

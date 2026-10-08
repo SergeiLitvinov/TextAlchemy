@@ -13,12 +13,14 @@ def cmd_plan(args: argparse.Namespace) -> int:
     from textalchemy.core.types import DocFormat
 
     features = [DocumentFeature(value) for value in args.feature] if args.feature else list(DocumentFeature)
+    target = DocFormat(args.target)
     plan = create_capability_registry().plan(
         DocFormat(args.source),
-        DocFormat(args.target),
+        target,
         mode=ConversionMode(args.mode),
         features=features,
         max_steps=args.max_steps,
+        available=lambda step: target is not DocFormat.MODEL or step.target is DocFormat.MODEL,
     )
     if plan is None:
         payload = {

@@ -74,6 +74,7 @@ class MatchingService:
                         "copied": copied is not None,
                         "match": True,
                         "score": round(match.score, 2),
+                        "source": {"title": match.item.title, "authors": match.item.authors, "year": match.item.year},
                     }
                 )
                 if not dry_run and copied is None:
@@ -106,6 +107,9 @@ class MatchingService:
                     "new": name or match.document.path.name,
                     "match": matched,
                     "score": round(match.score, 2) if matched else 0,
+                    "source": {"title": match.item.title, "authors": match.item.authors, "year": match.item.year}
+                    if matched
+                    else None,
                 }
             )
         return {"preview": preview, "total": len(preview), "matched": sum(item["match"] for item in preview)}

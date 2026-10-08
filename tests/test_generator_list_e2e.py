@@ -34,6 +34,7 @@ def test_list_editor_restore_dataset_and_document(e2e_server, page, list_templat
 
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(f'{e2e_server}/generate')
+    fixtures._generator_step(page)
     field = page.locator('[data-field-name=items]')
     rows = field.locator('.list-row textarea')
     expect(field.locator('.list-editor')).to_be_visible()
@@ -47,6 +48,7 @@ def test_list_editor_restore_dataset_and_document(e2e_server, page, list_templat
     field.get_by_role('button', name='Удалить строку 3', exact=True).click()
     expect(rows).to_have_count(2)
     page.reload()
+    fixtures._generator_step(page)
     page.locator('#restoreDraft').click()
     expect(rows.first).to_have_value('Второй')
     expect(rows.last).to_have_value('Первый')
@@ -59,7 +61,9 @@ def test_list_editor_restore_dataset_and_document(e2e_server, page, list_templat
     page.locator('#datasetLoad').click()
     expect(rows.first).to_have_value('Второй')
     with page.expect_download(timeout=60000) as download:
+        fixtures._generator_step(page, 2)
         page.locator('#genBtn').click()
+        fixtures._generator_step(page)
     doc = Document(io.BytesIO(download.value.path().read_bytes()))
     assert [p.text for p in doc.paragraphs if p.text] == ['Список', 'Второй', 'Первый']
     # Exact strings (including line breaks and numeric-looking text) survive both modes.
@@ -87,6 +91,7 @@ def test_json_mode_preserves_values(e2e_server, page, list_template, value):
     from playwright.sync_api import expect
 
     page.goto(f'{e2e_server}/generate')
+    fixtures._generator_step(page)
     field = page.locator('[data-field-name=items]')
     field.get_by_role('button', name='JSON', exact=True).click()
     page.locator('#field-items').fill(value)
@@ -96,6 +101,7 @@ def test_json_mode_preserves_values(e2e_server, page, list_template, value):
         expect(page.locator('#field-items')).to_be_visible()
         expect(field.locator('.list-rows')).to_be_hidden()
     page.reload()
+    fixtures._generator_step(page)
     page.locator('#restoreDraft').click()
     expect(page.locator('#field-items')).to_have_value(value)
     if value == '["a", "a", ""]':

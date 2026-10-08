@@ -23,7 +23,9 @@ def test_read_txt_missing():
 def test_read_txt_cp1251(tmp_path):
     p = tmp_path / "cp1251.txt"
     p.write_bytes("привет".encode("cp1251"))
-    result = read_txt(p)
+    from opendoc_formats.text_profile import TextProfile
+
+    result = read_txt(p, profile=TextProfile("cp1251"))
     assert "привет" in result.plain
 
 
@@ -32,7 +34,11 @@ def test_read_djvu_missing():
         read_djvu("nonexistent.djvu")
 
 
-def test_read_djvu_no_djvutxt(tmp_path):
+def test_read_djvu_no_djvutxt(tmp_path, monkeypatch):
+    def missing_tool(*args, **kwargs):
+        raise FileNotFoundError("djvutxt")
+
+    monkeypatch.setattr("subprocess.run", missing_tool)
     p = tmp_path / "test.djvu"
     p.write_text("fake", encoding="utf-8")
     result = read_djvu(p)

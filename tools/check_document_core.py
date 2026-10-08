@@ -9,11 +9,11 @@ PROBE = """
 import importlib.util
 from importlib.metadata import distribution
 from pathlib import Path
-import opendoc as core
+import opendoc_model as core
 
 for name in ('textalchemy', 'fastapi', 'docx', 'pptx', 'fitz', 'lxml'):
     assert importlib.util.find_spec(name) is None, name
-dist = distribution('opendoc')
+dist = distribution('opendoc-model')
 assert all('extra ==' in requirement for requirement in dist.requires or []), dist.requires
 assert Path(core.__file__).is_relative_to(Path(__import__('sys').prefix)), core.__file__
 paragraph = core.Paragraph(content=[core.TextRun('Independent document')],

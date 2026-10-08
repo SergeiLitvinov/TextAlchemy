@@ -2,7 +2,7 @@
 graft src/textalchemy
 recursive-include tools *.py *.json
 recursive-include contracts *.json
-recursive-include vendor/opendoc *.whl *.json *.md
+recursive-include vendor/opendoc-model *.whl *.json *.md
 recursive-include vendor/opendoc-formats *.whl *.json *.md
 graft doc
 graft tests

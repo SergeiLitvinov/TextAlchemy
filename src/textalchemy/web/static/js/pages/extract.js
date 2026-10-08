@@ -46,6 +46,9 @@ async function process() {
             text = data.text;
         }
         resultArea.value = text;
+        resultArea.hidden = false;
+        $('resultEmpty').hidden = true;
+        $('resultTools').hidden = false;
         $('emptyTextHint').hidden = Boolean(text.trim());
         resultArea.classList.toggle('code-result', output === 'latex');
         $('extract-result-title').textContent = output === 'latex' ? 'Исходник LaTeX' : 'Извлечённый текст';

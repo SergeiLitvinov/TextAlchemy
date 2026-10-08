@@ -39,7 +39,7 @@ jobs:
         run: |
           uv build --out-dir dist
           uv run python -m tools.release --dist dist
-          cp vendor/opendoc/*.whl vendor/opendoc-formats/*.whl dist/
+          cp vendor/opendoc-model/*.whl vendor/opendoc-formats/*.whl dist/
       - name: Save candidate artifacts without publishing
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -62,11 +62,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Verify bundled distribution provenance
-        run: python -c "import hashlib,json,pathlib; p=pathlib.Path('vendor/opendoc'); m=json.loads((p/'provenance.json').read_text()); assert hashlib.sha256((p/m['wheel']).read_bytes()).hexdigest()==m['sha256']"
+        run: python -c "import hashlib,json,pathlib; p=pathlib.Path('vendor/opendoc-model'); m=json.loads((p/'provenance.json').read_text()); assert hashlib.sha256((p/m['wheel']).read_bytes()).hexdigest()==m['sha256']"
       - name: Install only the document wheel
         run: |
           uv venv --python "${{ matrix.python-version }}" .textalchemy/document-core-env
-          uv pip install --python .textalchemy/document-core-env/bin/python --no-deps --no-index vendor/opendoc/*.whl
+          uv pip install --python .textalchemy/document-core-env/bin/python --no-deps --no-index vendor/opendoc-model/*.whl
       - name: Verify independence and model contracts
         run: uv run --no-project --python "${{ matrix.python-version }}" python tools/check_document_core.py --python .textalchemy/document-core-env/bin/python
 
@@ -147,6 +147,12 @@ jobs:
 
       - name: Lint with ruff
         run: uv run ruff check
+
+      - name: Install DjVu corpus tools for real adapter acceptance
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y djvulibre-bin
+          command -v djvutxt c44 djvused djvm
 
       - name: Verify immutable library releases and consumer boundary
         run: uv run python -m tools.check_library_contracts

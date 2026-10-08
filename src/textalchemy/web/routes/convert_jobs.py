@@ -47,6 +47,8 @@ async def api_convert_batch(
     max_text_edits: int | None = Form(None, ge=0),
     max_changed_formulas: int | None = Form(None, ge=0),
     max_changed_emphasis: int | None = Form(None, ge=0),
+    max_changed_headings: int | None = Form(None, ge=0),
+    txt_encoding: str = Form("auto"),
 ) -> dict[str, Any]:
     settings = BatchSettings(
         target_format=target_format,
@@ -58,6 +60,8 @@ async def api_convert_batch(
         max_text_edits=max_text_edits,
         max_changed_formulas=max_changed_formulas,
         max_changed_emphasis=max_changed_emphasis,
+        max_changed_headings=max_changed_headings,
+        txt_encoding=txt_encoding,
     )
     try:
         return await _submission_service().submit(

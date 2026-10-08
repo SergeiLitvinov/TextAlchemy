@@ -18,7 +18,7 @@ from typing import Any, TypeVar
 
 from jinja2 import StrictUndefined, TemplateSyntaxError, Undefined, meta
 from jinja2.sandbox import SandboxedEnvironment
-from opendoc.document_model import (
+from opendoc_model.document_model import (
     VECTOR_IMAGE_MEDIA_TYPES,
     Block,
     DocumentModel,
@@ -305,7 +305,7 @@ class _Renderer:
             )
         box = None
         if value.width_pt is not None or value.height_pt is not None:
-            from opendoc.document_model import Box
+            from opendoc_model.document_model import Box
 
             box = Box(0, 0, value.width_pt or 0, value.height_pt or 0)
         return Image(resource_id, alt_text=value.alt_text, box=box)

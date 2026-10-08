@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from opendoc.document_model import FormulaFormat
+from opendoc_model.document_model import FormulaFormat
 
 
 @dataclass(frozen=True)

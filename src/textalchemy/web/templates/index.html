@@ -4,71 +4,52 @@
 {% block content %}
 <section class="welcome-panel">
     <div>
-        <p class="eyebrow">Документы в нужном формате. Результат под контролем.</p>
-        <h2>Что вы хотите сделать?</h2>
-        <p class="lead">Преобразуйте, распознавайте и создавайте документы по шаблонам. Проверяйте результат и предупреждения о потерях перед использованием.</p>
+        <p class="eyebrow">TextAlchemy</p>
+        <h2>Документы в нужном формате</h2>
+        <p class="lead">Выберите действие, настройте результат и проверьте его перед скачиванием.</p>
     </div>
-    <a class="btn btn-primary hero-action" href="/convert">Выбрать документ <svg class="ui-icon" aria-hidden="true"><use href="#icon-arrow"/></svg></a>
 </section>
 
 <section aria-labelledby="quick-actions-title">
     <div class="section-heading">
-        <div><p class="eyebrow">Начать работу</p><h2 id="quick-actions-title">Основные действия</h2></div>
-        <a href="/pipeline">Настроить свой сценарий →</a>
+        <h2 id="quick-actions-title">Что вы хотите сделать?</h2>
     </div>
-    <div class="action-grid action-grid-six">
+    <div class="action-grid">
         <a class="action-card action-card-primary" href="/convert">
             <span class="action-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-convert"/></svg></span>
-            <span><strong>Преобразовать документ</strong><small>Выберите формат и баланс между точностью и редактируемостью</small></span>
+            <span><strong>Преобразовать документ</strong><small>Загрузить файл и сменить формат</small></span>
             <svg class="action-arrow ui-icon" aria-hidden="true"><use href="#icon-arrow"/></svg>
         </a>
         <a class="action-card" href="/generate">
             <span class="action-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-template"/></svg></span>
-            <span><strong>Создать по шаблону</strong><small>Заполните данные один раз и получите DOCX, PDF или HTML</small></span>
+            <span><strong>Создать по шаблону</strong><small>Заполнить поля и получить документ</small></span>
             <svg class="action-arrow ui-icon" aria-hidden="true"><use href="#icon-arrow"/></svg>
         </a>
         <a class="action-card" href="/recognize">
             <span class="action-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-scan"/></svg></span>
-            <span><strong>Распознать скан</strong><small>Верните текст и структуру бумажному или отсканированному документу</small></span>
-            <svg class="action-arrow ui-icon" aria-hidden="true"><use href="#icon-arrow"/></svg>
-        </a>
-        <a class="action-card" href="/reports">
-            <span class="action-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-quality"/></svg></span>
-            <span><strong>Состояние коллекции</strong><small>Посмотрите статистику библиотеки и результат последнего сопоставления файлов</small></span>
-            <svg class="action-arrow ui-icon" aria-hidden="true"><use href="#icon-arrow"/></svg>
-        </a>
-        <a class="action-card" href="/pipeline">
-            <span class="action-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-flow"/></svg></span>
-            <span><strong>Автоматизировать обработку</strong><small>Соберите повторяемый сценарий из проверяемых шагов без ручной рутины</small></span>
-            <svg class="action-arrow ui-icon" aria-hidden="true"><use href="#icon-arrow"/></svg>
-        </a>
-        <a class="action-card" href="/bibliography">
-            <span class="action-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-library"/></svg></span>
-            <span><strong>Организовать библиотеку</strong><small>Импортируйте источники, свяжите записи с файлами и подготовьте экспорт</small></span>
+            <span><strong>Распознать скан</strong><small>Получить текст из PDF или изображения</small></span>
             <svg class="action-arrow ui-icon" aria-hidden="true"><use href="#icon-arrow"/></svg>
         </a>
     </div>
 </section>
 
 <div class="dashboard-grid">
-    <section class="dashboard-card" aria-labelledby="quality-title">
-        <div class="section-heading compact"><div><p class="eyebrow">Контроль результата</p><h2 id="quality-title">Не просто смена формата</h2></div></div>
-        <div class="quality-list">
-            <div><span class="quality-icon">A</span><p><strong>Документы для редактирования</strong><small>Стили, списки, ссылки, правки, элементы управления и защищённые поля</small></p></div>
-            <div><span class="quality-icon">▦</span><p><strong>Сложные объекты</strong><small>Таблицы, формулы, векторная графика, схемы и вложенные объекты</small></p></div>
-            <div><span class="quality-icon">✓</span><p><strong>Проверка до скачивания</strong><small>Сравнение структуры и страниц, проверка шрифтов и цвета</small></p></div>
+    <section class="dashboard-card" aria-labelledby="tools-title">
+        <div class="section-heading compact"><h2 id="tools-title">Другие задачи</h2></div>
+        <div class="dashboard-tools">
+            <a href="/extract"><strong>Извлечь содержимое</strong><small>Текст для копирования и анализа</small><span aria-hidden="true">→</span></a>
+            <a href="/pipeline"><strong>Автоматизировать обработку</strong><small>Сценарий из нескольких действий</small><span aria-hidden="true">→</span></a>
         </div>
-        <a class="text-link" href="/convert">Преобразовать и проверить документ →</a>
     </section>
 
     <section class="dashboard-card" aria-labelledby="workspace-title">
         <div class="section-heading compact">
-            <div><p class="eyebrow">Ваша библиотека</p><h2 id="workspace-title">Коллекция источников</h2></div>
+            <h2 id="workspace-title">Библиотека источников</h2>
             <span class="count-badge">{{ bib_count }}</span>
         </div>
         {% if bib_count %}
         <p class="muted-copy">В библиотеке {{ bib_count }} записей. Свяжите их с файлами или экспортируйте в нужном формате.</p>
-        <div class="inline-actions"><a class="btn btn-secondary" href="/bibliography">Открыть источники</a><a class="text-link" href="/matching">Связать файлы</a></div>
+        <div class="inline-actions"><a class="btn btn-secondary" href="/bibliography">Открыть источники</a><a class="text-link" href="/matching">Поиск источников</a></div>
         {% else %}
         <div class="empty-state"><span aria-hidden="true">▤</span><p><strong>Источников пока нет</strong><small>Импортируйте список литературы или добавьте первую запись.</small></p></div>
         <a class="btn btn-secondary" href="/bibliography">Добавить источники</a>
@@ -76,9 +57,5 @@
     </section>
 </div>
 
-<section class="capability-strip" aria-label="Поддерживаемые возможности">
-    <div><strong>DOCX · PDF · PPTX · HTML · LaTeX · EPUB · TXT</strong><small><a href="/convert#formatCatalog">Проверить доступные направления и ограничения</a></small></div>
-    <div><strong>Можно редактировать · Баланс · Максимально похоже</strong><small>Три понятных режима качества</small></div>
-    <div><strong>OCR · формулы · вектор · шрифты</strong><small>Сложное содержимое с диагностикой потерь</small></div>
-</section>
+<p class="dashboard-help">Нужна помощь? <a href="/help/">Руководство пользователя</a> · <a href="/convert#formatCatalog">Доступные форматы</a></p>
 {% endblock %}

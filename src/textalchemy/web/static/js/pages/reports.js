@@ -12,14 +12,12 @@ function setStatus(message, type = 'info') {
 }
 
 function renderStats(data) {
-    const matched = data.matching?.matched?.length;
+    $('stats').innerHTML = `<strong>${esc(String(data.total_bib))}</strong> записей в библиотеке`;
     const stats = [
-        ['Источники', data.total_bib, 'записей в библиотеке'],
         ['Входные файлы', data.total_files, 'в папке исходников'],
         ['Файлы результата', data.matched_files, 'в папке копий; наличие не подтверждает связь'],
-        ['Найдено соответствий', matched ?? '—', matched === undefined ? 'сопоставление ещё не запускалось' : 'в последнем сопоставлении'],
     ];
-    $('stats').innerHTML = stats.map(([label, value, note]) =>
+    $('fileStats').innerHTML = stats.map(([label, value, note]) =>
         `<div class="metric-card"><span>${esc(label)}</span><strong>${esc(String(value))}</strong><small>${esc(note)}</small></div>`
     ).join('');
     const entries = Object.entries(data.doc_types || {});
@@ -54,20 +52,21 @@ function renderMatching(report) {
     element.innerHTML = html;
 }
 
-async function loadAll() {
+async function loadAll(notify = false) {
     if (loading) return;
     loading = true;
     window.setLoading($('refreshBtn'), true);
-    setStatus('Читаем состояние коллекции…');
+    setStatus('');
     try {
         const data = await api('/api/stats');
         renderStats(data);
         renderMatching(data.matching);
         loaded = true;
-        setStatus('Данные прочитаны. Файлы и записи не изменены.', 'success');
+        if (notify) window.toast('Обзор библиотеки обновлён', 'success');
     } catch (error) {
         if (!loaded) {
             $('stats').innerHTML = '';
+            $('fileStats').innerHTML = '';
             $('docTypes').textContent = 'Данные не загружены.';
             $('lastMatching').textContent = 'Отчёт не загружен.';
         }
@@ -78,5 +77,5 @@ async function loadAll() {
     }
 }
 
-$('refreshBtn').addEventListener('click', loadAll);
+$('refreshBtn').addEventListener('click', () => loadAll(true));
 loadAll();

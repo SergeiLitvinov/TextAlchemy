@@ -8,7 +8,8 @@ export function createExperienceController($, changed) {
         $('simpleConversionBtn').setAttribute('aria-pressed', String(!expert));
         $('expertConversionBtn').setAttribute('aria-pressed', String(expert));
         if (!expert) {
-            for (const id of ['maxLossIssues', 'maxLostObjects', 'maxChangedFormulas', 'maxChangedEmphasis', 'textPreservation']) $(id).value = '';
+            for (const id of ['maxLossIssues', 'maxLostObjects', 'maxChangedFormulas', 'maxChangedEmphasis', 'maxChangedHeadings', 'textPreservation']) $(id).value = '';
+            $('txtEncoding').value = 'auto';
             $('minRetention').value = '0';
             $('maxTextEdits').value = '0';
             $('maxTextEdits').disabled = true;
@@ -19,7 +20,7 @@ export function createExperienceController($, changed) {
         }
         $('experienceHelp').textContent = expert
             ? 'Выберите приоритет и строгие допуски. Возврат в простой режим сбросит эти настройки и индивидуальные настройки пакета.'
-            : 'Автоматический маршрут и отчёт о качестве. Экспертные допуски и индивидуальные настройки сброшены.';
+            : 'Автоматический маршрут и отчёт о качестве. Расширенные проверки и настройки пакета сброшены.';
         changed(!expert);
     }
     $('simpleConversionBtn').addEventListener('click', () => set(false));

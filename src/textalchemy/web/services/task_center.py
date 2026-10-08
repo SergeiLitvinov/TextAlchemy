@@ -24,10 +24,11 @@ class TaskCenterService:
 
     def snapshot(self, *, limit: int = 12) -> dict[str, Any]:
         visible = [task for task in self._store.list_tasks(limit=None) if task.get('queue_kind') != 'pipeline-input']
-        tasks = [self._public_task(task) for task in visible[:limit]]
+        ordered = sorted(visible, key=lambda task: task.get('status') not in _ACTIVE)
+        tasks = [self._public_task(task) for task in ordered[:limit]]
         counts: dict[str, int] = {}
-        for task in tasks:
-            status = str(task["status"])
+        for task in visible:
+            status = str(task.get("status", "unknown"))
             counts[status] = counts.get(status, 0) + 1
         return {
             "tasks": tasks,

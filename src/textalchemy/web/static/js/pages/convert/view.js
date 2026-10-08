@@ -42,7 +42,7 @@ export function createConversionView($) {
         ].filter((entry) => entry[1] !== undefined);
         $('inspectionState').textContent = data?.valid ? 'Структура читается' : 'Есть ошибки структуры';
         $('inspectionMetrics').innerHTML = entries.map(([label, value]) =>
-            `<div><span>${window.esc(label)}</span><strong>${window.esc(value)}</strong></div>`
+            `<div><span>${window.esc(label)}</span><strong>${window.esc(value ?? 'Не измерено')}</strong></div>`
         ).join('');
         const issues = data?.issues || [];
         $('sourceInspection').open = Boolean(issues.length || data?.valid === false);
@@ -71,14 +71,25 @@ export function createConversionView($) {
         const entries = Object.entries(names).filter(([name]) => retention[name]).map(([name, label]) => [label, retention[name]]);
         $('comparisonSection').hidden = entries.length === 0 && !inspectionError;
         $('retentionGrid').innerHTML = entries.map(([label, values]) => {
-            const percent = Math.round((values.ratio || 0) * 100);
+            const measured = Number.isFinite(values.ratio) && values.ratio >= 0 && values.ratio <= 1;
+            if (!measured) {
+                return `<div class="retention-item"><span>${window.esc(label)}</span><strong>Не измерено</strong>` +
+                    '<small>Нет сопоставимых данных</small></div>';
+            }
+            if (values.source === 0) {
+                return `<div class="retention-item"><span>${window.esc(label)}</span><strong>Нет в исходнике</strong>` +
+                    `<small>В результате: ${window.esc(values.target ?? 'не измерено')}</small></div>`;
+            }
+            const percent = Math.round(values.ratio * 100);
             const level = percent >= 99 ? 'good' : percent >= 80 ? 'warn' : 'bad';
             return `<div class="retention-item ${level}"><span>${window.esc(label)}</span><strong>${percent}%</strong>` +
                 `<small>${window.esc(values.target)} из ${window.esc(values.source)}</small></div>`;
         }).join('');
+        const incomplete = entries.some(([, values]) => !Number.isFinite(values.ratio) || values.ratio < 0 || values.ratio > 1);
         $('comparisonMessage').textContent = inspectionError || (comparisonData?.has_losses
             ? 'Обнаружены структурные отличия — подробности перечислены в замечаниях.'
-            : 'Проверенные элементы структуры сохранены.');
+            : incomplete ? 'Часть структуры не измерена. Доступные числа относятся только к сопоставимым данным.'
+                : 'Количество измеренных элементов не уменьшилось. Это не подтверждает одинаковое содержимое или оформление.');
         const objectDiff = comparisonData?.object_diff;
         const hasObjectData = Boolean(objectDiff);
         $('objectDiff').hidden = !hasObjectData;

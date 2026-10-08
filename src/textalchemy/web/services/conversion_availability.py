@@ -27,7 +27,12 @@ def unavailable_reason(
             return {
                 "code": "missing_dependencies",
                 "requirements": missing,
-                "message": "Для маршрута не найдены компоненты: " + ", ".join(missing) + ".",
+                "message": "Для маршрута необходимы: " + ", ".join(missing) + ".",
+            }
+        if any(step.target is not DocFormat.MODEL for step in implemented.steps[:-1]):
+            return {
+                "code": "web_route_unsupported",
+                "message": "Маршрут требует промежуточных файлов и пока не доступен через веб-интерфейс.",
             }
     theoretical = executor.registry.plan(source, target, mode=mode)
     if theoretical is not None:

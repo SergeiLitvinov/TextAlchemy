@@ -1,38 +1,32 @@
 {% extends "base.html" %}
 {% set active = 'reports' %}
-{% block title %}TextAlchemy — состояние коллекции{% endblock %}
+{% block title %}TextAlchemy — обзор библиотеки{% endblock %}
 {% block content %}
 <section class="page-heading">
     <div>
         <p class="eyebrow">Библиотека</p>
-        <h2>Состояние коллекции</h2>
-        <p class="lead">Записи библиотеки, файлы в настроенных папках и результат последнего сопоставления.</p>
+        <h2>Обзор библиотеки</h2>
+        <p class="lead">Ваш список литературы и сохранённые результаты поиска источников для файлов.</p>
     </div>
     <button type="button" id="refreshBtn" class="btn-secondary">Обновить данные</button>
 </section>
 
 {% include "partials/library_nav.html" %}
-<p class="field-help">Обновление только читает данные. Сопоставление и создание копий выполняются в разделе «Связать файлы».</p>
 <div id="status" class="status-bar" role="status" aria-live="polite" hidden></div>
 
-<section class="library-metrics" id="stats" aria-label="Основные показатели">
-    <div class="metric-skeleton"></div><div class="metric-skeleton"></div><div class="metric-skeleton"></div><div class="metric-skeleton"></div>
-</section>
-
-<div class="reports-layout">
     <section class="card report-panel">
-        <div class="card-head"><div><p class="eyebrow">Распределение</p><h3>Типы источников</h3></div></div>
+        <div class="card-head"><h3>Список литературы</h3><a href="/bibliography" class="text-link">Открыть источники →</a></div>
+        <div id="stats" class="report-library-summary" aria-label="Записи библиотеки"></div>
         <div id="docTypes"><p class="hint">Загружаем статистику…</p></div>
     </section>
     <section class="card report-panel">
         <div class="card-head">
-            <div><p class="eyebrow">Последняя проверка</p><h3>Связь источников и файлов</h3></div>
-            <a href="/matching" class="text-link">Открыть сопоставление →</a>
+            <h3>Последний поиск источников для файлов</h3>
+            <a href="/matching" class="text-link">Запустить новый поиск →</a>
         </div>
         <div id="lastMatching"><p class="hint">Загружаем результат…</p></div>
     </section>
-</div>
-<p class="field-help">Сохранность документа проверяется при <a href="/convert">конвертации</a>: отчёт и сравнение страниц находятся рядом с готовым результатом.</p>
+<details class="card report-panel"><summary>Файлы в настроенных папках</summary><div id="fileStats" class="library-metrics"></div><p class="field-help">Количество файлов не подтверждает их соответствие источникам. Папки задаются при поиске источников.</p></details>
 {% endblock %}
 
 {% block scripts %}

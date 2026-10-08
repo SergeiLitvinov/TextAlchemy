@@ -102,7 +102,7 @@ def test_txt_model_docx_roundtrip_preserves_blank_lines_and_edits(tmp_path):
     source, model_path, output = tmp_path / "in.txt", tmp_path / "model.json", tmp_path / "out.docx"
     source.write_bytes("Первый\r\n\r\nПоследний\r\n".encode("cp1251"))
     executor = ConversionExecutor()
-    first = executor.execute(ConversionRequest(source, model_path, DocFormat.TXT, DocFormat.MODEL))
+    first = executor.execute(ConversionRequest(source, model_path, DocFormat.TXT, DocFormat.MODEL, txt_encoding="cp1251"))
     assert first.success
     model = load_document(model_path)
     assert [block.plain_text for block in model.sections[0].blocks] == ["Первый", "", "Последний", ""]

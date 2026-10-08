@@ -15,14 +15,9 @@
             <p class="lead">Загрузите документ — TextAlchemy определит формат, предложит доступные результаты и покажет качество преобразования.</p>
         </div>
 
-        <details class="conversion-catalog" id="formatCatalog">
-            <summary>Доступные форматы и возможности</summary>
-            <p class="field-help">Здесь показаны доступные направления и причины ограничений: поддержка движком, компоненты установки или возможности веб-интерфейса. Сохранение в тот же формат не изменяет документ.</p>
-            <div id="formatCatalogContent" aria-live="polite">Загружаем направления…</div>
-        </details>
         <div id="filePickerWrap">
         <div class="file-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput">
-            <div class="drop-icon" aria-hidden="true">↥</div>
+            <div class="drop-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-template"/></svg></div>
             <strong id="drop-label">Загрузите документ</strong>
             <div class="hint" id="drop-hint">Определяем доступные форматы…</div>
             <input type="file" id="fileInput" multiple>
@@ -30,11 +25,16 @@
 
         </div>
 
+        <details class="conversion-catalog" id="formatCatalog">
+            <summary>Доступные форматы и возможности</summary>
+            <p class="field-help">Доступные направления и ограничения установки. Сохранение в тот же формат не изменяет документ.</p>
+            <div id="formatCatalogContent" aria-live="polite">Загружаем направления…</div>
+        </details>
         <div id="conversionSetup" hidden>
         <div class="experience-bar">
             <div class="experience-switch" role="group" aria-label="Режим конвертации">
                 <button type="button" class="seg-btn" id="simpleConversionBtn" aria-pressed="true">Простой</button>
-                <button type="button" class="seg-btn" id="expertConversionBtn" aria-pressed="false">Экспертный</button>
+                <button type="button" class="seg-btn" id="expertConversionBtn" aria-pressed="false">Расширенный</button>
             </div>
             <p id="experienceHelp" class="field-help" role="status">Выберите файл и формат. Маршрут подберётся автоматически; замечания будут в отчёте.</p>
         </div>
@@ -84,6 +84,17 @@
                     <p class="field-help" id="mode-help">Оптимальный баланс оформления и редактируемости.</p>
                 </div>
             </div>
+            <div id="txtInputProfile" data-expert class="conversion-input-profile" hidden>
+                <label for="txtEncoding">Кодировка исходного TXT</label>
+                <select id="txtEncoding" aria-describedby="txtEncodingHelp">
+                    <option value="auto">Unicode: UTF-8 или BOM</option>
+                    <option value="cp1251">Windows-1251</option>
+                    <option value="utf-8">UTF-8</option>
+                    <option value="utf-16-le">UTF-16 LE</option>
+                    <option value="utf-16-be">UTF-16 BE</option>
+                </select>
+                <p id="txtEncodingHelp" class="field-help">Только для TXT. Для старых русскоязычных файлов выберите Windows-1251. В пакете выбор применяется ко всем TXT.</p>
+            </div>
             <details id="routeGuidance" class="conversion-disclosure" hidden>
                 <summary>Что проверить для выбранного формата</summary>
                 <ul id="routeGuidanceList" class="issue-list"></ul>
@@ -112,6 +123,9 @@
                     <option value="5" data-i18n="quality.five">Не больше пяти</option>
                 </select>
                 <p class="field-help" id="objectBudgetHelp" data-i18n="objects.help">Проверяем абзацы, таблицы, изображения и формулы, включая вложенные. Таблица и каждый вложенный объект учитываются отдельно. При превышении лимита или недостоверном сравнении результат не выдаётся. Частичные изменения текста и оформление этим лимитом не ограничиваются.</p>
+                <label for="maxChangedHeadings">Допустимое число изменённых ролей заголовков</label>
+                <input id="maxChangedHeadings" type="number" min="0" step="1" placeholder="Без ограничения" aria-describedby="headingBudgetHelp">
+                <p class="field-help" id="headingBudgetHelp">Пустое поле отключает проверку. 0 сохраняет роли и уровни заголовков; удалённые заголовки тоже учитываются. При неполных данных или неоднозначном сопоставлении результат не выдаётся. Размеры текста и оформление страниц не проверяются.</p>
                 <label for="maxChangedEmphasis">Допустимое число символов с изменённым выделением</label>
                 <input id="maxChangedEmphasis" type="number" min="0" step="1" placeholder="Без ограничения" aria-describedby="emphasisBudgetHelp">
                 <p class="field-help" id="emphasisBudgetHelp">Пустое поле отключает проверку; 0 сохраняет жирное и курсивное выделение текста модели. Один символ учитывается один раз, даже если меняются оба свойства. Пробелы и разбиение абзацев не учитываются. При изменении последовательности текста результат не выдаётся. Шрифты, размеры и компоновка не проверяются.</p>
@@ -197,10 +211,22 @@
             <div data-expert><span>Маршрут</span><strong id="resultRoute">—</strong></div>
         </div>
         <p class="field-help" id="qualityGateSummary" role="status" hidden></p>
+            <p id="importAssessmentSummary" class="field-help" role="status" hidden></p>
+            <p id="pdfVectorsSummary" class="field-help" role="status" hidden></p>
         <p class="field-help" id="objectGateSummary" role="status" hidden></p>
         <p class="field-help" id="textGateSummary" role="status" hidden></p>
         <p class="field-help" id="emphasisGateSummary" role="status" hidden></p>
+        <p class="field-help" id="headingGateSummary" role="status" hidden></p>
         <p class="field-help" id="formulaGateSummary" role="status" hidden></p>
+        <section id="targetProgramChecks" aria-labelledby="targetProgramCheckTitle" hidden>
+            <h3 id="targetProgramCheckTitle">Проверено в целевой программе</h3>
+            <p class="field-help">Только перечисленные действия и объекты. Полное оформление и редактируемость документа этой проверкой не подтверждаются.</p>
+            <ul id="targetProgramCheckList" class="issue-list"></ul>
+        </section>
+        <p class="field-help" id="htmlSemanticsNotice" hidden>
+            HTML: проверьте язык документа и заголовки таблиц. Отсутствие сообщений о потерях не подтверждает доступность для экранного диктора.
+            <a href="/help/doc/guide/conversion/#проверка-html-и-доступности">Как проверить HTML</a>
+        </p>
         <div id="issuesSection" hidden>
             <h3>Что требует внимания</h3>
             <ul class="issue-list" id="issueList"></ul>
@@ -222,6 +248,11 @@
                 <ul class="issue-list" id="objectDiffList"></ul>
             </div>
         </details>
+        <details id="visualEvidence" class="conversion-disclosure" hidden>
+            <summary>Сохранённые измерения страниц</summary>
+            <p class="field-help">Сравнение изображений отдельных страниц. Редактирование в целевой программе не проверено.</p>
+            <ul id="visualEvidenceList" class="issue-list"></ul>
+        </details>
         <div id="previewSection" hidden>
             <h3>Сравнение страниц</h3>
             <div class="preview-toolbar">
@@ -232,9 +263,9 @@
                     <button type="button" class="preview-mode" id="previewModeDiff">Различия</button>
                 </div>
                 <div class="preview-paging">
-                    <button type="button" class="btn-secondary" id="previewPrev" aria-label="Предыдущая страница">‹</button>
+                    <button type="button" class="btn-secondary" id="previewPrev" aria-label="Предыдущая страница">Назад</button>
                     <span id="previewPageLabel" role="status">—</span>
-                    <button type="button" class="btn-secondary" id="previewNext" aria-label="Следующая страница">›</button>
+                    <button type="button" class="btn-secondary" id="previewNext" aria-label="Следующая страница">Далее</button>
                 </div>
             </div>
             <div class="preview-canvas" id="previewCanvas" tabindex="0" aria-live="polite">

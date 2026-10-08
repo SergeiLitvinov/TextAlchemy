@@ -15,9 +15,9 @@
 | `dev` | 35 | не выявлены |
 | `docs` | 22 | не выявлены |
 | `docx` | 13 | lxml 6.1.1 |
-| `epub` | 16 | lxml 6.1.1 |
+| `epub` | 13 | не выявлены |
 | `html` | 15 | не выявлены |
-| `ocr` | 113 | aistudio-sdk 0.3.8, cuda-toolkit 13.0.2 |
+| `ocr` | 112 | не выявлены |
 | `pdf` | 27 | lxml 6.1.1 |
 | `pptx` | 15 | lxml 6.1.1 |
 | `web` | 27 | не выявлены |
@@ -31,7 +31,7 @@
 | `aiohappyeyeballs 2.7.1` | Happy Eyeballs for asyncio | PSF-2.0 | [declared](https://pypi.org/pypi/aiohappyeyeballs/2.7.1/json) | ocr |
 | `aiohttp 3.14.1` | Async http client/server framework (asyncio) | Apache-2.0 AND MIT | [declared](https://pypi.org/pypi/aiohttp/3.14.1/json) | ocr |
 | `aiosignal 1.4.0` | aiosignal: a list of registered asynchronous callbacks | Apache-2.0 | [declared](https://pypi.org/pypi/aiosignal/1.4.0/json) | ocr |
-| `aistudio-sdk 0.3.8` | Python client library for the AIStudio API | UNKNOWN | [unresolved](https://pypi.org/project/aistudio-sdk/0.3.8/) | ocr |
+| `aistudio-sdk 0.3.9` | Python client library for the AIStudio API | Apache-2.0 | [license-file](https://pypi.org/project/aistudio-sdk/0.3.9/) | ocr |
 | `annotated-doc 0.0.4` | Document parameters, class attributes, return types, and variables inline, with Annotated. | MIT | [declared](https://pypi.org/pypi/annotated-doc/0.0.4/json) | ocr, web |
 | `annotated-types 0.7.0` | Reusable constraint types to use with typing.Annotated | MIT | [declared](https://pypi.org/pypi/annotated-types/0.7.0/json) | ocr, web |
 | `anyio 4.13.0` | High-level concurrency and networking framework on top of asyncio or Trio | MIT | [declared](https://pypi.org/pypi/anyio/4.13.0/json) | dev, ocr, web |
@@ -50,11 +50,9 @@
 | `coverage 7.14.1` | Code coverage measurement for Python | Apache-2.0 | [declared](https://pypi.org/pypi/coverage/7.14.1/json) | dev |
 | `crc32c 2.8` | A python package implementing the crc32c algorithm in hardware and software | LGPL-2.1-or-later | [declared](https://pypi.org/pypi/crc32c/2.8/json) | ocr |
 | `cryptography 50.0.2` | cryptography is a package which provides cryptographic recipes and primitives to Python developers. | Apache-2.0 OR BSD-3-Clause | [declared](https://pypi.org/pypi/cryptography/50.0.2/json) | pdf |
-| `cuda-bindings 13.3.1` | Python bindings for CUDA | LicenseRef-NVIDIA-SOFTWARE-LICENSE | [declared](https://pypi.org/pypi/cuda-bindings/13.3.1/json) | ocr |
+| `cuda-bindings 12.9.4` | Python bindings for CUDA | LicenseRef-NVIDIA-SOFTWARE-LICENSE | [license-file](https://files.pythonhosted.org/packages/a9/c1/dabe88f52c3e3760d861401bb994df08f672ec893b8f7592dc91626adcf3/cuda_bindings-12.9.4-cp312-cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl) | ocr |
 | `cuda-pathfinder 1.5.5` | Pathfinder for CUDA components | Apache-2.0 | [declared](https://pypi.org/pypi/cuda-pathfinder/1.5.5/json) | ocr |
-| `cuda-toolkit 13.0.2` | CUDA Toolkit meta-package | UNKNOWN (CUDA meta-package) | [unresolved](https://pypi.org/project/cuda-toolkit/13.0.2/) | ocr |
 | `easyocr 1.7.2` | OCR на PyTorch | Apache-2.0 | [declared](https://pypi.org/pypi/easyocr/1.7.2/json) | ocr |
-| `ebooklib 0.20` | Чтение EPUB через адаптер | AGPL-3.0-or-later | [declared](https://github.com/aerkalov/ebooklib) | epub |
 | `fastapi 0.136.3` | Маршруты Web/API | MIT | [declared](https://pypi.org/pypi/fastapi/0.136.3/json) | web |
 | `filelock 3.29.1` | A platform independent file lock. | MIT | [declared](https://pypi.org/pypi/filelock/3.29.1/json) | ocr |
 | `fire 0.7.1` | A library for automatically generating command line interfaces. | Apache-2.0 | [declared](https://pypi.org/pypi/fire/0.7.1/json) | pdf |
@@ -76,7 +74,7 @@
 | `jinja2 3.1.6` | Рендеринг шаблонов документов и Web | BSD (metadata classifier) | [declared](https://pypi.org/pypi/jinja2/3.1.6/json) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
 | `lazy-loader 0.5` | Makes it easy to load subpackages and functions on demand. | BSD-3-Clause | [declared](https://pypi.org/pypi/lazy-loader/0.5/json) | ocr |
 | `librt 0.11.0` | Mypyc runtime library | MIT | [declared](https://pypi.org/pypi/librt/0.11.0/json) | dev |
-| `lxml 6.1.1` | XML и MathML в библиотеках | BSD-3-Clause / ElementTree; UNKNOWN (два XSL-ресурса) | [unresolved](https://raw.githubusercontent.com/lxml/lxml/lxml-6.1.1/LICENSES.txt) | docx, epub, pdf, pptx |
+| `lxml 6.1.1` | XML и MathML в библиотеках | BSD-3-Clause / ElementTree; UNKNOWN (два XSL-ресурса) | [unresolved](https://raw.githubusercontent.com/lxml/lxml/lxml-6.1.1/LICENSES.txt) | docx, pdf, pptx |
 | `markdown 3.10.3` | Python implementation of John Gruber's Markdown. | BSD-3-Clause | [declared](https://pypi.org/pypi/markdown/3.10.3/json) | docs |
 | `markdown-it-py 4.2.0` | Python port of markdown-it. Markdown parsing, done right! | MIT | [declared](https://pypi.org/pypi/markdown-it-py/4.2.0/json) | ocr |
 | `markupsafe 3.0.3` | Safely add untrusted strings to HTML/XML markup. | BSD-3-Clause | [declared](https://pypi.org/pypi/markupsafe/3.0.3/json) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
@@ -93,25 +91,25 @@
 | `networkx 3.6.1` | Python package for creating and manipulating graphs and networks | BSD-3-Clause | [declared](https://pypi.org/pypi/networkx/3.6.1/json) | ocr |
 | `ninja 1.13.0` | Ninja is a small build system with a focus on speed | Apache Software License / BSD License | [declared](https://pypi.org/pypi/ninja/1.13.0/json) | ocr |
 | `numpy 2.3.5` | Fundamental package for array computing in Python | BSD-3-Clause + bundled notices | [declared](https://pypi.org/pypi/numpy/2.3.5/json) | ocr, pdf |
-| `nvidia-cublas 13.1.1.3` | CUBLAS native runtime libraries | LicenseRef-NVIDIA-Proprietary | [declared](https://pypi.org/pypi/nvidia-cublas/13.1.1.3/json) | ocr |
-| `nvidia-cuda-cupti 13.0.85` | CUDA profiling tools runtime libs. | LicenseRef-NVIDIA-Proprietary | [declared](https://pypi.org/pypi/nvidia-cuda-cupti/13.0.85/json) | ocr |
-| `nvidia-cuda-nvrtc 13.0.88` | NVRTC native runtime libraries | LicenseRef-NVIDIA-Proprietary | [declared](https://pypi.org/pypi/nvidia-cuda-nvrtc/13.0.88/json) | ocr |
-| `nvidia-cuda-runtime 13.0.96` | CUDA Runtime native Libraries | NVIDIA CUDA EULA | [vendor-terms](https://docs.nvidia.com/cuda/eula/index.html) | ocr |
-| `nvidia-cudnn-cu13 9.20.0.48` | cuDNN runtime libraries | NVIDIA cuDNN SLA | [vendor-terms](https://docs.nvidia.com/deeplearning/cudnn/backend/latest/reference/eula.html) | ocr |
-| `nvidia-cufft 12.0.0.61` | CUFFT native runtime libraries | LicenseRef-NVIDIA-Proprietary | [declared](https://pypi.org/pypi/nvidia-cufft/12.0.0.61/json) | ocr |
-| `nvidia-cufile 1.15.1.6` | cuFile GPUDirect libraries | LicenseRef-NVIDIA-Proprietary | [declared](https://pypi.org/pypi/nvidia-cufile/1.15.1.6/json) | ocr |
-| `nvidia-curand 10.4.0.35` | CURAND native runtime libraries | LicenseRef-NVIDIA-Proprietary | [declared](https://pypi.org/pypi/nvidia-curand/10.4.0.35/json) | ocr |
-| `nvidia-cusolver 12.0.4.66` | CUDA solver native runtime libraries | LicenseRef-NVIDIA-Proprietary | [declared](https://pypi.org/pypi/nvidia-cusolver/12.0.4.66/json) | ocr |
-| `nvidia-cusparse 12.6.3.3` | CUSPARSE native runtime libraries | LicenseRef-NVIDIA-Proprietary | [declared](https://pypi.org/pypi/nvidia-cusparse/12.6.3.3/json) | ocr |
-| `nvidia-cusparselt-cu13 0.8.1` | NVIDIA cuSPARSELt | NVIDIA Proprietary Software | [declared](https://pypi.org/pypi/nvidia-cusparselt-cu13/0.8.1/json) | ocr |
-| `nvidia-nccl-cu13 2.29.7` | NVIDIA Collective Communication Library (NCCL) Runtime | NVIDIA NCCL SLA (binary package) | [vendor-terms](https://docs.nvidia.com/deeplearning/nccl/archives/nccl_2292/pdf/NCCL-SLA.pdf) | ocr |
-| `nvidia-nvjitlink 13.0.88` | Nvidia JIT LTO Library | LicenseRef-NVIDIA-Proprietary | [declared](https://pypi.org/pypi/nvidia-nvjitlink/13.0.88/json) | ocr |
-| `nvidia-nvshmem-cu13 3.4.5` | NVSHMEM creates a global address space that provides efficient and scalable communication for NVIDIA GPU clusters. | NVIDIA NVSHMEM SLA | [vendor-terms](https://docs.nvidia.com/nvshmem/api/sla.html) | ocr |
-| `nvidia-nvtx 13.0.85` | NVIDIA Tools Extension | Apache-2.0 | [declared](https://pypi.org/pypi/nvidia-nvtx/13.0.85/json) | ocr |
+| `nvidia-cublas-cu12 12.8.4.1` | CUBLAS native runtime libraries | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/dc/61/e24b560ab2e2eaeb3c839129175fb330dfcfc29e5203196e5541a4c44682/nvidia_cublas_cu12-12.8.4.1-py3-none-manylinux_2_27_x86_64.whl) | ocr |
+| `nvidia-cuda-cupti-cu12 12.8.90` | CUDA profiling tools runtime libs. | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/f8/02/2adcaa145158bf1a8295d83591d22e4103dbfd821bcaf6f3f53151ca4ffa/nvidia_cuda_cupti_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl) | ocr |
+| `nvidia-cuda-nvrtc-cu12 12.8.93` | NVRTC native runtime libraries | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/05/6b/32f747947df2da6994e999492ab306a903659555dddc0fbdeb9d71f75e52/nvidia_cuda_nvrtc_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl) | ocr |
+| `nvidia-cuda-runtime-cu12 12.8.90` | CUDA Runtime native Libraries | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/0d/9b/a997b638fcd068ad6e4d53b8551a7d30fe8b404d6f1804abf1df69838932/nvidia_cuda_runtime_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl) | ocr |
+| `nvidia-cudnn-cu12 9.10.2.21` | cuDNN runtime libraries | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/ba/51/e123d997aa098c61d029f76663dedbfb9bc8dcf8c60cbd6adbe42f76d049/nvidia_cudnn_cu12-9.10.2.21-py3-none-manylinux_2_27_x86_64.whl) | ocr |
+| `nvidia-cufft-cu12 11.3.3.83` | CUFFT native runtime libraries | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/1f/13/ee4e00f30e676b66ae65b4f08cb5bcbb8392c03f54f2d5413ea99a5d1c80/nvidia_cufft_cu12-11.3.3.83-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl) | ocr |
+| `nvidia-cufile-cu12 1.13.1.3` | cuFile GPUDirect libraries | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/bb/fe/1bcba1dfbfb8d01be8d93f07bfc502c93fa23afa6fd5ab3fc7c1df71038a/nvidia_cufile_cu12-1.13.1.3-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl) | ocr |
+| `nvidia-curand-cu12 10.3.9.90` | CURAND native runtime libraries | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/fb/aa/6584b56dc84ebe9cf93226a5cde4d99080c8e90ab40f0c27bda7a0f29aa1/nvidia_curand_cu12-10.3.9.90-py3-none-manylinux_2_27_x86_64.whl) | ocr |
+| `nvidia-cusolver-cu12 11.7.3.90` | CUDA solver native runtime libraries | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/85/48/9a13d2975803e8cf2777d5ed57b87a0b6ca2cc795f9a4f59796a910bfb80/nvidia_cusolver_cu12-11.7.3.90-py3-none-manylinux_2_27_x86_64.whl) | ocr |
+| `nvidia-cusparse-cu12 12.5.8.93` | CUSPARSE native runtime libraries | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/c2/f5/e1854cb2f2bcd4280c44736c93550cc300ff4b8c95ebe370d0aa7d2b473d/nvidia_cusparse_cu12-12.5.8.93-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl) | ocr |
+| `nvidia-cusparselt-cu12 0.7.1` | NVIDIA cuSPARSELt | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/56/79/12978b96bd44274fe38b5dde5cfb660b1d114f70a65ef962bcbbed99b549/nvidia_cusparselt_cu12-0.7.1-py3-none-manylinux2014_x86_64.whl) | ocr |
+| `nvidia-nccl-cu12 2.27.5` | NVIDIA Collective Communication Library (NCCL) Runtime | BSD-3-Clause | [license-file](https://files.pythonhosted.org/packages/6e/89/f7a07dc961b60645dbbf42e80f2bc85ade7feb9a491b11a1e973aa00071f/nvidia_nccl_cu12-2.27.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl) | ocr |
+| `nvidia-nvjitlink-cu12 12.8.93` | Nvidia JIT LTO Library | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/f6/74/86a07f1d0f42998ca31312f998bd3b9a7eff7f52378f4f270c8679c77fb9/nvidia_nvjitlink_cu12-12.8.93-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl) | ocr |
+| `nvidia-nvshmem-cu12 3.4.5` | NVSHMEM creates a global address space that provides efficient and scalable communication for NVIDIA GPU clusters. | LicenseRef-NVIDIA-Proprietary | [license-file](https://files.pythonhosted.org/packages/b5/09/6ea3ea725f82e1e76684f0708bbedd871fc96da89945adeba65c3835a64c/nvidia_nvshmem_cu12-3.4.5-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl) | ocr |
+| `nvidia-nvtx-cu12 12.8.90` | NVIDIA Tools Extension | Apache-2.0 | [license-file](https://files.pythonhosted.org/packages/a2/eb/86626c1bbc2edb86323022371c39aa48df6fd8b0a1647bc274577f72e90b/nvidia_nvtx_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl) | ocr |
 | `opencv-contrib-python 4.10.0.84` | Wrapper package for OpenCV python bindings. | Apache-2.0 | [declared](https://pypi.org/pypi/opencv-contrib-python/4.10.0.84/json) | ocr |
 | `opencv-python-headless 4.13.0.92` | Wrapper package for OpenCV python bindings. | Apache-2.0 | [declared](https://pypi.org/pypi/opencv-python-headless/4.13.0.92/json) | ocr, pdf |
-| `opendoc 0.1.0` | Модель документа, JSON, ресурсы, валидация и сравнение | MIT | [license-file](https://github.com/SergeiLitvinov/opendoc/releases/tag/v0.1.0) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
-| `opendoc-formats 0.3.0` | Обработчики форматов, LaTeX и нативный доступ к документам | MIT | [license-file](https://github.com/SergeiLitvinov/opendoc-formats/releases/tag/v0.3.0) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
+| `opendoc-formats 0.17.0` | Обработчики форматов, LaTeX и нативный доступ к документам | MIT | [license-file](https://github.com/SergeiLitvinov/opendoc-formats/releases/tag/v0.17.0) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
+| `opendoc-model 0.7.2` | Модель документа, JSON, ресурсы, валидация и сравнение | MIT | [license-file](https://github.com/SergeiLitvinov/opendoc-model/releases/tag/v0.7.2) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
 | `opt-einsum 3.3.0` | Optimizing numpys einsum function | MIT | [declared](https://pypi.org/pypi/opt-einsum/3.3.0/json) | ocr |
 | `packaging 26.2` | Core utilities for Python packages | Apache-2.0 OR BSD-2-Clause | [declared](https://pypi.org/pypi/packaging/26.2/json) | dev, docs, ocr |
 | `paddleocr 3.7.0` | OCR на PaddlePaddle/PaddleX | Apache-2.0 | [declared](https://pypi.org/pypi/paddleocr/3.7.0/json) | ocr |
@@ -161,7 +159,7 @@
 | `setuptools 81.0.0` | Backend сборки wheel/sdist, также транзитивная зависимость OCR | MIT | [declared](https://pypi.org/pypi/setuptools/81.0.0/json) | build, ocr |
 | `shapely 2.1.2` | Manipulation and analysis of geometric objects | BSD-3-Clause | [declared](https://pypi.org/pypi/shapely/2.1.2/json) | ocr |
 | `shellingham 1.5.4` | Tool to Detect Surrounding Shell | ISC | [declared](https://pypi.org/pypi/shellingham/1.5.4/json) | ocr |
-| `six 1.17.0` | Python 2 and 3 compatibility utilities | MIT | [declared](https://pypi.org/pypi/six/1.17.0/json) | docs, epub, ocr |
+| `six 1.17.0` | Python 2 and 3 compatibility utilities | MIT | [declared](https://pypi.org/pypi/six/1.17.0/json) | docs, ocr |
 | `soupsieve 2.8.4` | A modern CSS selector implementation for Beautiful Soup. | MIT | [declared](https://pypi.org/pypi/soupsieve/2.8.4/json) | epub, html |
 | `sqlalchemy 2.0.50` | SQLite-библиотека и хранилище задач | MIT | [declared](https://pypi.org/pypi/sqlalchemy/2.0.50/json) | web |
 | `starlette 1.2.1` | The little ASGI library that shines. | BSD-3-Clause | [declared](https://pypi.org/pypi/starlette/1.2.1/json) | web |
@@ -171,10 +169,10 @@
 | `tifffile 2026.6.1` | Read and write TIFF files | BSD-3-Clause | [declared](https://pypi.org/pypi/tifffile/2026.6.1/json) | ocr |
 | `tinycss2 1.5.1` | A tiny CSS parser | BSD (metadata classifier) | [declared](https://pypi.org/pypi/tinycss2/1.5.1/json) | html |
 | `tomli 2.4.1` | A lil' TOML parser | MIT | [declared](https://pypi.org/pypi/tomli/2.4.1/json) | dev |
-| `torch 2.12.0` | Tensors and Dynamic neural networks in Python with strong GPU acceleration | BSD-3-Clause | [declared](https://pypi.org/pypi/torch/2.12.0/json) | ocr |
-| `torchvision 0.27.0` | image and video datasets and models for torch deep learning | BSD | [declared](https://pypi.org/pypi/torchvision/0.27.0/json) | ocr |
+| `torch 2.10.0` | Tensors and Dynamic neural networks in Python with strong GPU acceleration | BSD-3-Clause | [license-file](https://files.pythonhosted.org/packages/b3/7a/abada41517ce0011775f0f4eacc79659bc9bc6c361e6bfe6f7052a6b9363/torch-2.10.0-3-cp312-cp312-manylinux_2_28_x86_64.whl) | ocr |
+| `torchvision 0.25.0` | image and video datasets and models for torch deep learning | BSD-3-Clause | [license-file](https://files.pythonhosted.org/packages/68/2f/f24b039169db474e8688f649377de082a965fbf85daf4e46c44412f1d15a/torchvision-0.25.0-cp312-cp312-manylinux_2_28_x86_64.whl) | ocr |
 | `tqdm 4.68.2` | Индикаторы выполнения в CLI | MPL-2.0 AND MIT | [declared](https://pypi.org/pypi/tqdm/4.68.2/json) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
-| `triton 3.7.0` | A language and compiler for custom Deep Learning operations | MIT | [declared](https://pypi.org/pypi/triton/3.7.0/json) | ocr |
+| `triton 3.6.0` | A language and compiler for custom Deep Learning operations | MIT | [license-file](https://files.pythonhosted.org/packages/ab/a8/cdf8b3e4c98132f965f88c2313a4b493266832ad47fb52f23d14d4f86bb5/triton-3.6.0-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl) | ocr |
 | `typer 0.25.1` | Typer, build great CLIs. Easy to code. Based on Python type hints. | MIT | [declared](https://pypi.org/pypi/typer/0.25.1/json) | ocr |
 | `typing-extensions 4.15.0` | Backported and Experimental Type Hints for Python 3.9+ | PSF-2.0 | [declared](https://pypi.org/pypi/typing-extensions/4.15.0/json) | dev, docx, epub, html, ocr, pdf, pptx, web |
 | `typing-inspection 0.4.2` | Runtime typing introspection tools | MIT | [declared](https://pypi.org/pypi/typing-inspection/0.4.2/json) | ocr, web |

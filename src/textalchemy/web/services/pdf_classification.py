@@ -1,5 +1,5 @@
 """Supported semantic edits to PDF text blocks without rebuilding their contents."""
-from opendoc import HEADING_PROPERTY, DocumentModel, Heading, TextStyle, document_to_dict, set_heading
+from opendoc_model import HEADING_PROPERTY, DocumentModel, Heading, TextStyle, document_to_dict, set_heading
 
 from textalchemy.core.document_model import Paragraph, TextRun
 

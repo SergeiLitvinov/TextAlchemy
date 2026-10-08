@@ -17,7 +17,7 @@ from textalchemy.web.queue import TaskQueue
 from textalchemy.web.services.batch_retry import retry_saved_task
 from textalchemy.web.services.conversion_catalog import output_path_for
 from textalchemy.web.services.conversion_policy import request_policy_fields, stored_policy_fields
-from textalchemy.web.services.conversion_results import artifact_meta, inspection_payload
+from textalchemy.web.services.conversion_results import artifact_meta, inspect_task_source, inspection_payload
 from textalchemy.web.tasks import TaskStore
 
 
@@ -53,6 +53,8 @@ class ConversionTaskService:
         max_text_edits: int | None = None,
         max_changed_formulas: int | None = None,
         max_changed_emphasis: int | None = None,
+        max_changed_headings: int | None = None,
+        txt_encoding: str = "auto",
     ) -> None:
         self._store.set(
             task_id,
@@ -73,6 +75,8 @@ class ConversionTaskService:
                     max_text_edits,
                     max_changed_formulas,
                     max_changed_emphasis,
+                    max_changed_headings,
+                    txt_encoding,
                 ),
             },
         )
@@ -145,16 +149,14 @@ class ConversionTaskService:
         inspection_error = None
         task = self._store.get(task_id) or {}
         try:
-            try:
-                source_inspection = self._inspector(source_path)
-            except Exception as error:  # noqa: BLE001 - inspection must not block conversion
-                inspection_error = f"Не удалось проверить исходный документ: {error}"
+            source_inspection, inspection_error = inspect_task_source(task, source_path, source, self._inspector)
             request = ConversionRequest(
                 input_path=source_path,
                 output_path=output_path,
                 source=source,
                 target=target,
                 mode=mode,
+                model_intermediates_only=True,
                 **request_policy_fields(task),
             )
             executor = ConversionExecutor()

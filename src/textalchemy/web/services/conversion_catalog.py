@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from textalchemy.convert.executor import ConversionExecutor, infer_format
+from textalchemy.convert.input_policy import WORKBOOK_EXTENSIONS, WORKBOOK_MESSAGE
 from textalchemy.core.artifacts import ArtifactWorkspace
 from textalchemy.core.conversion_graph import ConversionPlan
 from textalchemy.core.document_model import ConversionMode
@@ -18,6 +19,7 @@ LEGACY_CONVERSIONS = {
     "latex": (DocFormat.DOCX, DocFormat.LATEX),
 }
 DEFAULT_TARGETS = {
+    DocFormat.DJVU: DocFormat.TXT,
     DocFormat.PDF: DocFormat.DOCX,
     DocFormat.PPTX: DocFormat.HTML,
     DocFormat.DOCX: DocFormat.PDF,
@@ -45,6 +47,7 @@ MEDIA_TYPES = {
     DocFormat.MODEL: "application/json",
 }
 FORMAT_LABELS = {
+    DocFormat.DJVU: "DjVu (текстовый слой)",
     DocFormat.EPUB: "Электронная книга (EPUB)",
     DocFormat.PDF: "PDF",
     DocFormat.DOCX: "Word (DOCX)",
@@ -55,6 +58,7 @@ FORMAT_LABELS = {
     DocFormat.TXT: "Текст (TXT)",
 }
 SOURCE_EXTENSIONS = {
+    DocFormat.DJVU: (".djvu",),
     DocFormat.HTML: (".html", ".htm"),
     DocFormat.EPUB: (".epub",),
     DocFormat.PDF: (".pdf",),
@@ -74,6 +78,8 @@ def resolve_conversion(
     legacy_format: str,
 ) -> tuple[DocFormat, DocFormat]:
     """Определить исходный и целевой форматы пользовательского запроса."""
+    if source_path.suffix.lower() in WORKBOOK_EXTENSIONS:
+        raise ValueError(WORKBOOK_MESSAGE)
     if source_format == "auto" and legacy_format in LEGACY_CONVERSIONS:
         legacy_source, legacy_target = LEGACY_CONVERSIONS[legacy_format]
         return legacy_source, DocFormat(target_format) if target_format else legacy_target
@@ -136,13 +142,18 @@ def available_conversions(executor: ConversionExecutor) -> dict[str, object]:
                     "unavailable_targets": unavailable_targets,
                 }
             )
-    return {"sources": sources, "unavailable_sources": unavailable_sources, "modes": [mode.value for mode in MODE_ORDER]}
+    return {
+        "sources": sources,
+        "unavailable_sources": unavailable_sources,
+        "modes": [mode.value for mode in MODE_ORDER],
+        "unsupported_inputs": [{"extensions": list(WORKBOOK_EXTENSIONS), "message": WORKBOOK_MESSAGE}],
+    }
 
 
 def _target_entry(executor: ConversionExecutor, source: DocFormat, target: DocFormat) -> dict[str, object]:
     plans, unavailable = {}, {}
     for mode in MODE_ORDER:
-        plan = executor.plan(source, target, mode=mode)
+        plan = executor.plan(source, target, mode=mode, model_intermediates_only=True)
         if plan is None or not web_plan_supported(plan):
             unavailable[mode.value] = unavailable_reason(executor, source, target, mode, plan)
             continue

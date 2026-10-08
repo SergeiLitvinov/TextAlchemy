@@ -8,21 +8,14 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.corpus.epub_fixture import write_epub_fixture
 from textalchemy.core.types import BlockType, DocFormat, Text
 from textalchemy.formats.epub import read_epub
 
 
 def _make_minimal_epub(path: Path) -> None:
-    """Create a minimal valid EPUB at *path* using ebooklib."""
-    from ebooklib import epub
-
-    book = epub.EpubBook()
-    book.set_identifier("id-test-001")
-    book.set_title("Test EPUB")
-    book.set_language("en")
-
-    c1 = epub.EpubHtml(title="Chapter 1", file_name="chap_1.xhtml", lang="en")
-    c1.content = """
+    """Создать минимальный EPUB стандартными ZIP/XML средствами."""
+    chapter = """
 <html><body>
   <h1>Chapter 1</h1>
   <p>Hello world.</p>
@@ -32,11 +25,7 @@ def _make_minimal_epub(path: Path) -> None:
   <p>Deeper text.</p>
 </body></html>
 """
-    book.add_item(c1)
-    book.add_item(epub.EpubNcx())
-    book.add_item(epub.EpubNav())
-    book.spine = ["nav", c1]
-    epub.write_epub(str(path), book)
+    write_epub_fixture(path, title="Test EPUB", language="en", chapters=[("chap_1.xhtml", "Chapter 1", chapter)])
 
 
 @pytest.fixture
@@ -53,7 +42,7 @@ class TestReadEpub:
         result = read_epub(epub_file)
         assert isinstance(result, Text)
         assert result.source_format == DocFormat.EPUB
-        assert result.engine == "ebooklib+bs4"
+        assert result.engine == "native-epub+bs4"
         assert "Hello world." in result.plain
         assert "Chapter 1" in result.plain
         assert "Item A" in result.plain
@@ -83,12 +72,12 @@ class TestReadEpub:
         with pytest.raises(FileNotFoundError):
             read_epub(Path("C:\\nonexistent_file.epub"))
 
-    def test_returns_text_with_warnings_on_missing_ebooklib(self, epub_file: Path):
+    def test_returns_text_with_warnings_on_missing_bs4(self, epub_file: Path):
         with patch.dict("sys.modules", {"ebooklib": None, "bs4": None}):
             with patch("builtins.__import__", side_effect=ImportError):
                 result = read_epub(epub_file)
         assert isinstance(result, Text)
-        assert "ebooklib or beautifulsoup4 not installed" in result.warnings
+        assert "beautifulsoup4 not installed" in result.warnings
 
     def test_import_error_warning_content(self, epub_file: Path):
         with patch.dict("sys.modules", {"ebooklib": None, "bs4": None}):
@@ -97,7 +86,7 @@ class TestReadEpub:
         assert result.plain == ""
         assert result.blocks == []
         assert result.source_format == DocFormat.EPUB
-        assert result.engine == "ebooklib"
+        assert result.engine == "native-epub"
 
     def test_plain_text_joins_blocks(self, epub_file: Path):
         result = read_epub(epub_file)

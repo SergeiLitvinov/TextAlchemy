@@ -18,6 +18,23 @@ def test_boundary_rejects_new_engine_bridge(tmp_path):
         check_source_boundary(tmp_path, {"compatibility_aliases": {}, "native_engine_bridges": {}})
 
 
+@pytest.mark.parametrize(
+    "code",
+    [
+        "import opendoc\n",
+        "from opendoc.document_model import DocumentModel\n",
+        "from importlib import import_module\nmodel = import_module('opendoc')\n",
+    ],
+)
+def test_boundary_rejects_old_model_namespace(tmp_path, code):
+    """Старые классы модели не должны сосуществовать с новой библиотекой."""
+    source = tmp_path / "src/textalchemy/old_model.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(code, encoding="utf-8")
+    with pytest.raises(ValueError, match="Legacy model import"):
+        check_source_boundary(tmp_path, {"compatibility_aliases": {}, "native_engine_bridges": {}})
+
+
 def test_boundary_cannot_be_bypassed_by_adding_engine_exceptions(tmp_path):
     with pytest.raises(ValueError, match="exceptions are no longer allowed"):
         check_source_boundary(
@@ -44,7 +61,7 @@ def test_boundary_rejects_implementation_in_facade(tmp_path):
 @pytest.mark.parametrize(
     "code",
     [
-        "from opendoc.document_model import _private\n",
+        "from opendoc_model.document_model import _private\n",
         "from opendoc_formats.native.docx_package import NativePackage\n",
         "import opendoc_formats.native.docx_package\n",
         "from opendoc_formats import native\n",
@@ -147,11 +164,12 @@ def test_adapter_upgrade_replaces_only_previous_verified_wheel(tmp_path, monkeyp
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr("opendoc_formats/__init__.py", "")
         archive.writestr(
-            "opendoc_formats-0.3.0.dist-info/METADATA", "Name: opendoc-formats\nVersion: 0.3.0\nRequires-Dist: opendoc==0.1.0\n"
+            "opendoc_formats-0.3.0.dist-info/METADATA",
+            "Name: opendoc-formats\nVersion: 0.3.0\nRequires-Dist: opendoc-model==0.1.0\n",
         )
     (tmp_path / "pyproject.toml").write_text(
         """[project]
-dependencies = ["opendoc==0.1.0", "opendoc-formats[pdf-text,fonts]==0.3.0"]
+dependencies = ["opendoc-model==0.1.0", "opendoc-formats[pdf-text,fonts]==0.3.0"]
 [tool.uv.sources]
 opendoc-formats = {path = "vendor/opendoc-formats/opendoc_formats-0.3.0-py3-none-any.whl"}
 """,

@@ -53,6 +53,8 @@ class ConversionSettings:
     max_text_edits: int | None = None
     max_changed_formulas: int | None = None
     max_changed_emphasis: int | None = None
+    max_changed_headings: int | None = None
+    txt_encoding: str = "auto"
 
     def policies(self) -> tuple[QualityPolicy | None, ObjectLossPolicy | None]:
         quality = QualityPolicy(self.max_loss_issues) if self.max_loss_issues is not None else None
@@ -65,6 +67,8 @@ class ConversionSettings:
             self.max_text_edits,
             self.max_changed_formulas,
             self.max_changed_emphasis,
+            self.max_changed_headings,
+            self.txt_encoding,
         )
         return quality, objects
 
@@ -80,9 +84,14 @@ def check_conversion_route(
 ) -> None:
     """Общая проверка доступности направления и прогноза сохранности."""
     check_min_retention(min_retention)
-    plan = executor.plan(source, target, mode=mode)
+    plan = executor.plan(source, target, mode=mode, model_intermediates_only=True)
     if plan is None or not web_plan_supported(plan):
-        raise ConversionRequestError(f"Маршрут {source.value} → {target.value} ({mode.value}) недоступен")
+        from textalchemy.web.services.conversion_availability import unavailable_reason
+
+        reason = unavailable_reason(executor, source, target, mode, plan)
+        raise ConversionRequestError(
+            f"Маршрут {source.value} → {target.value} ({mode.value}) недоступен. {reason['message']}"
+        )
     if target not in OUTPUT_SUFFIXES:
         raise ConversionRequestError(f"Формат результата {target.value} пока недоступен в Web UI")
     below = preservation_below(plan, min_retention)
@@ -172,6 +181,8 @@ class ConversionSubmissionService:
                 settings.max_text_edits,
                 settings.max_changed_formulas,
                 settings.max_changed_emphasis,
+                settings.max_changed_headings,
+                settings.txt_encoding,
             )
         except Exception as error:
             self.store.delete(task_id)

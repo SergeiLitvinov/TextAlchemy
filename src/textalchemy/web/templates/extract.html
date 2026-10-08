@@ -5,13 +5,13 @@
 <section class="page-heading">
     <div><p class="eyebrow">Извлечение содержимого</p><h2>Получите текст для анализа</h2>
         <p class="lead">Выберите документ и получите текст для копирования или скачивания. Исходник останется без изменений.</p></div>
-    <a class="text-link" href="/convert">Нужен новый документ? Преобразовать →</a>
+    <a class="text-link" target="_blank" rel="noopener" title="Руководство в новой вкладке" href="/help/doc/guide/recognition/">Как извлечь текст</a>
 </section>
-<div class="ingest-layout" id="ingestLayout">
+<div class="ingest-layout has-result" id="ingestLayout">
     <section class="card ingest-setup" aria-labelledby="extract-options-title">
         <div class="card-head"><div><p class="eyebrow">1 · Исходник</p><h3 id="extract-options-title">Выберите документ</h3></div></div>
         <div class="file-drop ingest-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Выбрать файл">
-            <span class="drop-icon" aria-hidden="true">↥</span><strong>Перетащите файл или выберите на компьютере</strong>
+            <span class="drop-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-template"/></svg></span><strong>Перетащите файл или выберите на компьютере</strong>
             <div class="hint">PDF, DOCX, TXT или DjVu</div><input type="file" id="fileInput" accept=".pdf,.docx,.txt,.djvu">
         </div>
         <p id="selectedFile" class="ingest-file" role="status" hidden></p>
@@ -29,13 +29,19 @@
         <button type="button" id="processBtn" class="ingest-primary" disabled>Извлечь содержимое</button>
         <div id="status" class="status-bar" role="status" aria-live="polite" hidden></div>
     </section>
-    <section class="card ingest-result" id="resultCard" aria-labelledby="extract-result-title" hidden>
+    <section class="card ingest-result" id="resultCard" aria-labelledby="extract-result-title">
         <div class="card-head"><div><p class="eyebrow">3 · Результат</p><h3 id="extract-result-title">Извлечённый текст</h3>
             <p id="resultSource" class="field-help ingest-file"></p></div></div>
-        <textarea id="result" readonly aria-label="Извлечённый текст"></textarea>
+        {% set empty_title = "Здесь появится извлечённое содержимое" %}
+        {% set empty_copy = "Получите текст из готового документа для копирования, анализа или сохранения в TXT." %}
+        {% set empty_action = "Скопируйте текст или скачайте файл" %}
+        {% include "partials/ingest_empty.html" %}
+        <textarea id="result" readonly aria-label="Извлечённый текст" hidden></textarea>
+        <div id="resultTools" hidden>
         <p id="emptyTextHint" class="field-help" hidden>Текст не найден. Если документ состоит из изображений, <a href="/recognize">распознайте скан</a>.</p>
         <div class="form-actions"><button type="button" id="downloadBtn">Скачать файл</button>
             <button type="button" id="copyBtn" class="btn-secondary">Копировать текст</button></div>
+        </div>
     </section>
 </div>
 {% endblock %}

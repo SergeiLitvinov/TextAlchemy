@@ -5,7 +5,7 @@
 ## Работа с моделью
 
 ```python
-from opendoc.document_model import DocumentModel, Paragraph, Section, TextRun
+from opendoc_model.document_model import DocumentModel, Paragraph, Section, TextRun
 from textalchemy.templating import (
     TemplateField, TemplateSchema, TemplateValueType,
     inspect_document_template, render_document_template,

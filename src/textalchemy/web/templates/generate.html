@@ -4,23 +4,29 @@
 {% block content %}
 <section class="page-heading">
     <div>
-        <p class="eyebrow">Создание документов</p>
-        <h2>Соберите документ по шаблону</h2>
-        <p class="lead">Выберите шаблон и заполните данные. Результат обновляется по мере ввода.</p>
+        <h2>Создать по шаблону</h2>
+        <p class="lead">Выберите основу, заполните данные и скачайте документ.</p>
     </div>
-    <div class="privacy-pill"><span aria-hidden="true">●</span> Данные обрабатываются локально</div>
+    <a class="text-link" target="_blank" rel="noopener" title="Руководство в новой вкладке" href="/help/doc/guide/templates/">Как создать документ</a>
 </section>
 
-<div class="segmented workspace-modes" role="group" aria-label="Работа с шаблоном">
+<div class="workspace-toolbar"><div class="segmented workspace-modes" role="group" aria-label="Работа с шаблоном">
     <button type="button" id="fillMode" class="seg-btn active" aria-pressed="true" aria-controls="documentFields documentOutput">Заполнить документ</button>
     <button type="button" id="editMode" class="seg-btn" aria-pressed="false" aria-controls="templateEditor">Изменить шаблон</button>
-</div>
+</div></div>
 
+<nav class="generator-steps" aria-label="Этапы создания документа">
+    <button type="button" class="btn-secondary" data-generator-step="0" aria-current="step" aria-controls="documentBasis"><span>1</span>Основа</button>
+    <button type="button" class="btn-secondary" data-generator-step="1" aria-controls="documentFields"><span>2</span>Данные</button>
+    <button type="button" class="btn-secondary" data-generator-step="2" aria-controls="documentOutput"><span>3</span>Скачать</button>
+</nav>
+
+<button id="generatorDocumentView" type="button" class="btn-secondary generator-document-view" aria-pressed="false" aria-controls="generate-form">Посмотреть документ</button>
 <form id="generate-form" class="generator-layout">
     <div class="generator-form-column">
-        <section class="card generator-section">
+        <section id="documentBasis" class="card generator-section" aria-labelledby="document-basis-title">
             <div class="card-head">
-                <div><p class="eyebrow">Шаг 1</p><h3>Основа документа</h3></div>
+                <div><h3 id="document-basis-title" tabindex="-1">Основа документа</h3></div>
             </div>
             <label for="template">Шаблон</label>
             <select id="template" required>
@@ -37,7 +43,7 @@
         </section>
 
         <section id="templateEditor" class="card generator-section" hidden aria-labelledby="template-editor-title">
-            <p class="eyebrow">Редактор шаблона</p><h3 id="template-editor-title">Что изменить?</h3>
+            <p class="eyebrow">Редактор шаблона</p><h3 id="template-editor-title" tabindex="-1">Что изменить?</h3>
             <p class="section-copy">Выберите одно действие. Правка создаёт отдельную копию; после сохранения вы перейдёте к заполнению её данных.</p>
             {% include "partials/template_source.html" %}
             {% include "partials/template_rich.html" %}
@@ -93,7 +99,7 @@
         </section>
         <section id="documentFields" class="card generator-section" aria-labelledby="data-fields-title">
             <div class="card-head">
-                <div><p class="eyebrow">Шаг 2</p><h3 id="data-fields-title" tabindex="-1">Данные документа</h3></div>
+                <div><h3 id="data-fields-title" tabindex="-1">Данные документа</h3></div>
                 <span class="required-note">* обязательные поля</span>
             </div>
 
@@ -106,7 +112,7 @@
         </section>
 
         <section id="documentOutput" class="card generator-section">
-            <div class="card-head"><div><p class="eyebrow">Шаг 3</p><h3>Файл результата</h3></div></div>
+            <div class="card-head"><div><h3 id="document-output-title" tabindex="-1">Скачать документ</h3></div></div>
             <div class="form-grid generator-output-grid">
                 <div>
                     <label for="output">Имя файла</label>
@@ -122,32 +128,28 @@
                 </fieldset>
             </div>
             <div class="form-actions generator-actions">
-                <button type="submit" id="genBtn">Создать документ <span aria-hidden="true">→</span></button>
+                <button type="submit" id="genBtn" disabled>Создать и скачать</button>
                 <span class="field-help">Перед скачиванием данные будут проверены по схеме.</span>
             </div>
             <div id="status" class="status-bar" hidden></div>
         </section>
+        <div class="generator-step-actions" id="generatorStepActions">
+            <button type="button" class="btn-secondary" id="generatorBack">Назад</button>
+            <button type="button" id="generatorNext">К данным</button>
+        </div>
     </div>
 
     <aside class="card generator-preview" id="previewSection" aria-labelledby="preview-title">
         <div class="card-head">
-            <div><p class="eyebrow">Предпросмотр</p><h3 id="preview-title">Страницы шаблона</h3></div>
-            <div class="preview-paging" id="previewPaging" hidden>
-                <button type="button" class="btn-secondary" id="previewPrev" aria-label="Предыдущая страница">‹</button>
-                <span id="previewPageLabel" role="status">—</span>
-                <button type="button" class="btn-secondary" id="previewNext" aria-label="Следующая страница">›</button>
-            </div>
+            <div><h3 id="preview-title" tabindex="-1">Черновой просмотр</h3></div>
         </div>
-        <p class="field-help">Результат обновляется автоматически после паузы во вводе.</p>
-        <div class="row-actions"><button id="previewFilled" type="button" hidden>Вернуться к предпросмотру</button><button id="previewSource" type="button" class="btn-secondary">Исходный шаблон</button></div>
+        <div class="row-actions preview-modes" role="group" aria-label="Вид просмотра"><button id="previewFilled" type="button" class="btn-secondary" aria-pressed="true">Черновик</button><button id="previewAccurate" type="button" class="btn-secondary" aria-pressed="false">Страницы результата</button><button id="previewSource" type="button" class="btn-secondary" aria-pressed="false">Шаблон</button></div>
+        <div id="livePreview" hidden><p id="livePreviewStatus" class="field-help" role="status"></p><iframe id="livePreviewFrame" title="Быстрый черновой просмотр документа" sandbox="" hidden></iframe></div>
         <div id="filledPreview" hidden>
             <p id="filledPreviewStatus" role="status"></p>
-            <div class="row-actions"><button id="filledPrev" type="button" aria-label="Предыдущая страница результата" disabled>‹</button><span id="filledPageLabel"></span><button id="filledNext" type="button" aria-label="Следующая страница результата" disabled>›</button></div>
+            <div class="row-actions page-controls"><button id="filledPrev" class="btn-secondary" type="button" aria-label="Предыдущая страница результата" disabled>Предыдущая</button><span id="filledPageLabel" role="status"></span><button id="filledNext" class="btn-secondary" type="button" aria-label="Следующая страница результата" disabled>Следующая</button></div>
             <div id="filledCanvas" class="preview-canvas preview-single"></div>
             <a id="filledDownload" hidden>Скачать просмотренный файл</a>
-        </div>
-        <div class="preview-canvas preview-single" id="previewCanvas" tabindex="0" aria-live="polite">
-            <p class="field-help" id="previewMessage">Выберите шаблон, чтобы увидеть его страницы.</p>
         </div>
         <p class="preview-note" id="previewNote">Это исходный шаблон. При заполнении результат обновляется автоматически после короткой паузы. Пустые поля отмечаются в черновике.</p>
     </aside>

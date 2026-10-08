@@ -77,7 +77,7 @@ def test_dashboard():
     assert 'aria-label="Основная навигация"' in resp.text
     assert 'href="/generate"' in resp.text
     assert 'href="/reports"' in resp.text
-    assert "Состояние коллекции" in resp.text
+    assert "Библиотека источников" in resp.text
     assert "Автоматизировать обработку" in resp.text
     assert 'data-task-center-open' in resp.text
     assert '/static/js/components/task-center.js' in resp.text
@@ -453,6 +453,8 @@ def test_dropzones_are_keyboard_operable():
             assert attrs.get("tabindex") == "0", f"{path}: file-drop без tabindex='0'"
         if scanner.dropzones:
             scripts = "\n".join(client.get(source).text for source in scanner.scripts)
+            if "components/ingest-input.js" in scripts:
+                scripts += client.get("/static/js/components/ingest-input.js").text
             assert "keydown" in scanner.html + scripts, f"{path}: file-drop без обработчика keydown (Enter/Space)"
 
 
@@ -725,7 +727,11 @@ def test_api_convert_capabilities_are_runtime_plans(monkeypatch):
 
     pdf_targets = {target["format"]: target for target in sources["pdf"]["targets"]}
     assert "docx" in pdf_targets
-    assert "html" not in pdf_targets  # unsafe path-only intermediate routes are not advertised
+    assert pdf_targets["html"]["plans"]["balanced"]["steps"] == ["pdf.model", "model.html"]
+    # Every intermediate is an in-memory model, never a path-only file conversion.
+    for target in pdf_targets.values():
+        for plan in target["plans"].values():
+            assert all(step.endswith(".model") for step in plan["steps"][:-1])
     assert set(pdf_targets["docx"]["modes"]) == {"balanced", "faithful", "editable"}
 
     docx_targets = {target["format"]: target for target in sources["docx"]["targets"]}

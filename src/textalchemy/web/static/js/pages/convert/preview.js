@@ -2,7 +2,7 @@
 
 const {conversionApi} = await import('./api.js' + new URL(import.meta.url).search);
 
-export function createPreviewController($, onCompletedTask) {
+export function createPreviewController($, onCompletedTask, onMeasurement = () => {}) {
     let taskId = null;
     let meta = null;
     let mode = 'source';
@@ -57,6 +57,7 @@ export function createPreviewController($, onCompletedTask) {
         canvas.innerHTML = '<p class="field-help" id="previewMessage">Рендерим страницы…</p>';
         syncControls();
         if (mode === 'diff') {
+            $('previewHint').textContent = 'Визуальное сходство этой страницы ещё не измерено.';
             try {
                 const result = await conversionApi.previewDiff(taskId, page);
                 if (currentRequest !== requestId) return;
@@ -69,10 +70,18 @@ export function createPreviewController($, onCompletedTask) {
                 wrapper.appendChild(image);
                 canvas.appendChild(wrapper);
                 $('previewHint').textContent = Number.isFinite(result.similarity)
-                    ? `Визуальное сходство страницы: ${Math.round(result.similarity * 100)}%. Красным подсвечены различия.`
-                    : 'Красным подсвечены визуальные различия результата.';
+                    ? `Визуальное сходство страницы: ${Math.round(result.similarity * 100)}%. ` +
+                        'Сравнение изображений этой страницы при 110 dpi; не оценка всего документа или редактируемости.'
+                    : 'Визуальное сходство страницы не измерено. Красным подсвечены различия изображений.';
+                try {
+                    const data = await conversionApi.task(taskId);
+                    if (currentRequest === requestId) onMeasurement(data.report);
+                } catch (_) { /* a later report opening loads saved evidence */ }
             } catch (_) {
-                if (currentRequest === requestId) canvas.innerHTML = '<p class="field-help">Не удалось построить карту различий.</p>';
+                if (currentRequest === requestId) {
+                    canvas.innerHTML = '<p class="field-help">Не удалось построить карту различий.</p>';
+                    $('previewHint').textContent = 'Визуальное сходство этой страницы не измерено: сравнение недоступно.';
+                }
             }
             return;
         }

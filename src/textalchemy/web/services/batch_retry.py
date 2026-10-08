@@ -20,6 +20,8 @@ POLICY_FIELDS = (
     "max_text_edits",
     "max_changed_formulas",
     "max_changed_emphasis",
+    "max_changed_headings",
+    "txt_encoding",
 )
 
 
@@ -135,7 +137,7 @@ class BatchRetryService:
             mode = ConversionMode(task.get("mode", item.get("mode", fallback_mode.value)))
         except (KeyError, ValueError):
             return None
-        plan = executor.plan(source, target, mode=mode)
+        plan = executor.plan(source, target, mode=mode, model_intermediates_only=True)
         if plan is None or not web_plan_supported(plan):
             return None
         return {

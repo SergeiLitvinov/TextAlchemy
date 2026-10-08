@@ -13,7 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def copy_inventory(tmp_path):
     (tmp_path / "contracts").mkdir()
-    for name in ("uv.lock", "pyproject.toml", "contracts/dependencies.json"):
+    records = json.loads((ROOT / 'contracts/dependencies.json').read_text(encoding='utf-8'))['packages']
+    files = {'uv.lock', 'pyproject.toml', 'contracts/dependencies.json'}
+    files.update(record['license_file']['path'] for record in records if record.get('license_file'))
+    files.update(notice['path'] for record in records for notice in record.get('notice_files', []))
+    for name in sorted(files):
+        (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_bytes((ROOT / name).read_bytes())
     return tmp_path
 
@@ -36,14 +41,57 @@ def test_inventory_rejects_stale_or_incomplete_licence_evidence(tmp_path, mutati
         dependencies.inventory(root)
 
 
-def test_ocr_profile_cannot_hide_unknown_licences_in_optional_branches():
-    with pytest.raises(ValueError, match="aistudio-sdk.*cuda-toolkit"):
-        dependencies.check_profile("ocr")
-    for name in ("base", "web", "html", "docs", "build"):
+def test_ocr_profile_accepts_audited_replacement_and_rejects_unknown_linux_branch(tmp_path):
+    dependencies.check_profile("ocr")
+    rows, profiles = dependencies.inventory()
+    assert not any(item['name'] == 'cuda-toolkit' for item in rows)
+    assert ('torch', '2.10.0') in profiles['ocr']
+    assert ('torchvision', '0.25.0') in profiles['ocr']
+    sdk = next(item for item in rows if item["name"] == "aistudio-sdk")
+    assert ("aistudio-sdk", "0.3.9") in profiles["ocr"]
+    assert sdk["license"] == "Apache-2.0"
+    assert sdk["status"] == "license-file"
+    for name in ("base", "web", "html", "epub", "docs", "build"):
         dependencies.check_profile(name)
+    root = copy_inventory(tmp_path)
+    path = root / 'contracts/dependencies.json'
+    data = json.loads(path.read_text(encoding='utf-8'))
+    runtime = next(item for item in data['packages'] if item['name'] == 'nvidia-cuda-runtime-cu12')
+    runtime.update(license='UNKNOWN', status='unresolved')
+    path.write_text(json.dumps(data), encoding='utf-8')
+    with pytest.raises(ValueError, match='^Unresolved dependency licences: nvidia-cuda-runtime-cu12$'):
+        dependencies.check_profile('ocr', root)
+    dependencies.check_profile('base', root)
 
 
-@pytest.mark.parametrize("profile", ["docx", "pptx", "pdf", "epub"])
+def test_inventory_rejects_changed_dependency_notice(tmp_path):
+    root = copy_inventory(tmp_path)
+    data = json.loads((root / 'contracts/dependencies.json').read_text(encoding='utf-8'))
+    torch = next(item for item in data['packages'] if item['name'] == 'torch')
+    notice = root / torch['notice_files'][0]['path']
+    notice.write_text('Changed upstream attribution', encoding='utf-8')
+    with pytest.raises(ValueError, match='Dependency licence file changed: torch'):
+        dependencies.inventory(root)
+
+
+@pytest.mark.parametrize("mutation", ["wheel", "text", "escape"])
+def test_inventory_binds_licence_evidence_to_locked_wheel_and_local_text(tmp_path, mutation):
+    root = copy_inventory(tmp_path)
+    path = root / "contracts/dependencies.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    sdk = next(item for item in data["packages"] if item["name"] == "aistudio-sdk")
+    if mutation == "wheel":
+        sdk["inspected_wheel_sha256"] = "0" * 64
+    elif mutation == "text":
+        (root / sdk["license_file"]["path"]).write_text("Changed terms", encoding="utf-8")
+    else:
+        sdk["license_file"]["path"] = "pyproject.toml"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(ValueError, match="wheel differs|licence file"):
+        dependencies.inventory(root)
+
+
+@pytest.mark.parametrize("profile", ["docx", "pptx", "pdf"])
 def test_release_blocks_unresolved_lxml_resources_before_archive_access(tmp_path, profile):
     with pytest.raises(ValueError, match="Unresolved dependency licences: lxml"):
         release.check(tmp_path, profile=profile)
@@ -53,7 +101,7 @@ def test_profiles_include_library_extras_and_all_python_versions():
     rows, profiles = dependencies.inventory()
     assert ("pymupdf", "1.27.2.3") in profiles["pdf"]
     assert ("pymupdf", "1.27.2.3") not in profiles["base"]
-    assert ("ebooklib", "0.20") in profiles["epub"]
+    assert not {"ebooklib", "lxml"}.intersection(name for name, _ in profiles["epub"])
     assert ("fonttools", next(item["version"] for item in rows if item["name"] == "fonttools")) in profiles["base"]
     tifffile = {(item["name"], item["version"]) for item in rows if item["name"] == "tifffile"}
     assert len(tifffile) == 2

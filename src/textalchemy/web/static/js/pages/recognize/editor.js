@@ -24,6 +24,8 @@ export function createOcrEditor($, setStatus) {
         draft = data;
         result.value = data.text;
         result.hidden = false;
+        $('resultEmpty').hidden = true;
+        $('resultTools').hidden = false;
         $('resultCard').hidden = false;
         $('ingestLayout').classList.add('has-result');
         $('resultSource').textContent = data.source_name || '';

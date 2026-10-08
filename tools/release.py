@@ -15,7 +15,8 @@ from tools.dependencies import check_profile, inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 LICENSES = ("doc/LICENSE", "doc/NOTICE", "doc/licenses/lunr-MIT.txt", "doc/licenses/lunr-languages-MPL-1.1.txt",
-            "doc/licenses/mkdocs-BSD-3-Clause.txt", "doc/licenses/umd-MIT.txt", "doc/licenses/python-docx-MIT.txt")
+            "doc/licenses/mkdocs-BSD-3-Clause.txt", "doc/licenses/umd-MIT.txt", "doc/licenses/python-docx-MIT.txt",
+            "doc/licenses/aistudio-sdk-Apache-2.0.txt")
 
 
 def validate_paths(names: list[str]) -> None:
@@ -66,13 +67,13 @@ def validate_wheel(path: Path, project: dict, help_data: bytes) -> None:
             if dist_info + "licenses/" + name not in names:
                 raise ValueError(f"Licence text missing from wheel: {name}")
         requirements = metadata.get_all("Requires-Dist", [])
-        for requirement in ("opendoc==0.1.0", "opendoc-formats[fonts,pdf-text]==0.3.0"):
+        for requirement in ("opendoc-model==0.7.2", "opendoc-formats[fonts,pdf-text]==0.17.0"):
             if requirement not in requirements:
                 raise ValueError(f"Missing immutable library requirement: {requirement}")
         bundled = archive.read("textalchemy/web/assets/documentation.zip")
         if bundled != help_data:
             raise ValueError("Wheel documentation differs from checked source bundle")
-        if any(name.startswith(("opendoc/", "opendoc_formats/", "vendor/")) for name in names):
+        if any(name.startswith(("opendoc_model/", "opendoc_formats/", "vendor/")) for name in names):
             raise ValueError("Library implementations must remain separate wheels")
         validate_help(bundled, project["version"])
 
@@ -95,7 +96,7 @@ def validate_sdist(path: Path, root: Path, project: dict) -> None:
         metadata = BytesParser().parsebytes(archive.extractfile(files["PKG-INFO"]).read())
         if metadata["Version"] != project["version"]:
             raise ValueError("Source distribution version differs from pyproject")
-        for directory in ("opendoc", "opendoc-formats"):
+        for directory in ("opendoc-model", "opendoc-formats"):
             provenance = json.loads((root / f"vendor/{directory}/provenance.json").read_text(encoding="utf-8"))
             wheel = next((root / f"vendor/{directory}").glob("*.whl"))
             name = wheel.relative_to(root).as_posix()
@@ -124,7 +125,7 @@ def check(directory: Path, *, root: Path = ROOT, profile: str = "base", tag: str
     validate_wheel(wheel, project, help_data)
     validate_sdist(sdist, root, project)
     artifacts = [wheel, sdist]
-    for name in ("opendoc", "opendoc-formats"):
+    for name in ("opendoc-model", "opendoc-formats"):
         artifacts.append(next((root / "vendor" / name).glob("*.whl")))
     return {
         "application": "textalchemy", "version": version, "profile": profile,

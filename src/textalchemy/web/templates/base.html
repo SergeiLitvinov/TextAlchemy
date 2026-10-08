@@ -13,7 +13,8 @@
     <a class="skip-link" href="#main-content">Перейти к содержимому</a>
     {% include "partials/header.html" %}
     <div class="app-layout">
-        <aside class="app-sidebar" id="app-sidebar" aria-label="Основная навигация">
+        <aside class="app-sidebar" id="app-sidebar" aria-label="Основная навигация" tabindex="-1">
+            <div class="sidebar-mobile-head"><strong>Разделы</strong><button class="icon-button" type="button" data-nav-close aria-label="Закрыть меню"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div>
             {% include "partials/navigation.html" %}
         </aside>
         <main class="app-main" id="main-content" tabindex="-1">
@@ -24,8 +25,7 @@
     </div>
     <div class="nav-backdrop" data-nav-close hidden></div>
     {% include "partials/task_center.html" %}
-    {% include "partials/language_dialog.html" %}
-    <script src="/static/js/app.js?v={{ asset_version }}"></script>
+    <script src="/static/js/app.js?v={{ asset_version }}" type="module"></script>
     <script src="/static/js/components/task-center.js?v={{ asset_version }}" type="module"></script>
     <script src="/static/js/i18n.js?v={{ asset_version }}" type="module"></script>
     {% block scripts %}{% endblock %}

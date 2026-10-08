@@ -53,8 +53,19 @@ function displayMode(visual) {
     $('modeExpertBtn').classList.toggle('active', !visual);
     $('modeVisualBtn').setAttribute('aria-selected', String(visual));
     $('modeExpertBtn').setAttribute('aria-selected', String(!visual));
+    $('modeVisualBtn').tabIndex = visual ? 0 : -1;
+    $('modeExpertBtn').tabIndex = visual ? -1 : 0;
     $('visualMode').hidden = !visual;
     $('expertMode').hidden = visual;
+}
+for (const id of ['modeVisualBtn', 'modeExpertBtn']) {
+    $(id).addEventListener('keydown', event => {
+        if (working || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const target = event.key === 'Home' ? 'modeVisualBtn' : event.key === 'End' ? 'modeExpertBtn'
+            : id === 'modeVisualBtn' ? 'modeExpertBtn' : 'modeVisualBtn';
+        $(target).focus(); $(target).click();
+    });
 }
 async function toExpert() {
     if (working) return;

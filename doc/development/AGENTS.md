@@ -11,7 +11,7 @@ Start with these stable entry points:
 | Work | Entry point |
 |---|---|
 | CLI parsing and dispatch | `src/textalchemy/__main__.py`, handlers under `src/textalchemy/cli/` |
-| Document structures | Independent OpenDoc project at `C:/project/opendoc`; bundled dependency in `vendor/opendoc/`; compatibility imports under `src/textalchemy/core/` |
+| Document structures | Independent OpenDoc Model project; distribution `opendoc-model`, imports `opendoc_model`; bundled dependency in `vendor/opendoc-model/`; compatibility imports under `src/textalchemy/core/` |
 | Application operations | `src/textalchemy/pipeline/` |
 | Format import/export | Independent `C:/project/opendoc-formats`; wheel in `vendor/opendoc-formats/`; compatibility imports under `src/textalchemy/formats/`, `src/textalchemy/convert/`, `src/textalchemy/extract/latex.py`; route execution stays in the application |
 | Template generation | In-memory API under `src/textalchemy/templating/`; application file/export adapters under `src/textalchemy/generate/` |

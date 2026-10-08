@@ -1,63 +1,63 @@
-"""Compatibility imports; document implementation lives in opendoc."""
+"""Compatibility imports; document implementation lives in opendoc_model."""
 
-from opendoc.units import (
+from opendoc_model.units import (
     CSS_PIXELS_PER_INCH as CSS_PIXELS_PER_INCH,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     EMU_PER_INCH as EMU_PER_INCH,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     EMU_PER_POINT as EMU_PER_POINT,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     OOXML_ANGLE_PER_DEGREE as OOXML_ANGLE_PER_DEGREE,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     POINTS_PER_INCH as POINTS_PER_INCH,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     CoordinateOrigin as CoordinateOrigin,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     Point2D as Point2D,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     Rect2D as Rect2D,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     canonical_coordinate_contract as canonical_coordinate_contract,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     css_px_to_points as css_px_to_points,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     degrees_to_ooxml_angle as degrees_to_ooxml_angle,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     emu_to_inches as emu_to_inches,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     emu_to_points as emu_to_points,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     inches_to_emu as inches_to_emu,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     ooxml_angle_to_degrees as ooxml_angle_to_degrees,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     points_to_css_px as points_to_css_px,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     points_to_emu as points_to_emu,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     round_half_away as round_half_away,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     transform_point_origin as transform_point_origin,
 )
-from opendoc.units import (
+from opendoc_model.units import (
     transform_rect_origin as transform_rect_origin,
 )
 

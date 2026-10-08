@@ -146,11 +146,11 @@ def _matches_type(value: Any, expected: TemplateValueType, image_type: type, for
     if expected is TemplateValueType.OBJECT:
         return isinstance(value, dict)
     if expected is TemplateValueType.IMAGE:
-        from opendoc.document_model import Image
+        from opendoc_model.document_model import Image
 
         return isinstance(value, (image_type, Image))
     if expected is TemplateValueType.FORMULA:
-        from opendoc.document_model import Formula
+        from opendoc_model.document_model import Formula
 
         return isinstance(value, (formula_type, Formula))
     return False
@@ -163,7 +163,7 @@ def _coerce_typed_value(value: Any, expected: TemplateValueType, image_type: typ
         if isinstance(value, dict):
             return image_type(**value)
     if expected is TemplateValueType.FORMULA and not isinstance(value, formula_type):
-        from opendoc.document_model import FormulaFormat
+        from opendoc_model.document_model import FormulaFormat
 
         if isinstance(value, str):
             return formula_type(value=value)

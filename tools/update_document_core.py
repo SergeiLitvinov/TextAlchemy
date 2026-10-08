@@ -12,7 +12,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BUNDLE = ROOT / "vendor/opendoc"
+BUNDLE = ROOT / "vendor/opendoc-model"
 
 
 def update(
@@ -33,26 +33,26 @@ def update(
         if len(metadata_names) != 1:
             raise ValueError("Expected exactly one distribution in the wheel")
         metadata = email.parser.Parser().parsestr(archive.read(metadata_names[0]).decode("utf-8"))
-        if metadata["Name"] != "opendoc" or not metadata["Version"]:
+        if metadata["Name"] != "opendoc-model" or not metadata["Version"]:
             raise ValueError("Expected an OpenDoc distribution")
         if any(
             not re.fullmatch(r"extra\s*==\s*['\"][A-Za-z0-9_.-]+['\"]", dependency.partition(";")[2].strip())
             for dependency in metadata.get_all("Requires-Dist", [])
         ):
             raise ValueError("OpenDoc must not have mandatory external dependencies")
-        if not wheel.name.startswith(f"opendoc-{metadata['Version']}-"):
+        if not wheel.name.startswith(f"opendoc_model-{metadata['Version']}-"):
             raise ValueError("Wheel filename must match the distribution version")
-        requirement = f"opendoc=={metadata['Version']}"
+        requirement = f"opendoc-model=={metadata['Version']}"
         if requirement not in consumer["project"]["dependencies"]:
             raise ValueError(f"Update the application requirement before bundling {requirement}")
-        expected = consumer["tool"]["uv"]["sources"]["opendoc"]["path"]
+        expected = consumer["tool"]["uv"]["sources"]["opendoc-model"]["path"]
         if (ROOT / expected).resolve() != (BUNDLE / wheel.name).resolve():
             raise ValueError("Update the application wheel path before bundling this release")
         modules = {}
         for name in archive.namelist():
-            if not name.startswith(("opendoc/", "opendoc-")) or ".." in Path(name).parts or "\\" in name:
+            if not name.startswith(("opendoc_model/", "opendoc_model-")) or ".." in Path(name).parts or "\\" in name:
                 raise ValueError("Wheel contains files outside the OpenDoc package")
-            if name.startswith("opendoc/") and name.endswith(".py"):
+            if name.startswith("opendoc_model/") and name.endswith(".py"):
                 data = archive.read(name)
                 tree = ast.parse(data.decode("utf-8"))
                 for node in ast.walk(tree):
@@ -74,13 +74,13 @@ def update(
         if previous.resolve().parent != BUNDLE.resolve() or previous.suffix != ".whl":
             raise ValueError("Previous wheel must stay inside the application bundle")
     manifest = {
-        "project": "OpenDoc",
+        "project": "OpenDoc Model",
         "distribution": metadata["Name"],
         "version": metadata["Version"],
         "wheel": wheel.name,
         "sha256": digest,
         "modules": modules,
-        "update": "uv run python -m tools.update_document_core --wheel path/to/opendoc.whl",
+        "update": "uv run python -m tools.update_document_core --wheel path/to/opendoc_model.whl",
     }
     if source_url is not None:
         manifest["source"] = {"url": source_url, "ref": source_ref, "checksum_verified": sha256 is not None}
@@ -104,7 +104,7 @@ def main() -> None:
     parser.add_argument("--source-ref", help="Immutable upstream commit or release reference")
     args = parser.parse_args()
     print(update(args.wheel, sha256=args.sha256, source_url=args.source_url, source_ref=args.source_ref))
-    subprocess.run(["uv", "lock", "--refresh-package", "opendoc"], cwd=ROOT, check=True)
+    subprocess.run(["uv", "lock", "--refresh-package", "opendoc-model"], cwd=ROOT, check=True)
     print("Lockfile updated; synchronize the environment before running checks.")
 
 

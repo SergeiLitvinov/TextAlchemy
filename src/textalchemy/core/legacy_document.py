@@ -1,7 +1,7 @@
 """Recognise historical application resource labels and delegate native assembly."""
 
-from opendoc import DocumentModel
 from opendoc_formats.package_resources import assemble_docx_package_resources
+from opendoc_model import DocumentModel
 
 LEGACY_ROLES = {
     "docx-footnotes": "footnotes",

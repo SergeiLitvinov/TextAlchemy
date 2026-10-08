@@ -1,8 +1,8 @@
-"""Compatibility imports; document implementation lives in opendoc."""
+"""Compatibility imports; document implementation lives in opendoc_model."""
 
-from opendoc.object_inventory import (
+from opendoc_model.object_inventory import (
     OBJECT_INVENTORY_SCOPE as OBJECT_INVENTORY_SCOPE,
 )
-from opendoc.object_inventory import (
+from opendoc_model.object_inventory import (
     inspect_objects as inspect_objects,
 )

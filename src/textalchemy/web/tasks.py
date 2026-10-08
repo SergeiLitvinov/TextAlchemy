@@ -155,6 +155,111 @@ class TaskStore:
             if self._read_meta_locked(task_id) is None:
                 self._delete_locked(task_id)
 
+    def store_preview_measurement(self, task_id: str, *, expected: dict[str, Any], measurement: dict[str, Any]) -> bool:
+        """Сохранить измерение актуальной страницы без продления TTL или смены кэша."""
+        with self._lock:
+            if not _valid_identifier(task_id):
+                return False
+            current = self._read_meta_locked(task_id)
+            if current != expected or not current or current.get("status") != "done" or self._is_stale_locked(current):
+                return False
+            directory = self._measurement_path(task_id, current).parent
+            directory.mkdir(parents=True, exist_ok=True)
+            records = self._read_measurements_locked(task_id, current)
+            records = [record for record in records if record.get("page") != measurement["page"]]
+            records.append(measurement)
+            records.sort(key=lambda record: record["page"])
+            atomic_write_text(directory / "visual-measurements.json", json.dumps(records, ensure_ascii=False), encoding="utf-8")
+            return True
+
+    def preview_measurements(self, task_id: str, *, expected: dict[str, Any]) -> list[dict[str, Any]]:
+        """Прочитать свидетельства только того результата, которому относится отчёт."""
+        with self._lock:
+            if not _valid_identifier(task_id):
+                return []
+            current = self._read_meta_locked(task_id)
+            if current != expected or not current or current.get("status") != "done" or self._is_stale_locked(current):
+                return []
+            return self._read_measurements_locked(task_id, current)
+
+    def store_target_program_check(self, task_id: str, *, expected: dict[str, Any], evidence: dict[str, Any]) -> bool:
+        """Attach local QA evidence to an unchanged, checksum-matched DOCX result."""
+        from textalchemy.web.services.target_program_evidence import validated_check
+
+        record = validated_check(evidence)
+        with self._lock:
+            current = self._read_meta_locked(task_id) if _valid_identifier(task_id) else None
+            if (current != expected or not current or current.get("status") != "done"
+                    or current.get("target_format") != "docx" or self._is_stale_locked(current)):
+                return False
+            if self._artifact_hash_locked(task_id, current) != record["artifact_sha256"]:
+                return False
+            path, revision = self._target_check_path(task_id, current)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            records = self._target_checks_locked(task_id, current)
+            records = [item for item in records if item["edited_sha256"] != record["edited_sha256"]]
+            records.append(record)
+            payload = {"revision": revision, "checks": records[-16:]}
+            atomic_write_text(path, json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            return True
+
+    def target_program_checks(self, task_id: str, *, expected: dict[str, Any]) -> list[dict[str, Any]]:
+        with self._lock:
+            current = self._read_meta_locked(task_id) if _valid_identifier(task_id) else None
+            if current != expected or not current or current.get("status") != "done" or self._is_stale_locked(current):
+                return []
+            return self._target_checks_locked(task_id, current)
+
+    def _target_checks_locked(self, task_id: str, task: dict[str, Any]) -> list[dict[str, Any]]:
+        from textalchemy.web.services.target_program_evidence import validated_check
+
+        path, revision = self._target_check_path(task_id, task)
+        try:
+            if path.stat().st_size > 64 * 1024:
+                return []
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict) or payload.get("revision") != revision:
+                return []
+            records = payload.get("checks")
+            if not isinstance(records, list) or len(records) > 16:
+                return []
+            records = [validated_check(item) for item in records]
+            digest = self._artifact_hash_locked(task_id, task)
+            return [record for record in records if record["artifact_sha256"] == digest]
+        except (OSError, ValueError, KeyError, TypeError):
+            return []
+
+    def _target_check_path(self, task_id: str, task: dict[str, Any]) -> tuple[Path, str]:
+        revision = hashlib.sha256(json.dumps(task, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+        # Short filenames avoid the Windows temporary-file path limit; the full revision is checked in the payload.
+        return self._task_dir(task_id) / "qa" / f"{revision[:16]}.json", revision
+
+    def _artifact_hash_locked(self, task_id: str, task: dict[str, Any]) -> str | None:
+        name = task.get("artifact")
+        if not isinstance(name, str):
+            return None
+        root = self._task_dir(task_id).resolve()
+        artifact = (root / name).resolve()
+        if not artifact.is_file() or root not in artifact.parents:
+            return None
+        with artifact.open("rb") as stream:
+            return hashlib.file_digest(stream, "sha256").hexdigest()
+
+    def _measurement_path(self, task_id: str, task: dict[str, Any]) -> Path:
+        revision = hashlib.sha256(json.dumps(task, sort_keys=True, ensure_ascii=True).encode()).hexdigest()
+        return self._task_dir(task_id) / "preview" / revision / "visual-measurements.json"
+
+    def _read_measurements_locked(self, task_id: str, task: dict[str, Any]) -> list[dict[str, Any]]:
+        try:
+            records = json.loads(self._measurement_path(task_id, task).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return []
+        if not isinstance(records, list):
+            return []
+        return [
+            record for record in records if isinstance(record, dict) and type(record.get("page")) is int and record["page"] > 0
+        ]
+
     def list_tasks(self, limit: int | None = 100) -> list[dict[str, Any]]:
         """Список задач (без протухших), свежие первыми; каждая содержит ``task_id``."""
         with self._lock:

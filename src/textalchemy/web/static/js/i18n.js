@@ -1,8 +1,6 @@
 "use strict";
 
 const LANGUAGE_KEY = "textalchemy-language";
-const dialog = document.getElementById("languageDialog");
-const triggers = [...document.querySelectorAll("[data-language-open]")];
 let messages = {};
 window.translate = (key, fallback, values = {}) =>
   (messages[key] || fallback).replace(/\{(\w+)\}/g, (match, name) => values[name] ?? match);
@@ -20,16 +18,5 @@ async function loadLocale(code) {
   });
   localStorage.setItem(LANGUAGE_KEY, catalog.code);
 }
-
-triggers.forEach((trigger) => trigger.addEventListener("click", () => dialog?.showModal()));
-dialog?.addEventListener("change", async (event) => {
-  if (event.target.name !== "interface-language") return;
-  try {
-    await loadLocale(event.target.value);
-    dialog.close();
-  } catch (error) {
-    window.toast(error.message, "error");
-  }
-});
 
 loadLocale(localStorage.getItem(LANGUAGE_KEY) || "ru").catch(() => {});

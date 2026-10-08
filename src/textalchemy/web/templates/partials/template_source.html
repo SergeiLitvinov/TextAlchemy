@@ -2,6 +2,7 @@
     <summary>Сделать значение полем шаблона</summary>
     <p>Найдите конкретное значение в образце и отметьте связанные вхождения. Разные роли людей выбирайте отдельно, даже если имя совпадает.</p>
     <button id="sourceInspect" type="button">Показать текст образца</button>
+    <div id="sourceFields" hidden>
     <label for="sourceBlocks">Абзац, таблица или колонтитул</label><select id="sourceBlocks"></select>
     <p id="sourceContext" class="source-context"></p>
     <div id="sourceSuggestions" class="row-actions" role="group" aria-label="Возможные заменяемые значения"></div>
@@ -10,4 +11,5 @@
     <div id="sourceMatches" role="group" aria-label="Вхождения значения"></div>
     <label for="sourceLabel">Как назвать поле</label><input id="sourceLabel" maxlength="100" placeholder="Например, ФИО руководителя">
     <button id="sourceSave" type="button" disabled>Сохранить копию с полем</button>
+    </div>
 </details>

@@ -3,8 +3,9 @@
 const [{conversionApi, downloadResult}, {createBatchFilter}, {createBatchOptions},
     {renderCatalog, renderGuidance, unavailableModeHelp}, {createHistoryController}, {renderIssues},
     {createPreviewController}, {createConversionView}, {createExperienceController},
-    {renderEmphasisGate, renderFormulaGate, renderObjectGate, renderQualityGate, renderTextGate}] = await Promise.all([
-    'api', 'batch-filter', 'batch-options', 'catalog', 'history', 'issues', 'preview', 'view', 'experience', 'quality'
+    {renderPdfVectors, renderHeadingGate, renderEmphasisGate, renderFormulaGate, renderObjectGate, renderQualityGate, renderTextGate},
+    {renderTargetChecks}] = await Promise.all([
+    'api', 'batch-filter', 'batch-options', 'catalog', 'history', 'issues', 'preview', 'view', 'experience', 'quality', 'target-checks'
 ].map(name => import(`./convert/${name}.js` + new URL(import.meta.url).search)));
 
 const $ = (id) => document.getElementById(id);
@@ -30,6 +31,16 @@ let batchPollVersion = 0;
 function sourceFor(file) {
     const name = file.name.toLowerCase();
     return state.capabilities.sources.find((source) => source.extensions.some((extension) => name.endsWith(extension)));
+}
+
+function unsupportedInput(file) {
+    const name = file.name.toLowerCase();
+    const matches = item => item.extensions.some(extension => name.endsWith(extension));
+    const unsupported = state.capabilities.unsupported_inputs?.find(matches);
+    if (unsupported) return unsupported.message;
+    const unavailable = state.capabilities.unavailable_sources?.find(matches);
+    return unavailable?.unavailable_targets?.flatMap(target => Object.values(target.unavailable_modes || {}))
+        .find(reason => reason.code === 'missing_dependencies')?.message;
 }
 
 function batchTargets(sources) {
@@ -106,7 +117,7 @@ async function inspect(file) {
 
 function selectFile(file) {
     const source = sourceFor(file);
-    if (!source) return view.status('Для этого формата нет доступных маршрутов конвертации.', 'error');
+    if (!source) return view.status(unsupportedInput(file) || 'Для этого формата нет доступных маршрутов конвертации.', 'error');
     $('filePickerWrap').hidden = true;
     experience.batchRequired(false);
     experience.stage(1);
@@ -116,7 +127,8 @@ function selectFile(file) {
     $('batchConvertBtn').hidden = true;
     $('convertBtn').hidden = false;
     $('singleFileBlock').hidden = false;
-    $('sourceInspection').hidden = false;
+    $('sourceInspection').hidden = ['djvu', 'txt'].includes(source.format);
+    $('txtInputProfile').hidden = source.format !== 'txt';
     $('sourceBadge').textContent = source.label;
     $('sourceFilename').textContent = file.name;
     $('pdfPreparation').hidden = source.format !== 'pdf';
@@ -127,13 +139,14 @@ function selectFile(file) {
         `<option value="${window.esc(item.format)}">${window.esc(item.label)} (${window.esc(item.extension)})</option>`).join('');
     if (source.targets.some((target) => target.format === source.default_target)) $('target').value = source.default_target;
     updateTarget();
-    inspect(file);
+    if (!['djvu', 'txt'].includes(source.format)) inspect(file);
 }
 
 function selectBatch(files) {
     const sources = files.map(sourceFor);
-    if (sources.some((source) => !source)) return view.status('Один из файлов имеет формат без доступных маршрутов конвертации.', 'error');
+    if (sources.some((source) => !source)) return view.status(files.map(unsupportedInput).find(Boolean) || 'Один из файлов имеет формат без доступных маршрутов конвертации.', 'error');
     $('filePickerWrap').hidden = true;
+    $('txtInputProfile').hidden = !sources.some(source => source.format === 'txt');
     const sharedTargets = batchTargets(sources);
     experience.batchRequired(!sharedTargets.length);
     experience.stage(1);
@@ -180,6 +193,25 @@ $('preparePdfBtn').addEventListener('click', async () => {
     } finally { window.setLoading($('preparePdfBtn'), false); }
 });
 
+function renderVisualEvidence(report) {
+    const records = report?.metrics?.visual_measurements || [];
+    $('visualEvidence').hidden = !records.length;
+    const list = $('visualEvidenceList');
+    list.replaceChildren();
+    for (const record of records) {
+        const item = document.createElement('li');
+        const title = document.createElement('strong');
+        title.textContent = `Страница ${record.page}: ` + (Number.isFinite(record.similarity)
+            ? `${Math.round(record.similarity * 100)}% сходства` : 'не измерено');
+        const conditions = document.createElement('span');
+        const versions = Object.entries(record.versions || {}).map(([name, value]) => `${name} ${value}`).join(', ');
+        conditions.textContent = `${record.source_name} → ${record.target_name} · ${record.dpi} dpi · ` +
+            `${record.method} · ${new Date(record.measured_at).toLocaleString()} · ${versions}`;
+        item.append(title, conditions);
+        list.append(item);
+    }
+}
+
 function renderReport(data, failed = false, taskId = state.activeTaskId) {
     experience.stage(2);
     const report = data.report || {issues: [], metrics: {}};
@@ -194,6 +226,12 @@ function renderReport(data, failed = false, taskId = state.activeTaskId) {
     $('resultFilename').textContent = data.filename || 'Результат не создан';
     $('resultMode').textContent = Array.from($('mode').options).find(option => option.value === data.mode)?.textContent || $('mode').selectedOptions[0]?.textContent || '—';
     $('resultRoute').textContent = steps.length ? steps.join(' → ') : 'Прямое преобразование';
+    const importAssessments = [data.report?.metrics?.source_import, ...Object.values(data.report?.metrics?.step_metrics || {})]
+        .filter(item => typeof item?.assessment_complete === 'boolean');
+    const incompleteImport = importAssessments.some(item => item.assessment_complete === false);
+    $('importAssessmentSummary').hidden = !incompleteImport;
+    $('importAssessmentSummary').textContent = incompleteImport
+        ? 'Библиотека проверяет часть свойств документа. Отсутствие сообщений не подтверждает сохранность всех объектов.' : '';
     $('qualityBadge').className = `quality-badge ${failed ? 'bad' : !data.report || losses.length ? 'warn' : 'good'}`;
     $('qualityBadge').textContent = failed ? 'Ошибка' : !data.report ? 'Отчёт о качестве недоступен' : losses.length ? `Сообщений о потерях: ${losses.length}` : warnings.length ? `Замечания: ${warnings.length}` : 'Потерь не зарегистрировано';
     renderQualityGate($, report);
@@ -201,7 +239,12 @@ function renderReport(data, failed = false, taskId = state.activeTaskId) {
     renderTextGate($, report);
     renderFormulaGate($, report);
     renderEmphasisGate($, report);
+    renderHeadingGate($, report);
+    renderPdfVectors($, report);
+    renderTargetChecks($, report);
     renderIssues($, report);
+    $('htmlSemanticsNotice').hidden = failed || data.target_format !== 'html';
+    renderVisualEvidence(report);
     view.comparison(data.comparison, data.inspection_error);
     preview.init(failed ? null : taskId);
     $('downloadBtn').hidden = failed;
@@ -210,7 +253,7 @@ function renderReport(data, failed = false, taskId = state.activeTaskId) {
 
 const preview = createPreviewController($, (data, taskId) => {
     renderReport(data, false, taskId);
-});
+}, renderVisualEvidence);
 
 async function pollTask(url) {
     try {
@@ -267,7 +310,7 @@ async function startSingle() {
     if ($('conversionWorkspace').dataset.processing === 'true') return;
     const target = selectedTarget();
     if (!state.pendingFile || !state.selectedSource || !target) return;
-    if (!$('maxChangedFormulas').reportValidity() || !$('maxChangedEmphasis').reportValidity()) return;
+    if (!$('maxChangedFormulas').reportValidity() || !$('maxChangedEmphasis').reportValidity() || !$('maxChangedHeadings').reportValidity()) return;
     if ($('textPreservation').value === 'flow' && !$('maxTextEdits').reportValidity()) return;
     $('resultCard').hidden = true;
     view.status('');
@@ -278,7 +321,7 @@ async function startSingle() {
         state.activeTask = await conversionApi.start(
             state.pendingFile, target.format, $('mode').value, $('minRetention').value,
             $('maxLossIssues').value, $('maxLostObjects').value, false, $('textPreservation').value,
-            $('textPreservation').value === 'flow' ? $('maxTextEdits').value : '', $('maxChangedFormulas').value, $('maxChangedEmphasis').value);
+            $('textPreservation').value === 'flow' ? $('maxTextEdits').value : '', $('maxChangedFormulas').value, $('maxChangedEmphasis').value, $('maxChangedHeadings').value, $('txtEncoding').value);
         state.activeTaskId = state.activeTask.task_id;
         view.progress(true, 45, 'Анализ структуры и выбор маршрута…');
         pollTask(state.activeTask.status);
@@ -289,7 +332,7 @@ async function startBatch() {
     if ($('conversionWorkspace').dataset.processing === 'true') return;
     const target = selectedTarget();
     if (!state.batchFiles || !target) return;
-    if (!$('maxChangedFormulas').reportValidity() || !$('maxChangedEmphasis').reportValidity()) return;
+    if (!$('maxChangedFormulas').reportValidity() || !$('maxChangedEmphasis').reportValidity() || !$('maxChangedHeadings').reportValidity()) return;
     if ($('textPreservation').value === 'flow' && !$('maxTextEdits').reportValidity()) return;
     view.status('');
     $('batchConvertBtn').hidden = true;
@@ -298,7 +341,7 @@ async function startBatch() {
         const job = await conversionApi.startBatch(
             state.batchFiles, target.format, $('mode').value, $('minRetention').value,
             $('maxLossIssues').value, $('maxLostObjects').value, false, $('textPreservation').value,
-            $('textPreservation').value === 'flow' ? $('maxTextEdits').value : '', batchOptions.values(), $('maxChangedFormulas').value, $('maxChangedEmphasis').value);
+            $('textPreservation').value === 'flow' ? $('maxTextEdits').value : '', batchOptions.values(), $('maxChangedFormulas').value, $('maxChangedEmphasis').value, $('maxChangedHeadings').value, $('txtEncoding').value);
         $('batchProgressCard').hidden = false;
         $('batchProgressState').textContent = 'Конвертируем…';
         $('batchProgressCard').scrollIntoView({behavior: 'smooth', block: 'start'});

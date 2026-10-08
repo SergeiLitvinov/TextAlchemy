@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from opendoc.document_model import DocumentModel, Image, Paragraph, Section, TextRun
+from opendoc_model.document_model import DocumentModel, Image, Paragraph, Section, TextRun
 
 from textalchemy.core.exceptions import GenerateError
 from textalchemy.generate.model_template import render_document_template as render_application
@@ -43,7 +43,7 @@ class Boundary(importlib.abc.MetaPathFinder):
             raise AssertionError("Optional dependency: " + fullname)
 
 sys.meta_path.insert(0, Boundary())
-from opendoc.document_model import DocumentModel, Section, Paragraph, TextRun
+from opendoc_model.document_model import DocumentModel, Section, Paragraph, TextRun
 from textalchemy.templating import render_document_template, TemplateSchema, TemplateField
 model = DocumentModel(sections=[Section(blocks=[Paragraph(content=[TextRun("{{ name }}")])])])
 filled = render_document_template(model, {}, schema=TemplateSchema(fields=[TemplateField("name", default="Ada")]))
@@ -65,7 +65,7 @@ def test_core_imports_stay_within_stdlib_jinja_opendoc_and_templating():
             elif isinstance(node, ast.ImportFrom) and not node.level:
                 modules = [node.module or ""]
             for module in modules:
-                assert module.split(".")[0] in sys.stdlib_module_names | {"jinja2", "opendoc"}, (path.name, module)
+                assert module.split(".")[0] in sys.stdlib_module_names | {"jinja2", "opendoc_model"}, (path.name, module)
 
 
 def test_core_preserves_template_schema_and_data_during_nested_render():

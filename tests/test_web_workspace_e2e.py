@@ -14,6 +14,7 @@ def test_generator_modes_preserve_input(e2e_server, page, width):
 
     page.set_viewport_size({'width': width, 'height': 900})
     page.goto(f'{e2e_server}/generate')
+    fixtures._generator_step(page)
     expect(page.locator('#field-title')).to_be_visible()
     expect(page.locator('#templateEditor')).to_be_hidden()
     expect(page.locator('#datasetName')).to_be_hidden()
@@ -31,10 +32,11 @@ def test_generator_modes_preserve_input(e2e_server, page, width):
     page.keyboard.press('Enter')
     expect(page.locator('#field-body')).to_have_value('Первый абзац\nВторой абзац')
     page.reload()
+    fixtures._generator_step(page)
     page.locator('#restoreDraft').click()
     expect(page.locator('#field-body')).to_have_value('Первый абзац\nВторой абзац')
     if width == 375:
-        assert page.locator('#template').bounding_box()['y'] < page.locator('#previewSection').bounding_box()['y']
+        assert page.locator('#documentFields').bounding_box()['y'] < page.locator('#previewSection').bounding_box()['y']
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     assert page.e2e_errors == []
 
@@ -69,6 +71,7 @@ def test_editor_accessibility(e2e_server, page):
     for route in ('generate', 'pdf-order'):
         page.goto(f'{e2e_server}/{route}')
         if route == 'generate':
+            fixtures._generator_step(page)
             expect(page.locator('#field-title')).to_be_visible()
             page.locator('#editMode').click()
             page.get_by_text('Настроить условный абзац', exact=True).click()

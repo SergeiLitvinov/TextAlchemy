@@ -9,12 +9,12 @@
         <p class="lead">Выберите действия, свяжите их с результатами предыдущих шагов и проверьте связи перед запуском.</p>
     </div>
     <div class="segmented" role="tablist" aria-label="Режим редактирования">
-        <button type="button" id="modeVisualBtn" class="seg-btn active" role="tab" aria-selected="true">Конструктор</button>
-        <button type="button" id="modeExpertBtn" class="seg-btn" role="tab" aria-selected="false">Текстовый режим</button>
+        <button type="button" id="modeVisualBtn" class="seg-btn active" role="tab" aria-selected="true" aria-controls="visualMode">Конструктор</button>
+        <button type="button" id="modeExpertBtn" class="seg-btn" role="tab" aria-selected="false" aria-controls="expertMode" tabindex="-1">Текстовый режим</button>
     </div>
 </section>
 
-<div id="visualMode" class="pipeline-layout">
+<div id="visualMode" class="pipeline-layout" role="tabpanel" aria-labelledby="modeVisualBtn">
     <details class="card operations-panel" id="operationCatalog">
         <summary>Каталог действий</summary>
         <div class="card-head">
@@ -66,7 +66,7 @@
     </section>
 </div>
 
-<section id="expertMode" hidden class="card expert-workspace" aria-labelledby="expert-title">
+<section id="expertMode" hidden class="card expert-workspace" role="tabpanel" aria-labelledby="modeExpertBtn">
     <div class="card-head">
         <div><p class="eyebrow">Для опытных пользователей</p><h3 id="expert-title">Текстовое описание сценария</h3></div>
         <div class="btn-group">

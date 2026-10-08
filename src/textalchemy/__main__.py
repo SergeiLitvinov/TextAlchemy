@@ -136,6 +136,11 @@ def _setup_parser():
     )
     p.add_argument("--max-steps", type=int, default=4)
     p.add_argument("--max-changed-emphasis", type=int, help="Maximum characters with changed bold/italic emphasis")
+    p.add_argument(
+        "--txt-encoding", choices=["auto", "utf-8", "utf-16-le", "utf-16-be", "cp1251"], default="auto",
+        help="TXT input encoding; CP1251 must be explicit",
+    )
+    p.add_argument("--max-changed-headings", type=int, help="Maximum changed or removed heading roles")
     p.add_argument("--max-changed-formulas", type=int, help="Допуск несовпавших или удалённых исходных формул")
     p.add_argument("--max-loss-issues", type=int, help="Максимум диагностированных потерь; 0 запрещает любые LOSS")
     text_check = p.add_mutually_exclusive_group()

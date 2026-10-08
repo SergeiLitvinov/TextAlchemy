@@ -123,7 +123,7 @@ def test_concurrent_orders_and_bad_uploads(pdf_draft):
                                             ('heading3', 'Heading 3', 3), ('paragraph', 'Normal', None)])
 def test_classification_survives_export_and_preserves_objects(pdf_draft, role, style, level):
     from docx import Document
-    from opendoc import DocumentModel, TextStyle, document_from_dict, document_to_dict, get_heading
+    from opendoc_model import DocumentModel, TextStyle, document_from_dict, document_to_dict, get_heading
 
     client, url, store, data = pdf_draft
     before = pdf_order.load(store, data['draft_id'])

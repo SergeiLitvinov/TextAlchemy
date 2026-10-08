@@ -17,27 +17,27 @@ ReleaseFixture = tuple[Callable[..., Path], Path]
 def release(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ReleaseFixture:
     root = tmp_path / "application"
     root.mkdir()
-    bundle = root / "vendor/opendoc"
+    bundle = root / "vendor/opendoc-model"
     monkeypatch.setattr(updater, "ROOT", root)
     monkeypatch.setattr(updater, "BUNDLE", bundle)
     (root / "pyproject.toml").write_text(
-        '[project]\ndependencies=["opendoc==0.1.0"]\n'
-        '[tool.uv.sources]\nopendoc={path="vendor/opendoc/opendoc-0.1.0-py3-none-any.whl"}\n',
+        '[project]\ndependencies=["opendoc-model==0.3.0"]\n'
+        '[tool.uv.sources]\nopendoc-model={path="vendor/opendoc-model/opendoc_model-0.3.0-py3-none-any.whl"}\n',
         encoding="utf-8",
     )
 
     def build(
         *,
-        name: str = "opendoc",
-        version: str = "0.1.0",
+        name: str = "opendoc-model",
+        version: str = "0.3.0",
         dependencies: str = "",
         code: str = "class Document: pass\n",
         extra: str | None = None,
     ) -> Path:
-        wheel = tmp_path / f"opendoc-{version}-py3-none-any.whl"
+        wheel = tmp_path / f"opendoc_model-{version}-py3-none-any.whl"
         with zipfile.ZipFile(wheel, "w") as archive:
-            archive.writestr(f"opendoc-{version}.dist-info/METADATA", f"Name: {name}\nVersion: {version}\n{dependencies}")
-            archive.writestr("opendoc/__init__.py", code)
+            archive.writestr(f"opendoc_model-{version}.dist-info/METADATA", f"Name: {name}\nVersion: {version}\n{dependencies}")
+            archive.writestr("opendoc_model/__init__.py", code)
             if extra:
                 archive.writestr(extra, "external")
         return wheel
@@ -61,7 +61,7 @@ def test_update_copies_artifact_without_building_source_and_records_hashes(
     assert target.read_bytes() == wheel.read_bytes() == original
     provenance = json.loads((bundle / "provenance.json").read_text(encoding="utf-8"))
     assert provenance["sha256"] == hashlib.sha256(original).hexdigest()
-    assert provenance["distribution"] == "opendoc" and provenance["version"] == "0.1.0"
+    assert provenance["distribution"] == "opendoc-model" and provenance["version"] == "0.3.0"
     assert "--wheel" in provenance["update"] and "--source" not in provenance["update"]
     assert updater.update(target) == target  # Reaccepting the bundled wheel is safe.
 
@@ -70,11 +70,11 @@ def test_update_copies_artifact_without_building_source_and_records_hashes(
     "changes",
     [
         {"name": "other"},
-        {"version": "0.2.0"},
+        {"version": "0.4.0"},
         {"dependencies": "Requires-Dist: textalchemy\n"},
         {"dependencies": 'Requires-Dist: dependency; extra == "math" or python_version >= "3.11"\n'},
         {"code": "from textalchemy.core import document_model\n"},
-        {"extra": "../opendoc/escape.py"},
+        {"extra": "../opendoc_model/escape.py"},
         {"extra": "other_package/__init__.py"},
     ],
 )
@@ -94,8 +94,8 @@ def test_upgrade_retires_only_the_previous_bundled_artifact(release: ReleaseFixt
     source = build()
     previous = updater.update(source)
     project = updater.ROOT / "pyproject.toml"
-    project.write_text(project.read_text(encoding="utf-8").replace("0.1.0", "0.2.0"), encoding="utf-8")
-    target = updater.update(build(version="0.2.0"))
+    project.write_text(project.read_text(encoding="utf-8").replace("0.3.0", "0.4.0"), encoding="utf-8")
+    target = updater.update(build(version="0.4.0"))
     assert target.exists() and not previous.exists()
     assert source.exists()  # The release producer's copy is never removed.
     assert list(bundle.glob("*.whl")) == [target]

@@ -10,10 +10,13 @@ function renderResults(data, isPreview) {
     ));
     for (const item of rows) {
         const tr = document.createElement('tr');
+        const source = item.source;
+        const description = source ? `<strong>${esc(source.title)}</strong><small>${esc((source.authors || []).join(', '))}${source.year ? ' · ' + esc(source.year) : ''}</small>`
+            : item.match ? 'Источник найден' : 'Соответствие не найдено';
         tr.innerHTML =
             `<td>${esc(item.original)}</td>` +
+            `<td class="matching-source">${description}</td>` +
             `<td>${esc(item.new || (data.dry_run ? item.planned_name : 'Копия не создана'))}</td>` +
-            `<td>${item.match ? '✅' : '❌'}</td>` +
             `<td>${esc(item.score)}</td>`;
         body.appendChild(tr);
     }
@@ -23,6 +26,7 @@ function renderResults(data, isPreview) {
         `Всего: ${data.total}, совпадений: ${matched}, без совпадений: ${unmatched}` +
         (data.errors && data.errors.length ? `, ошибок: ${data.errors.length}` : '');
     $('resultsCard').hidden = false;
+    $('matchingFinish').hidden = false;
     window._lastReport = data;
 }
 
@@ -34,7 +38,8 @@ function setStatus(msg, type) {
     el.textContent = msg;
 }
 
-$('previewBtn').addEventListener('click', async () => {
+$('matchForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
     const fd = new FormData();
     fd.set('source_dir', $('source_dir').value);
     fd.set('threshold', $('threshold').value);
@@ -45,13 +50,12 @@ $('previewBtn').addEventListener('click', async () => {
     try {
         const data = await api('/api/preview/rename', { method: 'POST', formData: fd });
         renderResults(data, true);
-        setStatus('Готово. Проверьте предпросмотр перед запуском.', 'success');
+        setStatus('Поиск завершён. Проверьте найденные источники.', 'success');
     } catch (_) { setStatus('', null); }
     finally { setLoading(btn, false); }
 });
 
-$('matchForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
+$('runBtn').addEventListener('click', async () => {
     const fd = new FormData();
     fd.set('source_dir', $('source_dir').value);
     fd.set('output_dir', $('output_dir').value);
@@ -85,6 +89,14 @@ $('downloadBtn').addEventListener('click', () => {
 
 function updateRunAction() {
     $('runBtn').textContent = $('dryRun').checked ? 'Составить отчёт' : 'Копировать с новыми именами';
+    $('copyDestination').hidden = $('dryRun').checked;
 }
 $('dryRun').addEventListener('change', updateRunAction);
 updateRunAction();
+for (const id of ['source_dir', 'threshold', 'bibliography_file']) {
+    $(id).addEventListener('input', () => {
+        $('resultsCard').hidden = true; $('matchingFinish').hidden = true;
+        $('directorySnapshot').hidden = true; window._lastReport = null;
+        setStatus('Параметры изменены. Повторите поиск, чтобы проверить новые предложения.');
+    });
+}

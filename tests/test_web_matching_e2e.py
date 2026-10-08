@@ -25,11 +25,11 @@ def test_matching_preview_dry_run_copy_and_failure(
     page.goto(e2e_server + "/matching")
     page.locator(".matching-settings summary").click()
     page.locator("#source_dir").fill(str(source))
-    page.locator("#output_dir").fill(str(output))
     page.locator("#threshold").fill("0.99")
     page.locator("#previewBtn").click()
     expect(page.locator("#resultsSummary")).to_contain_text("совпадений: 1")
-    expect(page.locator("#resultsBody")).to_contain_text("✅")
+    expect(page.locator("#resultsBody")).to_contain_text("Руководство по физике")
+    expect(page.locator("#resultsBody")).to_contain_text("Иванов")
     assert not output.exists()
     page.locator("#dryRun").check()
     expect(page.locator("#runBtn")).to_have_text("Составить отчёт")
@@ -38,6 +38,7 @@ def test_matching_preview_dry_run_copy_and_failure(
     expect(page.locator("#resultsBody")).not_to_contain_text("Копия не создана")
     assert not output.exists()
     page.locator("#dryRun").uncheck()
+    page.locator("#output_dir").fill(str(output))
     expect(page.locator("#runBtn")).to_have_text("Копировать с новыми именами")
     page.locator("#runBtn").click()
     expect(page.locator("#status")).to_contain_text("Копирование завершено")
@@ -78,12 +79,12 @@ def test_collection_report_separates_file_counts_and_saved_matching(
     page.on("request", lambda request: mutations.append(request.url) if request.method != "GET" else None)
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(e2e_server + "/reports")
-    expect(page.locator("#status")).to_contain_text("Файлы и записи не изменены")
-    expect(page.get_by_role("heading", name="Состояние коллекции")).to_be_visible()
-    metrics = page.locator("#stats .metric-card")
-    expect(metrics.nth(2)).to_contain_text(str(len(before)))
-    expect(metrics.nth(2)).to_contain_text("наличие не подтверждает связь")
-    expect(metrics.nth(3).locator("strong")).to_have_text("1")
+    expect(page.locator("#stats")).to_contain_text("записей в библиотеке")
+    expect(page.get_by_role("heading", name="Обзор библиотеки")).to_be_visible()
+    page.get_by_text('Файлы в настроенных папках', exact=True).click()
+    metrics = page.locator("#fileStats .metric-card")
+    expect(metrics.nth(1)).to_contain_text(str(len(before)))
+    expect(metrics.nth(1)).to_contain_text("наличие не подтверждает связь")
     expect(page.locator("#lastMatching")).to_contain_text("соответствий")
     details = page.locator("#lastMatching details").first
     assert not details.evaluate("el => el.open")
@@ -106,7 +107,7 @@ def test_collection_refresh_failure_keeps_previous_data_and_explains_staleness(
     e2e_server: str, page: Page, matching: MatchingFixture
 ) -> None:
     page.goto(e2e_server + "/reports")
-    expect(page.locator("#status")).to_contain_text("Данные прочитаны")
+    expect(page.locator("#stats")).to_contain_text("записей в библиотеке")
     before = page.locator("#stats").inner_text()
     page.route("**/api/stats", lambda route: route.fulfill(status=503, json={"detail": "Статистика недоступна"}))
     page.locator("#refreshBtn").click()
@@ -116,7 +117,7 @@ def test_collection_refresh_failure_keeps_previous_data_and_explains_staleness(
     expect(page.locator("#refreshBtn")).to_be_enabled()
     page.unroute("**/api/stats")
     page.locator("#refreshBtn").click()
-    expect(page.locator("#status")).to_contain_text("Данные прочитаны")
+    expect(page.locator("#status")).to_be_hidden()
     assert page.e2e_errors == ["Failed to load resource: the server responded with a status of 503 (Service Unavailable)"]
 
 

@@ -40,7 +40,7 @@ def update(wheel: Path, *, sha256: str, source_url: str, source_ref: str) -> Pat
         ):
             raise ValueError("Pin the release version in pyproject.toml first")
         requirements = metadata.get_all("Requires-Dist", [])
-        required_model = next((item for item in requirements if item.startswith("opendoc==")), None)
+        required_model = next((item for item in requirements if item.startswith("opendoc-model==")), None)
         if required_model not in consumer["project"]["dependencies"]:
             raise ValueError("Consumer must pin the same OpenDoc version as the adapters")
         files = {}

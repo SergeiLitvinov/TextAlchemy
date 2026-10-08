@@ -64,6 +64,8 @@ def _persist_conversion_task(
     max_text_edits: int | None = None,
     max_changed_formulas: int | None = None,
     max_changed_emphasis: int | None = None,
+    max_changed_headings: int | None = None,
+    txt_encoding: str = "auto",
 ) -> None:
     """Compatibility wrapper around the application service."""
     _task_service().persist(
@@ -79,6 +81,8 @@ def _persist_conversion_task(
         max_text_edits,
         max_changed_formulas,
         max_changed_emphasis,
+        max_changed_headings,
+        txt_encoding,
     )
 
 
@@ -123,6 +127,8 @@ async def api_convert(
     max_text_edits: int | None = Form(None, ge=0),
     max_changed_formulas: int | None = Form(None, ge=0),
     max_changed_emphasis: int | None = Form(None, ge=0),
+    max_changed_headings: int | None = Form(None, ge=0),
+    txt_encoding: str = Form("auto"),
 ):
     service = ConversionSubmissionService(
         store=tasks_store,
@@ -143,6 +149,8 @@ async def api_convert(
         max_text_edits,
         max_changed_formulas,
         max_changed_emphasis,
+        max_changed_headings,
+        txt_encoding,
     )
     try:
         return await service.submit(
@@ -167,7 +175,18 @@ async def api_convert_status(task_id: str):
     task = tasks_store.get(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return _public_task_payload(task)
+    payload = _public_task_payload(task)
+    measurements = tasks_store.preview_measurements(task_id, expected=task)
+    target_checks = tasks_store.target_program_checks(task_id, expected=task)
+    if (measurements or target_checks) and isinstance(payload.get("report"), dict):
+        report = payload["report"]
+        metrics = {**report.get("metrics", {})}
+        if measurements:
+            metrics["visual_measurements"] = measurements
+        if target_checks:
+            metrics["target_program_checks"] = target_checks
+        payload["report"] = {**report, "metrics": metrics}
+    return payload
 
 
 @app.get("/api/convert/result/{task_id}")

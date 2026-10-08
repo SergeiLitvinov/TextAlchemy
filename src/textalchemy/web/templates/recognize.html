@@ -5,13 +5,13 @@
 <section class="page-heading">
     <div><p class="eyebrow">Распознавание текста</p><h2>Превратите скан в редактируемый текст</h2>
         <p class="lead">Выберите PDF или изображение, проверьте настройки и начните обработку. Затем исправьте и скачайте текст.</p></div>
-    <div class="privacy-pill"><span aria-hidden="true">●</span> Файлы остаются на компьютере</div>
+    <a class="text-link" target="_blank" rel="noopener" title="Руководство в новой вкладке" href="/help/doc/guide/recognition/">Как получить текст из скана</a>
 </section>
-<div class="ingest-layout" id="ingestLayout">
+<div class="ingest-layout has-result" id="ingestLayout">
     <section class="card ingest-setup" aria-labelledby="ocr-source-title">
         <div class="card-head"><div><p class="eyebrow">1 · Исходник</p><h3 id="ocr-source-title">Выберите PDF или изображение</h3></div></div>
         <div class="file-drop ingest-drop" id="dropZone" role="button" tabindex="0" aria-controls="fileInput" aria-label="Выбрать изображение или PDF">
-            <span class="drop-icon" aria-hidden="true">↥</span><strong>Перетащите файл или выберите на компьютере</strong>
+            <span class="drop-icon" aria-hidden="true"><svg class="ui-icon"><use href="#icon-template"/></svg></span><strong>Перетащите файл или выберите на компьютере</strong>
             <div class="hint">PNG, JPG или PDF</div><input type="file" id="fileInput" accept=".png,.jpg,.jpeg,.pdf">
         </div>
         <p id="selectedFile" class="ingest-file" role="status" hidden></p>
@@ -39,10 +39,15 @@
             <a href="/pdf-order">Подготовить структуру PDF →</a>
         </details>
     </section>
-    <section class="card ingest-result" id="resultCard" aria-labelledby="ocr-result-title" hidden>
+    <section class="card ingest-result" id="resultCard" aria-labelledby="ocr-result-title">
         <div class="card-head"><div><p class="eyebrow">3 · Проверка и скачивание</p><h3 id="ocr-result-title">Проверьте текст</h3>
             <p id="resultSource" class="field-help ingest-file"></p></div><button type="button" class="btn-secondary" id="copyBtn" disabled>Копировать</button></div>
+        {% set empty_title = "Здесь появится текст документа" %}
+        {% set empty_copy = "После распознавания исправьте ошибки прямо здесь. Исходный скан останется без изменений." %}
+        {% set empty_action = "Проверьте текст и скачайте результат" %}
+        {% include "partials/ingest_empty.html" %}
         <textarea id="result" aria-label="Распознанный текст" hidden></textarea>
+        <div id="resultTools" hidden>
         <p id="editStatus" role="status" aria-live="polite"></p>
         <div class="ingest-export"><label for="ocrExportFormat">Формат скачивания</label><select id="ocrExportFormat" disabled>
             <option value="txt">Текст TXT</option><option value="docx">Документ DOCX</option><option value="pdf">Документ PDF</option><option value="model">JSON-модель</option>
@@ -57,6 +62,7 @@
             <button type="button" id="reloadTextBtn" class="btn-secondary" disabled>Загрузить сохранённое</button>
         </details>
         <p class="field-help">Редактор сохраняет текст и абзацы, а не расположение областей, таблицы и изображения скана. Сохранённая версия доступна по адресу страницы один час после сохранения.</p>
+        </div>
     </section>
 </div>
 {% endblock %}

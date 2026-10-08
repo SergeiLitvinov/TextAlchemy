@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from opendoc.document_model import DocumentModel
+from opendoc_model.document_model import DocumentModel
 
 from textalchemy.core.diagnostics import ConversionReport
 from textalchemy.core.exceptions import GenerateError

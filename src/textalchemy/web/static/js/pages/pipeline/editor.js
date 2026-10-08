@@ -90,9 +90,9 @@ export function createStepEditor($, model, onChange, onUploadBusy = () => {}) {
             }
             return `<div class="step-card" data-index="${index}">
                 <div class="step-head"><select class="op-select" data-field="op" aria-label="Операция">${operations}${unavailable}</select>
-                    <div class="btn-group step-actions"><button type="button" class="btn btn-sm" data-move="-1" aria-label="Выше" ${index === 0 ? 'disabled' : ''}>↑</button>
-                    <button type="button" class="btn btn-sm" data-move="1" aria-label="Ниже" ${index === model.state.steps.length - 1 ? 'disabled' : ''}>↓</button>
-                    <button type="button" class="btn btn-sm btn-danger" data-remove aria-label="Удалить">✕</button></div></div>
+                    <div class="btn-group step-actions"><button type="button" class="icon-button" data-move="-1" aria-label="Выше" title="Переместить шаг выше" ${index === 0 ? 'disabled' : ''}><svg class="ui-icon" aria-hidden="true"><use href="#icon-up"/></svg></button>
+                    <button type="button" class="icon-button" data-move="1" aria-label="Ниже" title="Переместить шаг ниже" ${index === model.state.steps.length - 1 ? 'disabled' : ''}><svg class="ui-icon" aria-hidden="true"><use href="#icon-down"/></svg></button>
+                    <button type="button" class="icon-button danger-action" data-remove aria-label="Удалить" title="Удалить шаг"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></button></div></div>
                 <p class="field-help">${window.esc(operation?.description || step.op)}</p>
                 <div class="step-body"><div class="param-field"><label for="output-${index}">Назвать результат шага</label>
                     <input type="text" id="output-${index}" data-field="output" value="${window.esc(step.output)}" placeholder="doc"></div>

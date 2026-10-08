@@ -9,20 +9,30 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from textalchemy.core.diagnostics import ConversionReport, IssueSeverity
+from textalchemy.core.types import DocFormat
 
 if TYPE_CHECKING:
     from textalchemy.convert.executor import CancellationCheck, ConversionExecutor, ConversionRequest
 
 
 def execute_with_quality(
-    executor: ConversionExecutor, request: ConversionRequest, *, cancelled: CancellationCheck | None = None,
+    executor: ConversionExecutor,
+    request: ConversionRequest,
+    *,
+    cancelled: CancellationCheck | None = None,
 ) -> ConversionReport:
     """Publish quality-gated output only after the whole route succeeds."""
-    if all(policy is None for policy in (
-        request.quality_policy, request.object_loss_policy, request.text_preservation_policy,
-        request.formula_loss_policy,
-        request.emphasis_loss_policy,
-    )):
+    if request.target is not DocFormat.PDF and all(
+        policy is None
+        for policy in (
+            request.quality_policy,
+            request.object_loss_policy,
+            request.text_preservation_policy,
+            request.formula_loss_policy,
+            request.emphasis_loss_policy,
+            request.heading_loss_policy,
+        )
+    ):
         return executor._execute(request, cancelled=cancelled)
     report = ConversionReport(request.output_path)
     try:
@@ -33,11 +43,16 @@ def execute_with_quality(
             report.output_path = request.output_path
             if report.success and cancelled is not None and cancelled():
                 return _cancelled_report(report)
-            if report.success and any(policy is not None for policy in (
-                request.object_loss_policy, request.text_preservation_policy,
-                request.formula_loss_policy,
-                request.emphasis_loss_policy,
-            )):
+            if report.success and any(
+                policy is not None
+                for policy in (
+                    request.object_loss_policy,
+                    request.text_preservation_policy,
+                    request.formula_loss_policy,
+                    request.emphasis_loss_policy,
+                    request.heading_loss_policy, request.txt_encoding,
+                )
+            ):
                 from textalchemy.convert.object_quality import check_object_quality
 
                 check_object_quality(
@@ -48,9 +63,16 @@ def execute_with_quality(
                     request.text_preservation_policy,
                     request.formula_loss_policy,
                     request.emphasis_loss_policy,
+                    request.heading_loss_policy, request.txt_encoding,
                 )
                 if cancelled is not None and cancelled():
                     return _cancelled_report(report)
+            if report.success and request.target is DocFormat.PDF:
+                from textalchemy.convert.verification import verify_pdf_output
+
+                verify_pdf_output(staged, report, cancelled=cancelled)
+            if report.success and cancelled is not None and cancelled():
+                return _cancelled_report(report)
             if report.success:
                 if request.output_path.is_dir():
                     raise ValueError("Для публикации каталога выберите новый путь результата")

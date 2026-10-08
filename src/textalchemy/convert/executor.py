@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from textalchemy.convert.backends import ExporterBackend, ImporterBackend, PathConverterBackend
+from textalchemy.convert.backends import ExporterBackend, PathConverterBackend
 from textalchemy.convert.capabilities import create_capability_registry
+from textalchemy.convert.heading_budget import HeadingBudget
 from textalchemy.convert.protocols import ConversionBackend, ConversionValue
 from textalchemy.convert.publication import _cancelled_report
+from textalchemy.convert.runtime_policy import infer_format, requirement_available
 from textalchemy.convert.stages import StageContext
 from textalchemy.core.conversion_graph import (
     DEFAULT_FEATURES,
@@ -33,12 +34,7 @@ BackendEntry = ConversionBackend | StepHandler
 RequirementChecker = Callable[[str], bool]
 CancellationCheck = Callable[[], bool]
 
-_MODULE_REQUIREMENTS = {
-    "python-docx": "docx",
-    "python-pptx": "pptx",
-    "pymupdf": "fitz",
-    "beautifulsoup4": "bs4",
-}
+
 
 
 @dataclass(frozen=True)
@@ -55,6 +51,14 @@ class ConversionRequest:
     text_preservation_policy: TextPreservationPolicy | None = None
     formula_loss_policy: FormulaLossPolicy | None = None
     emphasis_loss_policy: EmphasisLossPolicy | None = None
+    heading_loss_policy: HeadingBudget | None = None
+    txt_encoding: str = "auto"
+    model_intermediates_only: bool = False
+
+    def __post_init__(self) -> None:
+        from opendoc_formats.text_profile import TextProfile
+
+        TextProfile(self.txt_encoding)
 
 
 class ConversionExecutor:
@@ -77,6 +81,7 @@ class ConversionExecutor:
         mode: ConversionMode = ConversionMode.BALANCED,
         features: frozenset[DocumentFeature] = DEFAULT_FEATURES,
         max_steps: int = 4,
+        model_intermediates_only: bool = False,
     ) -> ConversionPlan | None:
         """Построить маршрут, доступный в текущем runtime-окружении."""
 
@@ -86,7 +91,9 @@ class ConversionExecutor:
             mode=mode,
             features=features,
             max_steps=max_steps,
-            available=self._step_available,
+            available=lambda step: self._step_available(step) and (
+                (not model_intermediates_only and target is not DocFormat.MODEL) or step.target in {DocFormat.MODEL, target}
+            ),
         )
 
     def execute(self, request: ConversionRequest, *, cancelled: CancellationCheck | None = None) -> ConversionReport:
@@ -114,6 +121,7 @@ class ConversionExecutor:
             mode=request.mode,
             features=request.features,
             max_steps=request.max_steps,
+            model_intermediates_only=request.model_intermediates_only,
         )
         if plan is None:
             if theoretical is None:
@@ -136,7 +144,18 @@ class ConversionExecutor:
         try:
             if is_cancelled():
                 return _cancelled_report(report)
-            value = _load_initial(request)
+            if request.source is DocFormat.MODEL:
+                from textalchemy.convert.library_import import import_document
+
+                value, initial_report = import_document(request.input_path, request.output_path, "json", cancelled=is_cancelled)
+                report.issues.extend(initial_report.issues)
+                report.metrics["source_import"] = initial_report.metrics
+                if not initial_report.success:
+                    return report
+                if request.quality_policy is not None and not request.quality_policy.evaluate(report):
+                    return report
+            else:
+                value = _load_initial(request)
             if not plan.steps and request.target is not DocFormat.MODEL:
                 request.output_path.parent.mkdir(parents=True, exist_ok=True)
                 if request.input_path.resolve() != request.output_path.resolve():
@@ -150,7 +169,12 @@ class ConversionExecutor:
                 if is_cancelled():
                     return _cancelled_report(report)
                 backend = self.backends[step.id]
-                if isinstance(backend, ConversionBackend) and hasattr(backend, "execute_stage"):
+                if backend is _import_txt:
+                    from textalchemy.convert.library_import import import_document
+
+                    value, step_report = import_document(
+                        value, request.output_path, "txt", txt_encoding=request.txt_encoding, cancelled=is_cancelled)
+                elif isinstance(backend, ConversionBackend) and hasattr(backend, "execute_stage"):
                     stage_result = backend.execute_stage(value, StageContext(request.output_path, is_cancelled))
                     value, step_report = stage_result.value, stage_result.report
                 else:
@@ -186,35 +210,6 @@ class ConversionExecutor:
         return step.id in self.backends and all(self.requirement_checker(item) for item in step.requirements)
 
 
-def requirement_available(requirement: str) -> bool:
-    if requirement == "libreoffice":
-        from opendoc_formats.office import find_libreoffice
-
-        return find_libreoffice() is not None
-    module = _MODULE_REQUIREMENTS.get(requirement, requirement.replace("-", "_"))
-    return importlib.util.find_spec(module) is not None
-
-
-
-def infer_format(path: str | Path) -> DocFormat:
-    suffix = Path(path).suffix.lower()
-    aliases = {
-        ".pdf": DocFormat.PDF,
-        ".docx": DocFormat.DOCX,
-        ".pptx": DocFormat.PPTX,
-        ".html": DocFormat.HTML,
-        ".htm": DocFormat.HTML,
-        ".tex": DocFormat.LATEX,
-        ".json": DocFormat.MODEL,
-        ".txt": DocFormat.TXT,
-        ".djvu": DocFormat.DJVU,
-        ".epub": DocFormat.EPUB,
-    }
-    if suffix not in aliases:
-        raise ValueError(f"cannot infer document format from suffix {suffix or '<none>'!r}")
-    return aliases[suffix]
-
-
 def _load_initial(request: ConversionRequest) -> Path | DocumentModel:
     if request.source is DocFormat.MODEL:
         from textalchemy.core.document_codec import load_document
@@ -225,11 +220,13 @@ def _load_initial(request: ConversionRequest) -> Path | DocumentModel:
 
 def _built_in_backends() -> dict[str, ConversionBackend]:
     return {
-        "txt.model": ImporterBackend("txt.model", _read_txt),
-        "epub.model": ImporterBackend("epub.model", _read_epub),
+        "pdf.model": _import_pdf,
+        "djvu.model": _import_djvu,
+        "txt.model": _import_txt,
+        "epub.model": _import_epub,
         "html.model": _import_html,
-        "docx.model": ImporterBackend("docx.model", _read_docx),
-        "pptx.model": ImporterBackend("pptx.model", _read_pptx),
+        "docx.model": _import_docx,
+        "pptx.model": _import_pptx,
         "model.docx": ExporterBackend("model.docx", _write_docx),
         "model.pptx": ExporterBackend("model.pptx", _write_pptx),
         "model.txt": ExporterBackend("model.txt", _write_txt),
@@ -252,10 +249,59 @@ def _built_in_backends() -> dict[str, ConversionBackend]:
     }
 
 
-def _read_txt(source: Path) -> DocumentModel:
-    from textalchemy.formats.txt import read_txt_model
+def _import_pdf(source: ConversionValue, output: Path) -> tuple[DocumentModel | None, ConversionReport]:
+    from textalchemy.convert.library_import import import_document
 
-    return read_txt_model(source)
+    return import_document(source, output, "pdf")
+
+
+def _import_txt(source: ConversionValue, output: Path) -> tuple[DocumentModel | None, ConversionReport]:
+    from textalchemy.convert.library_import import import_document
+
+    return import_document(source, output, "txt")
+
+
+def _import_docx(source: ConversionValue, output: Path) -> tuple[DocumentModel | None, ConversionReport]:
+    from textalchemy.convert.library_import import import_document
+
+    return import_document(source, output, "docx")
+
+
+def _import_pptx(source: ConversionValue, output: Path) -> tuple[DocumentModel | None, ConversionReport]:
+    from textalchemy.convert.library_import import import_document
+
+    return import_document(source, output, "pptx")
+
+
+def _import_epub(source: ConversionValue, output: Path) -> tuple[DocumentModel | None, ConversionReport]:
+    from textalchemy.convert.library_import import import_document
+
+    return import_document(source, output, "epub")
+
+
+
+def _import_djvu(source: ConversionValue, output: Path) -> tuple[DocumentModel, ConversionReport]:
+    from opendoc_formats import read_document
+    from opendoc_model import inspect_document_model
+
+    if not isinstance(source, Path):
+        raise TypeError("DjVu importer requires a path")
+    result = read_document(source, format_id="djvu")
+    if not result.success or result.document is None:
+        raise ValueError("; ".join(issue.message for issue in result.issues) or "DjVu import failed")
+    inspection = inspect_document_model(result.document)
+    if inspection.metadata["text_flow"]["characters"] == 0:
+        raise ValueError("В DjVu нет доступного текстового слоя. Для скана требуется распознавание текста.")
+    report = ConversionReport(output)
+    for issue in result.issues:
+        report.add(issue.severity, issue.code, issue.message, issue.location)
+    report.add(
+        IssueSeverity.WARNING, "djvu-text-only",
+        "Перенесён только текстовый слой DjVu. Страницы, координаты, изображения и оформление "
+        "не восстанавливаются; распознавание сканов не выполняется.",
+    )
+    report.metrics.update(import_scope="text_layer_only", page_geometry_verified=None, ocr_performed=False)
+    return result.document, report
 
 
 def _import_html(source: ConversionValue, output: Path) -> tuple[DocumentModel, ConversionReport]:
@@ -271,22 +317,7 @@ def _import_html(source: ConversionValue, output: Path) -> tuple[DocumentModel, 
     return model, report
 
 
-def _read_epub(source: Path) -> DocumentModel:
-    from textalchemy.formats.epub import read_epub_model
 
-    return read_epub_model(source)
-
-
-def _read_docx(source: Path) -> DocumentModel:
-    from textalchemy.formats.docx import read_docx_model
-
-    return read_docx_model(source)
-
-
-def _read_pptx(source: Path) -> DocumentModel:
-    from textalchemy.formats.pptx import read_pptx_model
-
-    return read_pptx_model(source)
 
 
 def _write_docx(model: DocumentModel, output: Path) -> ConversionReport:

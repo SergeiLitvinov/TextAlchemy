@@ -1,5 +1,6 @@
 """Offline dependency inventory: exact lock coverage, profiles and licence evidence."""
 
+import hashlib
 import json
 import re
 import tomllib
@@ -18,6 +19,7 @@ def inventory(root: Path = ROOT) -> tuple[list[dict], dict[str, set[tuple[str, s
     expected = {(item["name"], item["version"]) for item in packages if item["name"] != "textalchemy"}
     if len(records) != len(metadata["packages"]) or set(records) != expected:
         raise ValueError("Dependency licence inventory differs from uv.lock (missing, stale or duplicate records)")
+    locked = {(item["name"], item["version"]): item for item in packages}
     for record in records.values():
         if not all(record.get(field) for field in ("description", "license", "evidence", "status")):
             raise ValueError(f"Incomplete dependency evidence: {record['name']}")
@@ -25,6 +27,20 @@ def inventory(root: Path = ROOT) -> tuple[list[dict], dict[str, set[tuple[str, s
             raise ValueError(f"Invalid dependency evidence status: {record['name']}")
         if "UNKNOWN" in record["license"] and record["status"] != "unresolved":
             raise ValueError(f"Unknown dependency licence must remain unresolved: {record['name']}")
+        inspected = record.get("inspected_wheel_sha256")
+        if inspected and f"sha256:{inspected}" not in {
+            wheel.get("hash") for wheel in locked[record["name"], record["version"]].get("wheels", [])
+        }:
+            raise ValueError(f"Inspected wheel differs from lock: {record['name']}")
+        licence_files = [record['license_file']] if record.get('license_file') else []
+        licence_files.extend(record.get('notice_files', []))
+        for licence in licence_files:
+            path = (root / licence["path"]).resolve()
+            directory = (root / "doc/licenses").resolve()
+            if not path.is_relative_to(directory) or not path.is_file():
+                raise ValueError(f"Invalid dependency licence file: {record['name']}")
+            if hashlib.sha256(path.read_bytes()).hexdigest() != licence.get("sha256"):
+                raise ValueError(f"Dependency licence file changed: {record['name']}")
     by_name = defaultdict(list)
     for package in packages:
         by_name[package["name"]].append(package)

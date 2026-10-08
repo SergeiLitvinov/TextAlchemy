@@ -253,5 +253,5 @@ render_txt_model(*, document: 'DocumentModel', output_path: 'Union[str, Path]') 
 Заполнить DocumentModel данными: переменные, условия и циклы.
 
 ```text
-render_template(*, document: opendoc.document_model.DocumentModel, data: dict[str, Any], strict: bool = True, schema: dict[str, Any] | None = None) -> opendoc.document_model.DocumentModel
+render_template(*, document: opendoc_model.document_model.DocumentModel, data: dict[str, Any], strict: bool = True, schema: dict[str, Any] | None = None) -> opendoc_model.document_model.DocumentModel
 ```

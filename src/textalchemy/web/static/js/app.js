@@ -7,6 +7,8 @@
  *  - esc(str)               — экранирование HTML (защита от XSS)
  *  - загрузка/сохранение темы в localStorage
  */
+import {createDrawer} from "./components/drawer.js";
+
 (function () {
   "use strict";
 
@@ -43,26 +45,26 @@
 
   function initNavigation() {
     const openButton = document.querySelector("[data-nav-open]");
-    const closeTarget = document.querySelector("[data-nav-close]");
+    const panel = document.getElementById("app-sidebar");
+    const backdrop = document.querySelector(".nav-backdrop");
+    const desktopMedia = window.matchMedia("(min-width: 1051px)");
     if (!openButton) return;
 
-    function setOpen(open) {
-      document.body.classList.toggle("nav-open", open);
-      openButton.setAttribute("aria-expanded", String(open));
-      if (closeTarget) closeTarget.hidden = !open;
-    }
-
-    openButton.addEventListener("click", () => setOpen(!document.body.classList.contains("nav-open")));
-    if (closeTarget) closeTarget.addEventListener("click", () => setOpen(false));
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") setOpen(false);
+    const navigation = createDrawer({
+      panel, triggers: [openButton], closeTargets: [...document.querySelectorAll("[data-nav-close]")],
+      background: [document.querySelector(".header"), document.getElementById("main-content")],
+      initialFocus: () => panel.querySelector("a[aria-current='page']"),
+      onChange(open) {
+        document.body.classList.toggle("nav-open", open);
+        panel.inert = !open && !desktopMedia.matches;
+        if (backdrop) backdrop.hidden = !open;
+      },
     });
-    const desktopMedia = window.matchMedia("(min-width: 1051px)");
-    if (desktopMedia.addEventListener) {
-      desktopMedia.addEventListener("change", (event) => {
-        if (event.matches) setOpen(false);
-      });
-    }
+    desktopMedia.addEventListener("change", () => {
+      navigation.close(false);
+      panel.inert = !desktopMedia.matches;
+    });
+    panel.inert = !desktopMedia.matches;
   }
 
   // ── Тосты ──────────────────────────────────────────────

@@ -1,4 +1,4 @@
-"""Compatibility imports; document implementation lives in opendoc."""
+"""Compatibility imports; document implementation lives in opendoc_model."""
 
 from __future__ import annotations
 
@@ -6,14 +6,14 @@ import json
 from pathlib import Path
 from typing import Any
 
-from opendoc import document_codec as _codec
-from opendoc.document_codec import (
+from opendoc_model import document_codec as _codec
+from opendoc_model.document_codec import (
     FORMAT_VERSION as FORMAT_VERSION,
 )
-from opendoc.document_codec import (
+from opendoc_model.document_codec import (
     SUPPORTED_FORMAT_VERSIONS as SUPPORTED_FORMAT_VERSIONS,
 )
-from opendoc.document_model import DocumentModel
+from opendoc_model.document_model import DocumentModel
 
 FORMAT_NAME = _codec.FORMAT_NAME
 LEGACY_FORMAT_NAME = "textalchemy.document"

@@ -7,7 +7,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from opendoc import DocumentModel, Paragraph, document_from_json, document_to_dict, inspect_document_model
+from opendoc_model import DocumentModel, Paragraph, document_from_json, document_to_dict, inspect_document_model
 
 from textalchemy.core.document_codec import document_from_json as legacy_loads
 from textalchemy.core.document_model import DocumentModel as LegacyDocumentModel
@@ -16,7 +16,7 @@ from textalchemy.core.inspection import inspect_document_model as legacy_inspect
 
 
 def test_application_imports_are_exactly_the_library_types_and_functions():
-    from opendoc import ArtifactLimitError
+    from opendoc_model import ArtifactLimitError
 
     from textalchemy.core.artifacts import ArtifactLimitError as LegacyArtifactLimitError
 
@@ -45,9 +45,9 @@ def test_independent_library_rejects_application_identifier():
 
 
 def test_document_library_never_imports_the_consuming_application():
-    import opendoc
+    import opendoc_model
 
-    source = Path(opendoc.__file__).parent
+    source = Path(opendoc_model.__file__).parent
     assert list(source.glob("*.py")), "Library modules must actually be inspected"
     for path in source.glob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
@@ -61,25 +61,25 @@ def test_document_library_never_imports_the_consuming_application():
 
 
 def test_bundled_wheel_matches_provenance_and_installed_modules():
-    import opendoc
+    import opendoc_model
 
-    bundle = Path(__file__).parents[1] / "vendor/opendoc"
+    bundle = Path(__file__).parents[1] / "vendor/opendoc-model"
     provenance = json.loads((bundle / "provenance.json").read_text(encoding="utf-8"))
     wheel = bundle / provenance["wheel"]
-    assert provenance["distribution"] == "opendoc"
+    assert provenance["distribution"] == "opendoc-model"
     assert list(bundle.glob("*.whl")) == [wheel]
     assert hashlib.sha256(wheel.read_bytes()).hexdigest() == provenance["sha256"]
     assert provenance["modules"]
     with zipfile.ZipFile(wheel) as archive:
         for name, digest in provenance["modules"].items():
             assert hashlib.sha256(archive.read(name)).hexdigest() == digest
-            installed = Path(opendoc.__file__).parent / name.split("/", 1)[1]
+            installed = Path(opendoc_model.__file__).parent / name.split("/", 1)[1]
             assert hashlib.sha256(installed.read_bytes()).hexdigest() == digest
 
 
 @pytest.mark.parametrize("format_name", ["textalchemy.document", "opendoc.document"])
 def test_native_semantics_survive_application_json(format_name):
-    from opendoc import (
+    from opendoc_model import (
         Anchor,
         Footnote,
         FootnoteReference,
@@ -127,7 +127,7 @@ def test_native_semantics_survive_application_json(format_name):
 
 
 def test_native_version_one_attachments_are_not_application_migrations():
-    from opendoc import Resource, ResourceKind
+    from opendoc_model import Resource, ResourceKind
 
     from textalchemy.core.document_codec import document_from_dict
 
@@ -141,7 +141,7 @@ def test_native_version_one_attachments_are_not_application_migrations():
 
 
 def test_application_saved_file_is_readable_by_standalone_opendoc(tmp_path):
-    from opendoc import Section, TextRun, load_document
+    from opendoc_model import Section, TextRun, load_document
 
     from textalchemy.core.document_codec import save_document
 
@@ -153,7 +153,7 @@ def test_application_saved_file_is_readable_by_standalone_opendoc(tmp_path):
 
 @pytest.mark.parametrize("value", [float("inf"), float("nan")])
 def test_invalid_model_does_not_replace_existing_output(tmp_path, value):
-    from opendoc import Section, TextRun
+    from opendoc_model import Section, TextRun
 
     from textalchemy.convert.pptx_writer import write_pptx_model
     from textalchemy.core.document_codec import save_document
@@ -170,7 +170,7 @@ def test_invalid_model_does_not_replace_existing_output(tmp_path, value):
 
 
 def test_unscoped_inspection_does_not_claim_complete_resource_retention():
-    from opendoc import DocumentInspection, compare_inspections
+    from opendoc_model import DocumentInspection, compare_inspections
 
     source = DocumentInspection(None, "pdf", resources=[{"id": "one", "sha256": "a" * 64, "size_bytes": 1}])
     target = DocumentInspection(None, "pdf", resources=[{"id": "one", "sha256": "a" * 64, "size_bytes": 1}])

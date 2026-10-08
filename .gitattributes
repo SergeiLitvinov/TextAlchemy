@@ -1,0 +1,3 @@
+# Preserve the audited licence bytes from the official wheel on every platform.
+doc/licenses/aistudio-sdk-Apache-2.0.txt -text
+doc/licenses/nvidia-cusparselt-cu12-0.7.1.txt -text

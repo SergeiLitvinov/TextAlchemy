@@ -7,6 +7,17 @@ from textalchemy.core.types import DocFormat
 
 def route_guidance(source: DocFormat, target: DocFormat) -> list[str]:
     notes = []
+    if source is DocFormat.PDF and target is not DocFormat.DOCX:
+        notes.append(
+            "PDF: в модель переносятся доступный текст, геометрия страниц и поддерживаемая графика. "
+            "Формы, слои, аннотации, маски и порядок сложной вёрстки не прошли полную приёмку. "
+            "Скан без текстового слоя требует отдельного распознавания."
+        )
+    if source is DocFormat.DJVU:
+        notes.append(
+            "DjVu: переносится только имеющийся текстовый слой. Страницы, координаты, изображения "
+            "и оформление не восстанавливаются; сканы без текста требуют отдельного распознавания."
+        )
     if source is DocFormat.HTML:
         notes.append(
             "HTML: сохраняются статический текст, списки, таблицы и встроенные изображения и формулы. "
@@ -16,6 +27,11 @@ def route_guidance(source: DocFormat, target: DocFormat) -> list[str]:
         notes.append(
             "EPUB: сохраняются главы, ссылки, изображения и базовое оформление. "
             "Сложный CSS и точная разбивка на страницы не воспроизводятся."
+        )
+    if target is DocFormat.HTML:
+        notes.append(
+            "HTML: проверьте язык документа и заголовки таблиц. "
+            "Эти данные могут теряться без сообщения о потерях; доступность для экранного диктора не подтверждена."
         )
     if target is DocFormat.PPTX:
         notes.append(

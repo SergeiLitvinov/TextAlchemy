@@ -61,10 +61,14 @@ def _install_easyocr(monkeypatch, results=None):
 
     class Reader:
         def __init__(self, languages, gpu=False):
+            if set(languages) - {'ru', 'en'}:
+                raise ValueError('Unsupported EasyOCR language code')
             self.languages = languages
             self.gpu = gpu
 
         def readtext(self, image, **kwargs):
+            if kwargs.get('paragraph'):
+                return [(box, text) for box, text, _confidence in results]
             return results
 
     module = types.ModuleType("easyocr")
@@ -77,6 +81,7 @@ def _install_paddle(monkeypatch):
 
     class PaddleOCR:
         def __init__(self, **kwargs):
+            assert kwargs['lang'] == 'ru'
             self.kwargs = kwargs
 
         def predict(self, path):

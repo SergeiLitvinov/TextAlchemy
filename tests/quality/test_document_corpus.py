@@ -215,7 +215,7 @@ def test_scientific_report_pdf_pages_pass_visual_smoke_bounds(tmp_path):
     report = write_pdf_model(read_docx_model(source), pdf)
     bounds = GOLDEN["visual"]
 
-    assert report.success
+    assert report.success, report.to_dict()
     with fitz.open(pdf) as rendered:
         assert rendered.page_count >= bounds["minimum_pages"]
         for page in rendered:

@@ -9,6 +9,7 @@ from pathlib import Path
 
 def cmd_convert_file(args: argparse.Namespace) -> int:
     from textalchemy.convert.executor import ConversionExecutor, ConversionRequest, infer_format
+    from textalchemy.convert.heading_budget import HeadingBudget
     from textalchemy.core.conversion_graph import DocumentFeature
     from textalchemy.core.document_model import ConversionMode
     from textalchemy.core.emphasis_quality import EmphasisLossPolicy
@@ -27,6 +28,8 @@ def cmd_convert_file(args: argparse.Namespace) -> int:
         policy = QualityPolicy(limit) if limit is not None else None
         object_limit = getattr(args, "max_lost_objects", None)
         object_policy = ObjectLossPolicy(object_limit) if object_limit is not None else None
+        heading_limit = getattr(args, "max_changed_headings", None)
+        heading_policy = HeadingBudget(heading_limit) if heading_limit is not None else None
         emphasis_limit = getattr(args, "max_changed_emphasis", None)
         emphasis_policy = EmphasisLossPolicy(emphasis_limit) if emphasis_limit is not None else None
         formula_limit = getattr(args, 'max_changed_formulas', None)
@@ -60,6 +63,8 @@ def cmd_convert_file(args: argparse.Namespace) -> int:
             text_preservation_policy=text_policy,
             formula_loss_policy=formula_policy,
             emphasis_loss_policy=emphasis_policy,
+            heading_loss_policy=heading_policy,
+            txt_encoding=getattr(args, "txt_encoding", "auto"),
         )
     )
     if args.json:

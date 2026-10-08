@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from hashlib import sha256
+from importlib.metadata import version
 from pathlib import Path
 from typing import Any, Callable
 
@@ -90,6 +93,32 @@ class ConversionPreviewService:
             self._verify(snapshot)
             raise PreviewError("Не удалось сравнить страницы", 404) from error
         self._verify(snapshot)
+        measurement = {
+            "page": page,
+            "dpi": max(1, min(dpi, MAX_PREVIEW_DPI)),
+            "method": "normalised-grayscale-mae-v1",
+            "normalization_pixels": [160, 160],
+            "similarity": comparison.similarity,
+            "rmse": comparison.root_mean_square_error,
+            "source_png_sha256": sha256(source_png).hexdigest(),
+            "target_png_sha256": sha256(target_png).hexdigest(),
+            "source_name": snapshot.source.name,
+            "target_name": snapshot.target.name,
+            "source_format": snapshot.task.get("source_format"),
+            "target_format": snapshot.task.get("target_format"),
+            "measured_at": datetime.now(timezone.utc).isoformat(),
+            "versions": {name: version(name) for name in ("textalchemy", "opendoc-model", "opendoc-formats", "pillow")},
+            "scope": "page_images_only",
+            "editability_verified": None,
+        }
+        try:
+            saved = self.store.store_preview_measurement(task_id, expected=snapshot.task, measurement=measurement)
+        except OSError as error:
+            self._verify(snapshot)
+            raise PreviewError("Не удалось сохранить измерение; повторите сравнение", 503) from error
+        if not saved:
+            self._verify(snapshot)
+            self._changed(task_id)
         return PreviewImage(data, comparison.similarity, comparison.root_mean_square_error)
 
     def _snapshot(self, task_id: str) -> PreviewSnapshot:

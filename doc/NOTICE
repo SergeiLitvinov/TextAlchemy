@@ -26,13 +26,18 @@ its default document structure/styles. python-docx is Copyright (c) 2013
 Steve Canny, MIT. Licence: doc/licenses/python-docx-MIT.txt
 https://github.com/python-openxml/python-docx
 
-The source distribution includes the official OpenDoc 0.1.0 and OpenDoc
-Formats 0.3.0 wheels, each with its own MIT licence and notices. Preserve
+The source distribution includes the official OpenDoc Model 0.7.2 and OpenDoc
+Formats 0.17.0 wheels, each with its own MIT licence and notices. Preserve
 the original wheels and provenance files. No engine binaries are bundled.
 
 Other dependencies are installed separately. Their terms remain applicable,
-including optional AGPL/commercial PDF, AGPL EPUB, LGPL components and NVIDIA
+including optional AGPL/commercial PDF, LGPL components and NVIDIA
 binary terms. The complete locked inventory and unresolved OCR licence
 evidence are documented in doc/reference/dependencies.md and
 doc/development/licenses.md. OCR model weights and external programs are
 separate downloads and are not covered by TextAlchemy's MIT licence.
+
+The dependency audit reproduces the unchanged Apache-2.0 licence from the
+official aistudio-sdk 0.3.9 wheel in doc/licenses/aistudio-sdk-Apache-2.0.txt.
+The SDK is installed separately; its code is not bundled in TextAlchemy.
+https://pypi.org/project/aistudio-sdk/0.3.9/

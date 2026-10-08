@@ -53,6 +53,8 @@
 | `--feature` | Приоритетная функция документа; можно повторять | варианты: text, styles, raster_images, vector_graphics, formulas, tables, page_geometry, sections, running_content, notes, fields |
 | `--max-steps` |  | default: 4 |
 | `--max-changed-emphasis` | Maximum characters with changed bold/italic emphasis |  |
+| `--txt-encoding` | TXT input encoding; CP1251 must be explicit | default: 'auto'; варианты: auto, utf-8, utf-16-le, utf-16-be, cp1251 |
+| `--max-changed-headings` | Maximum changed or removed heading roles |  |
 | `--max-changed-formulas` | Допуск несовпавших или удалённых исходных формул |  |
 | `--max-loss-issues` | Максимум диагностированных потерь; 0 запрещает любые LOSS |  |
 | `--require-unchanged-text` | Требовать точного сохранения текста исходных абзацев | default: False |

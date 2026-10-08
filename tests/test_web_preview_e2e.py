@@ -20,6 +20,101 @@ from textalchemy.web.tasks import TaskStore
 browser, page, e2e_server, task_store = fixtures.browser, fixtures.page, fixtures.e2e_server, fixtures.task_store
 
 
+def open_saved_preview(page: Page, server: str) -> None:
+    """Открыть настоящие сохранённые PDF через историю конвертации."""
+    page.goto(server + "/convert")
+    fixtures._wait_convert_ready(page)
+    page.locator("#conversionHistory > summary").click()
+    page.locator("#historyList details summary").click()
+    page.locator('[data-preview-task="pages"]').click()
+    expect(page.locator("#previewSection")).to_be_visible()
+
+
+def test_unknown_structure_and_absent_objects_are_not_percentages(
+    e2e_server: str,
+    page: Page,
+    task_store: TaskStore,
+    tmp_path: Path,
+) -> None:
+    """Неизвестная метрика, отсутствие объектов и измеренный ноль различаются."""
+    seed(task_store, tmp_path)
+    comparison = {
+        "retention": {
+            "pages": {"source": None, "target": 2, "ratio": None},
+            "images": {"source": 0, "target": 0, "ratio": 1},
+            "characters": {"source": 10, "target": 0, "ratio": 0},
+        }
+    }
+    task_store.set("pages", {**task_store.get("pages"), "comparison": comparison})
+    open_saved_preview(page, e2e_server)
+    page.locator("#comparisonSection > summary").click()
+    grid = page.locator("#retentionGrid")
+    unknown = grid.locator(".retention-item").filter(has=page.get_by_text("Страницы", exact=True))
+    absent = grid.locator(".retention-item").filter(has=page.get_by_text("Изображения", exact=True))
+    lost = grid.locator(".retention-item").filter(has=page.get_by_text("Текст", exact=True))
+    expect(unknown.locator("strong")).to_have_text("Не измерено")
+    expect(absent.locator("strong")).to_have_text("Нет в исходнике")
+    expect(lost.locator("strong")).to_have_text("0%")
+    expect(lost).to_have_class("retention-item bad")
+    expect(unknown).to_have_class("retention-item")
+    expect(absent).to_have_class("retention-item")
+    expect(page.locator("#comparisonMessage")).to_contain_text("Часть структуры не измерена")
+    assert task_store.get("pages")["comparison"] == comparison
+    assert page.e2e_errors == []
+
+
+@pytest.mark.parametrize("header,expected", [(None, None), ("", None), ("invalid", None), ("1.2", None), ("0", "0%")])
+def test_visual_measurement_missing_header_is_unknown_and_zero_is_measured(
+    e2e_server: str,
+    page: Page,
+    task_store: TaskStore,
+    tmp_path: Path,
+    header: str | None,
+    expected: str | None,
+) -> None:
+    """Отсутствующий показатель не заменяется нулём при получении карты различий."""
+    seed(task_store, tmp_path)
+
+    def alter_header(route: Route) -> None:
+        response = route.fetch()
+        headers = {key: value for key, value in response.headers.items() if key.lower() != "x-visual-similarity"}
+        if header is not None:
+            headers["X-Visual-Similarity"] = header
+        route.fulfill(response=response, headers=headers)
+
+    page.route("**/preview/pages/diff?*", alter_header)
+    open_saved_preview(page, e2e_server)
+    page.locator("#previewModeDiff").click()
+    page.wait_for_function("document.querySelector('#previewCanvas img')?.naturalWidth > 0")
+    hint = page.locator("#previewHint")
+    if expected is None:
+        expect(hint).to_contain_text("не измерено")
+        expect(hint).not_to_contain_text("0%")
+    else:
+        expect(hint).to_contain_text(expected)
+        expect(hint).to_contain_text("110 dpi")
+        expect(hint).to_contain_text("не оценка всего документа")
+    assert page.e2e_errors == []
+
+
+def test_failed_next_page_clears_previous_visual_measurement(
+    e2e_server: str,
+    page: Page,
+    task_store: TaskStore,
+    tmp_path: Path,
+) -> None:
+    seed(task_store, tmp_path)
+    open_saved_preview(page, e2e_server)
+    page.locator("#previewModeDiff").click()
+    expect(page.locator("#previewHint")).to_contain_text("110 dpi")
+    expect(page.locator("#previewHint")).to_contain_text("%")
+    page.route("**/preview/pages/diff?page=2&*", lambda route: route.fulfill(status=404, body="Comparison unavailable"))
+    page.locator("#previewNext").click()
+    expect(page.locator("#previewHint")).to_contain_text("сравнение недоступно")
+    expect(page.locator("#previewHint")).not_to_contain_text("%")
+    assert page.e2e_errors == ["Failed to load resource: the server responded with a status of 404 (Not Found)"]
+
+
 def seed(store: TaskStore, tmp_path: Path, task_id: str = "pages", *, pages: int = 2) -> None:
     source, target = tmp_path / f"{task_id}-source.pdf", tmp_path / f"{task_id}-target.pdf"
     pdf(source, "Original", pages=pages)
@@ -57,6 +152,37 @@ def seed(store: TaskStore, tmp_path: Path, task_id: str = "pages", *, pages: int
             ],
         },
     )
+
+
+@pytest.mark.parametrize("width", [375, 1280])
+def test_visual_evidence_in_report_after_reopening(
+    e2e_server: str, page: Page, task_store: TaskStore, tmp_path: Path, width: int
+) -> None:
+    """Измерение настоящих PDF отображается и сохраняется при повторном открытии отчёта."""
+    seed(task_store, tmp_path)
+    page.set_viewport_size({"width": width, "height": 900})
+    task_store.set("pages", {**task_store.get("pages"), "report": {"issues": [], "metrics": {"executed_steps": ["pdf.pdf"]}}})
+    original = task_store.get("pages")
+    open_saved_preview(page, e2e_server)
+    expect(page.locator("#visualEvidence")).to_be_hidden()
+    page.locator("#previewModeDiff").click()
+    expect(page.locator("#visualEvidence")).to_be_visible()
+    page.locator("#visualEvidence > summary").click()
+    expect(page.locator("#visualEvidenceList")).to_contain_text("Страница 1:")
+    expect(page.locator("#visualEvidenceList")).to_contain_text("110 dpi")
+    expect(page.locator("#visualEvidenceList")).to_contain_text("opendoc-model")
+    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    with httpx.Client(base_url=e2e_server) as client:
+        payload = client.get("/api/convert/status/pages").json()
+    assert payload["report"]["metrics"]["executed_steps"] == ["pdf.pdf"]
+    records = payload["report"]["metrics"]["visual_measurements"]
+    assert len(records) == 1 and records[0]["page"] == 1 and records[0]["editability_verified"] is None
+    assert task_store.get("pages") == original
+    open_saved_preview(page, e2e_server)
+    expect(page.locator("#visualEvidence")).to_be_visible()
+    page.locator("#visualEvidence > summary").click()
+    expect(page.locator("#visualEvidenceList")).to_contain_text("Страница 1:")
+    assert page.e2e_errors == []
 
 
 @pytest.mark.parametrize("width", [375, 1280])

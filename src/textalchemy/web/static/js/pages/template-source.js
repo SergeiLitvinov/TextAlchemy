@@ -27,6 +27,7 @@ export function createTemplateSource($, useCopy, edit) {
     });
     $('sourceInspect').onclick = () => run(async token => {
         const data = await window.api(url()); if (token !== epoch) return;
+        $('sourceFields').hidden = false;
         $('sourceBlocks').replaceChildren(...data.blocks.map(block => new Option(`${block.location}: ${block.text.slice(0, 100)}`, block.id)));
         $('sourceBlocks').onchange = () => {
             const block = data.blocks.find(item => item.id === $('sourceBlocks').value);
@@ -34,6 +35,7 @@ export function createTemplateSource($, useCopy, edit) {
             inspection = null; $('sourceMatches').replaceChildren(); controls();
         };
         $('sourceBlocks').onchange();
+        $('sourceBlocks').focus();
         $('sourceSuggestions').replaceChildren(...data.suggestions.map(text => {
             const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-secondary';
             button.textContent = text; button.onclick = () => { $('sourceQuery').value = text; $('sourceSearch').click(); };
@@ -65,6 +67,7 @@ export function createTemplateSource($, useCopy, edit) {
     });
     return {bind(template) {
         name = template; epoch++; inspection = null;
+        $('sourceFields').hidden = true;
         $('sourceBlocks').replaceChildren(); $('sourceMatches').replaceChildren(); $('sourceSuggestions').replaceChildren();
         $('sourceContext').textContent = ''; $('sourceQuery').value = ''; $('sourceLabel').value = ''; controls();
     }};

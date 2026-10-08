@@ -9,7 +9,7 @@
 | Подсистема | Модулей |
 |---|---|
 | [cli](#area-cli) | 16 |
-| [convert](#area-convert) | 53 |
+| [convert](#area-convert) | 58 |
 | [core](#area-core) | 34 |
 | [extract](#area-extract) | 5 |
 | [fonts](#area-fonts) | 5 |
@@ -22,7 +22,7 @@
 | [quality](#area-quality) | 2 |
 | [recognize](#area-recognize) | 4 |
 | [templating](#area-templating) | 5 |
-| [web](#area-web) | 72 |
+| [web](#area-web) | 74 |
 
 <a id="area-cli"></a>
 ## cli
@@ -83,7 +83,7 @@ Universal single-file conversion command.
 
 Символы (строка): [cmd_convert_file (10)](../../src/textalchemy/cli/convert_file_cmd.py#L10).
 
-Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.core.conversion_graph](#textalchemy-core-conversion_graph), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.emphasis_quality](#textalchemy-core-emphasis_quality), [textalchemy.core.formula_quality_policy](#textalchemy-core-formula_quality_policy), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.quality_policy](#textalchemy-core-quality_policy), [textalchemy.core.text_quality_policy](#textalchemy-core-text_quality_policy), [textalchemy.core.types](#textalchemy-core-types).
+Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.convert.heading_budget](#textalchemy-convert-heading_budget), [textalchemy.core.conversion_graph](#textalchemy-core-conversion_graph), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.emphasis_quality](#textalchemy-core-emphasis_quality), [textalchemy.core.formula_quality_policy](#textalchemy-core-formula_quality_policy), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.quality_policy](#textalchemy-core-quality_policy), [textalchemy.core.text_quality_policy](#textalchemy-core-text_quality_policy), [textalchemy.core.types](#textalchemy-core-types).
 
 <a id="textalchemy-cli-extract_cmd"></a>
 ### textalchemy.cli.extract_cmd
@@ -194,7 +194,7 @@ CLI-проверка DOCX-шаблона без генерации резуль�
 
 Импорты: [textalchemy.convert.backends](#textalchemy-convert-backends), [textalchemy.convert.base](#textalchemy-convert-base), [textalchemy.convert.capabilities](#textalchemy-convert-capabilities), [textalchemy.convert.docx_to_latex](#textalchemy-convert-docx_to_latex), [textalchemy.convert.docx_writer](#textalchemy-convert-docx_writer), [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.convert.html_writer](#textalchemy-convert-html_writer), [textalchemy.convert.pdf_to_docx](#textalchemy-convert-pdf_to_docx), [textalchemy.convert.pdf_writer](#textalchemy-convert-pdf_writer), [textalchemy.convert.pptx_to_html](#textalchemy-convert-pptx_to_html), [textalchemy.convert.pptx_writer](#textalchemy-convert-pptx_writer), [textalchemy.convert.protocols](#textalchemy-convert-protocols), [textalchemy.convert.txt_writer](#textalchemy-convert-txt_writer).
 
-Прямые импорты в тестах: [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pdf_to_docx.py](../../tests/convert/test_pdf_to_docx.py), [tests/convert/test_protocols.py](../../tests/convert/test_protocols.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_web_architecture.py](../../tests/test_web_architecture.py).
+Прямые импорты в тестах: [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pdf_to_docx.py](../../tests/convert/test_pdf_to_docx.py), [tests/convert/test_pdf_verification.py](../../tests/convert/test_pdf_verification.py), [tests/convert/test_protocols.py](../../tests/convert/test_protocols.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_web_architecture.py](../../tests/test_web_architecture.py).
 
 <a id="textalchemy-convert-backends"></a>
 ### textalchemy.convert.backends
@@ -225,7 +225,7 @@ Compatibility alias; implementation belongs to OpenDoc Formats.
 
 Built-in conversion capabilities without importing heavy converter backends.
 
-Символы (строка): [built_in_capabilities (34)](../../src/textalchemy/convert/capabilities.py#L34), [create_capability_registry (292)](../../src/textalchemy/convert/capabilities.py#L292).
+Символы (строка): [built_in_capabilities (34)](../../src/textalchemy/convert/capabilities.py#L34), [create_capability_registry (307)](../../src/textalchemy/convert/capabilities.py#L307).
 
 Импорты: [textalchemy.core.conversion_graph](#textalchemy-core-conversion_graph), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.types](#textalchemy-core-types).
 
@@ -352,11 +352,11 @@ Compatibility alias; implementation belongs to OpenDoc Formats.
 
 Execution of capability-planned conversions.
 
-Символы (строка): [ConversionRequest (45)](../../src/textalchemy/convert/executor.py#L45), [ConversionExecutor (60)](../../src/textalchemy/convert/executor.py#L60), [requirement_available (189)](../../src/textalchemy/convert/executor.py#L189), [infer_format (199)](../../src/textalchemy/convert/executor.py#L199).
+Символы (строка): [ConversionRequest (41)](../../src/textalchemy/convert/executor.py#L41), [ConversionExecutor (64)](../../src/textalchemy/convert/executor.py#L64).
 
-Импорты: [textalchemy.convert.backends](#textalchemy-convert-backends), [textalchemy.convert.capabilities](#textalchemy-convert-capabilities), [textalchemy.convert.docx_to_latex](#textalchemy-convert-docx_to_latex), [textalchemy.convert.docx_writer](#textalchemy-convert-docx_writer), [textalchemy.convert.html_writer](#textalchemy-convert-html_writer), [textalchemy.convert.pdf_to_docx](#textalchemy-convert-pdf_to_docx), [textalchemy.convert.pdf_writer](#textalchemy-convert-pdf_writer), [textalchemy.convert.pptx_to_html](#textalchemy-convert-pptx_to_html), [textalchemy.convert.pptx_writer](#textalchemy-convert-pptx_writer), [textalchemy.convert.protocols](#textalchemy-convert-protocols), [textalchemy.convert.publication](#textalchemy-convert-publication), [textalchemy.convert.stages](#textalchemy-convert-stages), [textalchemy.convert.txt_writer](#textalchemy-convert-txt_writer), [textalchemy.core.conversion_graph](#textalchemy-core-conversion_graph), [textalchemy.core.diagnostics](#textalchemy-core-diagnostics), [textalchemy.core.document_codec](#textalchemy-core-document_codec), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.emphasis_quality](#textalchemy-core-emphasis_quality), [textalchemy.core.formula_quality_policy](#textalchemy-core-formula_quality_policy), [textalchemy.core.io](#textalchemy-core-io), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.quality_policy](#textalchemy-core-quality_policy), [textalchemy.core.text_quality_policy](#textalchemy-core-text_quality_policy), [textalchemy.core.types](#textalchemy-core-types), [textalchemy.formats.docx](#textalchemy-formats-docx), [textalchemy.formats.epub](#textalchemy-formats-epub), [textalchemy.formats.html](#textalchemy-formats-html), [textalchemy.formats.pptx](#textalchemy-formats-pptx), [textalchemy.formats.txt](#textalchemy-formats-txt).
+Импорты: [textalchemy.convert.backends](#textalchemy-convert-backends), [textalchemy.convert.capabilities](#textalchemy-convert-capabilities), [textalchemy.convert.docx_to_latex](#textalchemy-convert-docx_to_latex), [textalchemy.convert.docx_writer](#textalchemy-convert-docx_writer), [textalchemy.convert.heading_budget](#textalchemy-convert-heading_budget), [textalchemy.convert.html_writer](#textalchemy-convert-html_writer), [textalchemy.convert.library_import](#textalchemy-convert-library_import), [textalchemy.convert.pdf_to_docx](#textalchemy-convert-pdf_to_docx), [textalchemy.convert.pdf_writer](#textalchemy-convert-pdf_writer), [textalchemy.convert.pptx_to_html](#textalchemy-convert-pptx_to_html), [textalchemy.convert.pptx_writer](#textalchemy-convert-pptx_writer), [textalchemy.convert.protocols](#textalchemy-convert-protocols), [textalchemy.convert.publication](#textalchemy-convert-publication), [textalchemy.convert.runtime_policy](#textalchemy-convert-runtime_policy), [textalchemy.convert.stages](#textalchemy-convert-stages), [textalchemy.convert.txt_writer](#textalchemy-convert-txt_writer), [textalchemy.core.conversion_graph](#textalchemy-core-conversion_graph), [textalchemy.core.diagnostics](#textalchemy-core-diagnostics), [textalchemy.core.document_codec](#textalchemy-core-document_codec), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.emphasis_quality](#textalchemy-core-emphasis_quality), [textalchemy.core.formula_quality_policy](#textalchemy-core-formula_quality_policy), [textalchemy.core.io](#textalchemy-core-io), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.quality_policy](#textalchemy-core-quality_policy), [textalchemy.core.text_quality_policy](#textalchemy-core-text_quality_policy), [textalchemy.core.types](#textalchemy-core-types), [textalchemy.formats.html](#textalchemy-formats-html).
 
-Прямые импорты в тестах: [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_diagnostics.py](../../tests/test_formats/test_html_diagnostics.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py).
+Прямые импорты в тестах: [tests/convert/test_color_budget.py](../../tests/convert/test_color_budget.py), [tests/convert/test_djvu_integration.py](../../tests/convert/test_djvu_integration.py), [tests/convert/test_djvu_real.py](../../tests/convert/test_djvu_real.py), [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_heading_budget.py](../../tests/convert/test_heading_budget.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pdf_verification.py](../../tests/convert/test_pdf_verification.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_docx_layout_acceptance.py](../../tests/test_docx_layout_acceptance.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_diagnostics.py](../../tests/test_formats/test_html_diagnostics.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_formats_release_integration.py](../../tests/test_formats_release_integration.py), [tests/test_pdf_scan_acceptance.py](../../tests/test_pdf_scan_acceptance.py), [tests/test_pptx_visual_acceptance.py](../../tests/test_pptx_visual_acceptance.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py), [tests/test_web_pdf_interactions.py](../../tests/test_web_pdf_interactions.py), [tests/test_web_pdf_vectors.py](../../tests/test_web_pdf_vectors.py), [tests/test_web_workbook_policy.py](../../tests/test_web_workbook_policy.py).
 
 <a id="textalchemy-convert-font_preflight"></a>
 ### textalchemy.convert.font_preflight
@@ -366,6 +366,17 @@ Execution of capability-planned conversions.
 Compatibility alias; implementation belongs to OpenDoc Formats.
 
 Символы (строка): нет публичных определений верхнего уровня.
+
+<a id="textalchemy-convert-heading_budget"></a>
+### textalchemy.convert.heading_budget
+
+[src/textalchemy/convert/heading_budget.py](../../src/textalchemy/convert/heading_budget.py)
+
+Application publication limit over public heading-comparison measurements.
+
+Символы (строка): [HeadingBudget (10)](../../src/textalchemy/convert/heading_budget.py#L10).
+
+Прямые импорты в тестах: [tests/convert/test_heading_budget.py](../../tests/convert/test_heading_budget.py).
 
 <a id="textalchemy-convert-html_layout"></a>
 ### textalchemy.convert.html_layout
@@ -427,6 +438,28 @@ Compatibility alias; implementation belongs to OpenDoc Formats.
 
 Прямые импорты в тестах: [tests/convert/test_html_layout_e2e.py](../../tests/convert/test_html_layout_e2e.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_normalize_e2e.py](../../tests/convert/test_html_normalize_e2e.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py).
 
+<a id="textalchemy-convert-input_policy"></a>
+### textalchemy.convert.input_policy
+
+[src/textalchemy/convert/input_policy.py](../../src/textalchemy/convert/input_policy.py)
+
+Объяснения входных форматов вне документных маршрутов приложения.
+
+Символы (строка): нет публичных определений верхнего уровня.
+
+Прямые импорты в тестах: [tests/test_web_workbook_policy.py](../../tests/test_web_workbook_policy.py).
+
+<a id="textalchemy-convert-library_import"></a>
+### textalchemy.convert.library_import
+
+[src/textalchemy/convert/library_import.py](../../src/textalchemy/convert/library_import.py)
+
+Translate public adapter diagnostics into the application's route report.
+
+Символы (строка): [import_document (13)](../../src/textalchemy/convert/library_import.py#L13), [inspect_source (42)](../../src/textalchemy/convert/library_import.py#L42).
+
+Импорты: [textalchemy.core.diagnostics](#textalchemy-core-diagnostics), [textalchemy.core.inspection](#textalchemy-core-inspection).
+
 <a id="textalchemy-convert-mathml_to_omml"></a>
 ### textalchemy.convert.mathml_to_omml
 
@@ -443,9 +476,9 @@ Compatibility alias; implementation belongs to OpenDoc Formats.
 
 Inspect the serialized result before publishing an object-budgeted conversion.
 
-Символы (строка): [check_object_quality (13)](../../src/textalchemy/convert/object_quality.py#L13).
+Символы (строка): [check_object_quality (14)](../../src/textalchemy/convert/object_quality.py#L14).
 
-Импорты: [textalchemy.core.diagnostics](#textalchemy-core-diagnostics), [textalchemy.core.emphasis_quality](#textalchemy-core-emphasis_quality), [textalchemy.core.formula_quality_policy](#textalchemy-core-formula_quality_policy), [textalchemy.core.inspection](#textalchemy-core-inspection), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.text_quality_policy](#textalchemy-core-text_quality_policy).
+Импорты: [textalchemy.convert.heading_budget](#textalchemy-convert-heading_budget), [textalchemy.convert.library_import](#textalchemy-convert-library_import), [textalchemy.core.diagnostics](#textalchemy-core-diagnostics), [textalchemy.core.emphasis_quality](#textalchemy-core-emphasis_quality), [textalchemy.core.formula_quality_policy](#textalchemy-core-formula_quality_policy), [textalchemy.core.inspection](#textalchemy-core-inspection), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.text_quality_policy](#textalchemy-core-text_quality_policy).
 
 Прямые импорты в тестах: [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py).
 
@@ -690,9 +723,20 @@ Compatibility alias; implementation belongs to OpenDoc Formats.
 
 Atomic publication of conversions after independent quality checks.
 
-Символы (строка): [execute_with_quality (17)](../../src/textalchemy/convert/publication.py#L17).
+Символы (строка): [execute_with_quality (18)](../../src/textalchemy/convert/publication.py#L18).
 
-Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.convert.object_quality](#textalchemy-convert-object_quality), [textalchemy.core.diagnostics](#textalchemy-core-diagnostics).
+Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.convert.object_quality](#textalchemy-convert-object_quality), [textalchemy.convert.verification](#textalchemy-convert-verification), [textalchemy.core.diagnostics](#textalchemy-core-diagnostics), [textalchemy.core.types](#textalchemy-core-types).
+
+<a id="textalchemy-convert-runtime_policy"></a>
+### textalchemy.convert.runtime_policy
+
+[src/textalchemy/convert/runtime_policy.py](../../src/textalchemy/convert/runtime_policy.py)
+
+Application input suffix policy and optional route availability.
+
+Символы (строка): [requirement_available (16)](../../src/textalchemy/convert/runtime_policy.py#L16), [infer_format (30)](../../src/textalchemy/convert/runtime_policy.py#L30).
+
+Импорты: [textalchemy.convert.input_policy](#textalchemy-convert-input_policy), [textalchemy.core.types](#textalchemy-core-types).
 
 <a id="textalchemy-convert-stages"></a>
 ### textalchemy.convert.stages
@@ -713,6 +757,19 @@ Compatibility alias; implementation belongs to OpenDoc Formats.
 Compatibility alias; implementation belongs to OpenDoc Formats.
 
 Символы (строка): нет публичных определений верхнего уровня.
+
+<a id="textalchemy-convert-verification"></a>
+### textalchemy.convert.verification
+
+[src/textalchemy/convert/verification.py](../../src/textalchemy/convert/verification.py)
+
+Прикладная стадия проверки PDF через публичный API форматной библиотеки.
+
+Символы (строка): [verify_pdf_output (15)](../../src/textalchemy/convert/verification.py#L15).
+
+Импорты: [textalchemy.core.diagnostics](#textalchemy-core-diagnostics).
+
+Прямые импорты в тестах: [tests/convert/test_pdf_verification.py](../../tests/convert/test_pdf_verification.py).
 
 
 <a id="area-core"></a>
@@ -747,7 +804,7 @@ Compatibility alias; implementation belongs to OpenDoc Formats.
 
 [src/textalchemy/core/color.py](../../src/textalchemy/core/color.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
@@ -773,7 +830,7 @@ Capability model and route planner for document conversions.
 
 Импорты: [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.types](#textalchemy-core-types).
 
-Прямые импорты в тестах: [tests/convert/test_capabilities.py](../../tests/convert/test_capabilities.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py).
+Прямые импорты в тестах: [tests/convert/test_capabilities.py](../../tests/convert/test_capabilities.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_pdf_verification.py](../../tests/convert/test_pdf_verification.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py).
 
 <a id="textalchemy-core-database"></a>
 ### textalchemy.core.database
@@ -791,11 +848,11 @@ Capability model and route planner for document conversions.
 
 [src/textalchemy/core/diagnostics.py](../../src/textalchemy/core/diagnostics.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
-Прямые импорты в тестах: [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_protocols.py](../../tests/convert/test_protocols.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_core/test_font_embedding.py](../../tests/test_core/test_font_embedding.py), [tests/test_core/test_font_resolver.py](../../tests/test_core/test_font_resolver.py), [tests/test_core/test_nested_object_inspection.py](../../tests/test_core/test_nested_object_inspection.py), [tests/test_web.py](../../tests/test_web.py).
+Прямые импорты в тестах: [tests/convert/test_djvu_integration.py](../../tests/convert/test_djvu_integration.py), [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_heading_budget.py](../../tests/convert/test_heading_budget.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pdf_verification.py](../../tests/convert/test_pdf_verification.py), [tests/convert/test_protocols.py](../../tests/convert/test_protocols.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_core/test_font_embedding.py](../../tests/test_core/test_font_embedding.py), [tests/test_core/test_font_resolver.py](../../tests/test_core/test_font_resolver.py), [tests/test_core/test_nested_object_inspection.py](../../tests/test_core/test_nested_object_inspection.py), [tests/test_web.py](../../tests/test_web.py).
 
 <a id="textalchemy-core-doc_types"></a>
 ### textalchemy.core.doc_types
@@ -822,24 +879,24 @@ Compatibility alias; implementation belongs to OpenDoc Formats.
 
 [src/textalchemy/core/document_codec.py](../../src/textalchemy/core/document_codec.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): [document_to_dict (22)](../../src/textalchemy/core/document_codec.py#L22), [document_from_dict (27)](../../src/textalchemy/core/document_codec.py#L27), [document_to_json (43)](../../src/textalchemy/core/document_codec.py#L43), [document_from_json (47)](../../src/textalchemy/core/document_codec.py#L47), [save_document (51)](../../src/textalchemy/core/document_codec.py#L51), [load_document (57)](../../src/textalchemy/core/document_codec.py#L57).
 
 Импорты: [textalchemy.core.io](#textalchemy-core-io), [textalchemy.core.legacy_document](#textalchemy-core-legacy_document).
 
-Прямые импорты в тестах: [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_cli.py](../../tests/test_cli.py), [tests/test_core/test_document_codec.py](../../tests/test_core/test_document_codec.py), [tests/test_document_library_integration.py](../../tests/test_document_library_integration.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_diagnostics.py](../../tests/test_formats/test_html_diagnostics.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_web_ocr_edit.py](../../tests/test_web_ocr_edit.py), [tests/test_web_pdf_diagnostics.py](../../tests/test_web_pdf_diagnostics.py).
+Прямые импорты в тестах: [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_cli.py](../../tests/test_cli.py), [tests/test_core/test_document_codec.py](../../tests/test_core/test_document_codec.py), [tests/test_document_library_integration.py](../../tests/test_document_library_integration.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_diagnostics.py](../../tests/test_formats/test_html_diagnostics.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_recognize/test_web_easyocr_acceptance.py](../../tests/test_recognize/test_web_easyocr_acceptance.py), [tests/test_web_epub_native.py](../../tests/test_web_epub_native.py), [tests/test_web_epub_structures.py](../../tests/test_web_epub_structures.py), [tests/test_web_html_accessibility.py](../../tests/test_web_html_accessibility.py), [tests/test_web_html_ledger.py](../../tests/test_web_html_ledger.py), [tests/test_web_ocr_edit.py](../../tests/test_web_ocr_edit.py), [tests/test_web_pdf_diagnostics.py](../../tests/test_web_pdf_diagnostics.py), [tests/test_web_pdf_interactions.py](../../tests/test_web_pdf_interactions.py), [tests/test_web_pdf_vectors.py](../../tests/test_web_pdf_vectors.py), [tests/test_web_vector_fallback.py](../../tests/test_web_vector_fallback.py).
 
 <a id="textalchemy-core-document_model"></a>
 ### textalchemy.core.document_model
 
 [src/textalchemy/core/document_model.py](../../src/textalchemy/core/document_model.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
-Прямые импорты в тестах: [tests/convert/test_capabilities.py](../../tests/convert/test_capabilities.py), [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_protocols.py](../../tests/convert/test_protocols.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/quality/test_document_corpus.py](../../tests/quality/test_document_corpus.py), [tests/quality/test_multiformat_corpus.py](../../tests/quality/test_multiformat_corpus.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_cli.py](../../tests/test_cli.py), [tests/test_core/test_document_codec.py](../../tests/test_core/test_document_codec.py), [tests/test_core/test_document_model.py](../../tests/test_core/test_document_model.py), [tests/test_core/test_font_embedding.py](../../tests/test_core/test_font_embedding.py), [tests/test_core/test_font_resolver.py](../../tests/test_core/test_font_resolver.py), [tests/test_core/test_inspection.py](../../tests/test_core/test_inspection.py), [tests/test_core/test_nested_object_inspection.py](../../tests/test_core/test_nested_object_inspection.py), [tests/test_core/test_object_matching.py](../../tests/test_core/test_object_matching.py), [tests/test_document_library_integration.py](../../tests/test_document_library_integration.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_formats/test_pptx_model.py](../../tests/test_formats/test_pptx_model.py), [tests/test_generate/test_model_template.py](../../tests/test_generate/test_model_template.py), [tests/test_generate/test_template_schema.py](../../tests/test_generate/test_template_schema.py), [tests/test_pipeline/test_document_model_pipeline.py](../../tests/test_pipeline/test_document_model_pipeline.py), [tests/test_pipeline/test_pptx_model.py](../../tests/test_pipeline/test_pptx_model.py), [tests/test_pipeline/test_template.py](../../tests/test_pipeline/test_template.py), [tests/test_web.py](../../tests/test_web.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py), [tests/test_web_pdf_diagnostics.py](../../tests/test_web_pdf_diagnostics.py).
+Прямые импорты в тестах: [tests/convert/test_capabilities.py](../../tests/convert/test_capabilities.py), [tests/convert/test_djvu_integration.py](../../tests/convert/test_djvu_integration.py), [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pdf_verification.py](../../tests/convert/test_pdf_verification.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_protocols.py](../../tests/convert/test_protocols.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/quality/test_document_corpus.py](../../tests/quality/test_document_corpus.py), [tests/quality/test_multiformat_corpus.py](../../tests/quality/test_multiformat_corpus.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_cli.py](../../tests/test_cli.py), [tests/test_core/test_document_codec.py](../../tests/test_core/test_document_codec.py), [tests/test_core/test_document_model.py](../../tests/test_core/test_document_model.py), [tests/test_core/test_font_embedding.py](../../tests/test_core/test_font_embedding.py), [tests/test_core/test_font_resolver.py](../../tests/test_core/test_font_resolver.py), [tests/test_core/test_inspection.py](../../tests/test_core/test_inspection.py), [tests/test_core/test_nested_object_inspection.py](../../tests/test_core/test_nested_object_inspection.py), [tests/test_core/test_object_matching.py](../../tests/test_core/test_object_matching.py), [tests/test_document_library_integration.py](../../tests/test_document_library_integration.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_formats/test_pptx_model.py](../../tests/test_formats/test_pptx_model.py), [tests/test_generate/test_model_template.py](../../tests/test_generate/test_model_template.py), [tests/test_generate/test_template_schema.py](../../tests/test_generate/test_template_schema.py), [tests/test_pipeline/test_document_model_pipeline.py](../../tests/test_pipeline/test_document_model_pipeline.py), [tests/test_pipeline/test_pptx_model.py](../../tests/test_pipeline/test_pptx_model.py), [tests/test_pipeline/test_template.py](../../tests/test_pipeline/test_template.py), [tests/test_web.py](../../tests/test_web.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py), [tests/test_web_epub_structures.py](../../tests/test_web_epub_structures.py), [tests/test_web_pdf_diagnostics.py](../../tests/test_web_pdf_diagnostics.py), [tests/test_web_vector_fallback.py](../../tests/test_web_vector_fallback.py).
 
 <a id="textalchemy-core-emphasis_quality"></a>
 ### textalchemy.core.emphasis_quality
@@ -879,7 +936,7 @@ Legacy-алиасы. Реализация в ``core.io`` и ``core.hashing``.
 
 [src/textalchemy/core/formula_quality_policy.py](../../src/textalchemy/core/formula_quality_policy.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
@@ -909,7 +966,7 @@ File inspection facade; legacy application JSON remains application-owned.
 
 Импорты: [textalchemy.core.document_codec](#textalchemy-core-document_codec).
 
-Прямые импорты в тестах: [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/quality/test_document_corpus.py](../../tests/quality/test_document_corpus.py), [tests/test_core/test_inspection.py](../../tests/test_core/test_inspection.py), [tests/test_core/test_nested_object_inspection.py](../../tests/test_core/test_nested_object_inspection.py), [tests/test_core/test_object_matching.py](../../tests/test_core/test_object_matching.py), [tests/test_document_library_integration.py](../../tests/test_document_library_integration.py), [tests/test_web.py](../../tests/test_web.py).
+Прямые импорты в тестах: [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_heading_budget.py](../../tests/convert/test_heading_budget.py), [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/quality/test_document_corpus.py](../../tests/quality/test_document_corpus.py), [tests/test_core/test_inspection.py](../../tests/test_core/test_inspection.py), [tests/test_core/test_nested_object_inspection.py](../../tests/test_core/test_nested_object_inspection.py), [tests/test_core/test_object_matching.py](../../tests/test_core/test_object_matching.py), [tests/test_document_library_integration.py](../../tests/test_document_library_integration.py), [tests/test_web.py](../../tests/test_web.py).
 
 <a id="textalchemy-core-io"></a>
 ### textalchemy.core.io
@@ -956,7 +1013,7 @@ Recognise historical application resource labels and delegate native assembly.
 
 [src/textalchemy/core/mathml.py](../../src/textalchemy/core/mathml.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
@@ -965,7 +1022,7 @@ Compatibility imports; document implementation lives in opendoc.
 
 [src/textalchemy/core/object_inventory.py](../../src/textalchemy/core/object_inventory.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
@@ -974,7 +1031,7 @@ Compatibility imports; document implementation lives in opendoc.
 
 [src/textalchemy/core/object_matching.py](../../src/textalchemy/core/object_matching.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
@@ -983,7 +1040,7 @@ Compatibility imports; document implementation lives in opendoc.
 
 [src/textalchemy/core/object_quality_policy.py](../../src/textalchemy/core/object_quality_policy.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
@@ -1005,7 +1062,7 @@ Compatibility imports; document implementation lives in opendoc.
 
 [src/textalchemy/core/properties.py](../../src/textalchemy/core/properties.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
@@ -1014,11 +1071,11 @@ Compatibility imports; document implementation lives in opendoc.
 
 [src/textalchemy/core/quality_policy.py](../../src/textalchemy/core/quality_policy.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
-Прямые импорты в тестах: [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py).
+Прямые импорты в тестах: [tests/convert/test_color_budget.py](../../tests/convert/test_color_budget.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/test_docx_layout_acceptance.py](../../tests/test_docx_layout_acceptance.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_formats_release_integration.py](../../tests/test_formats_release_integration.py), [tests/test_pdf_scan_acceptance.py](../../tests/test_pdf_scan_acceptance.py), [tests/test_pptx_visual_acceptance.py](../../tests/test_pptx_visual_acceptance.py), [tests/test_web_pdf_interactions.py](../../tests/test_web_pdf_interactions.py).
 
 <a id="textalchemy-core-registry"></a>
 ### textalchemy.core.registry
@@ -1058,11 +1115,11 @@ Compatibility alias: limits and implementation have one owner.
 
 [src/textalchemy/core/text_quality_policy.py](../../src/textalchemy/core/text_quality_policy.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
-Прямые импорты в тестах: [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py).
+Прямые импорты в тестах: [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/test_formats_release_integration.py](../../tests/test_formats_release_integration.py).
 
 <a id="textalchemy-core-types"></a>
 ### textalchemy.core.types
@@ -1075,14 +1132,14 @@ Compatibility imports; document implementation lives in opendoc.
 
 Импорты: [textalchemy.core.io](#textalchemy-core-io).
 
-Прямые импорты в тестах: [tests/convert/test_capabilities.py](../../tests/convert/test_capabilities.py), [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_core/test_document_codec.py](../../tests/test_core/test_document_codec.py), [tests/test_core/test_types.py](../../tests/test_core/test_types.py), [tests/test_formats/test_epub.py](../../tests/test_formats/test_epub.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_diagnostics.py](../../tests/test_formats/test_html_diagnostics.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_formats/test_pdf.py](../../tests/test_formats/test_pdf.py), [tests/test_formats/test_txt.py](../../tests/test_formats/test_txt.py), [tests/test_organize/test_matching.py](../../tests/test_organize/test_matching.py), [tests/test_pipeline/test_document_model_pipeline.py](../../tests/test_pipeline/test_document_model_pipeline.py), [tests/test_pipeline/test_emails.py](../../tests/test_pipeline/test_emails.py), [tests/test_pipeline/test_match_files.py](../../tests/test_pipeline/test_match_files.py), [tests/test_pipeline/test_name.py](../../tests/test_pipeline/test_name.py), [tests/test_pipeline/test_pipeline.py](../../tests/test_pipeline/test_pipeline.py), [tests/test_pipeline/test_pptx_model.py](../../tests/test_pipeline/test_pptx_model.py), [tests/test_pipeline/test_render.py](../../tests/test_pipeline/test_render.py), [tests/test_pipeline/test_render_html.py](../../tests/test_pipeline/test_render_html.py), [tests/test_pipeline/test_signals.py](../../tests/test_pipeline/test_signals.py), [tests/test_web.py](../../tests/test_web.py), [tests/test_web_bibliography.py](../../tests/test_web_bibliography.py), [tests/test_web_bibliography_e2e.py](../../tests/test_web_bibliography_e2e.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py), [tests/test_web_matching.py](../../tests/test_web_matching.py).
+Прямые импорты в тестах: [tests/convert/test_capabilities.py](../../tests/convert/test_capabilities.py), [tests/convert/test_color_budget.py](../../tests/convert/test_color_budget.py), [tests/convert/test_djvu_integration.py](../../tests/convert/test_djvu_integration.py), [tests/convert/test_djvu_real.py](../../tests/convert/test_djvu_real.py), [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_executor.py](../../tests/convert/test_executor.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_heading_budget.py](../../tests/convert/test_heading_budget.py), [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pdf_resources.py](../../tests/convert/test_pdf_resources.py), [tests/convert/test_pdf_verification.py](../../tests/convert/test_pdf_verification.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_quality_policy.py](../../tests/convert/test_quality_policy.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_core/test_document_codec.py](../../tests/test_core/test_document_codec.py), [tests/test_core/test_types.py](../../tests/test_core/test_types.py), [tests/test_docx_layout_acceptance.py](../../tests/test_docx_layout_acceptance.py), [tests/test_formats/test_epub.py](../../tests/test_formats/test_epub.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_diagnostics.py](../../tests/test_formats/test_html_diagnostics.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_formats/test_pdf.py](../../tests/test_formats/test_pdf.py), [tests/test_formats/test_txt.py](../../tests/test_formats/test_txt.py), [tests/test_formats_release_integration.py](../../tests/test_formats_release_integration.py), [tests/test_organize/test_matching.py](../../tests/test_organize/test_matching.py), [tests/test_pdf_scan_acceptance.py](../../tests/test_pdf_scan_acceptance.py), [tests/test_pipeline/test_document_model_pipeline.py](../../tests/test_pipeline/test_document_model_pipeline.py), [tests/test_pipeline/test_emails.py](../../tests/test_pipeline/test_emails.py), [tests/test_pipeline/test_match_files.py](../../tests/test_pipeline/test_match_files.py), [tests/test_pipeline/test_name.py](../../tests/test_pipeline/test_name.py), [tests/test_pipeline/test_pipeline.py](../../tests/test_pipeline/test_pipeline.py), [tests/test_pipeline/test_pptx_model.py](../../tests/test_pipeline/test_pptx_model.py), [tests/test_pipeline/test_render.py](../../tests/test_pipeline/test_render.py), [tests/test_pipeline/test_render_html.py](../../tests/test_pipeline/test_render_html.py), [tests/test_pipeline/test_signals.py](../../tests/test_pipeline/test_signals.py), [tests/test_pptx_visual_acceptance.py](../../tests/test_pptx_visual_acceptance.py), [tests/test_web.py](../../tests/test_web.py), [tests/test_web_bibliography.py](../../tests/test_web_bibliography.py), [tests/test_web_bibliography_e2e.py](../../tests/test_web_bibliography_e2e.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py), [tests/test_web_matching.py](../../tests/test_web_matching.py), [tests/test_web_pdf_interactions.py](../../tests/test_web_pdf_interactions.py), [tests/test_web_pdf_vectors.py](../../tests/test_web_pdf_vectors.py).
 
 <a id="textalchemy-core-units"></a>
 ### textalchemy.core.units
 
 [src/textalchemy/core/units.py](../../src/textalchemy/core/units.py)
 
-Compatibility imports; document implementation lives in opendoc.
+Compatibility imports; document implementation lives in opendoc_model.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
@@ -1320,7 +1377,7 @@ Compatibility alias; implementation belongs to OpenDoc Formats.
 
 Символы (строка): нет публичных определений верхнего уровня.
 
-Прямые импорты в тестах: [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/test_formats/test_html_diagnostics.py](../../tests/test_formats/test_html_diagnostics.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py).
+Прямые импорты в тестах: [tests/convert/test_html_normalize.py](../../tests/convert/test_html_normalize.py), [tests/convert/test_html_verify.py](../../tests/convert/test_html_verify.py), [tests/test_formats/test_html_diagnostics.py](../../tests/test_formats/test_html_diagnostics.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_web_html_accessibility.py](../../tests/test_web_html_accessibility.py).
 
 <a id="textalchemy-formats-html_css"></a>
 ### textalchemy.formats.html_css
@@ -1716,11 +1773,11 @@ Legacy-алиасы для organize.utils. Реализация в ``core.io``.
 
 [src/textalchemy/__main__.py](../../src/textalchemy/__main__.py)
 
-Символы (строка): [main (229)](../../src/textalchemy/__main__.py#L229).
+Символы (строка): [main (234)](../../src/textalchemy/__main__.py#L234).
 
 Импорты: [textalchemy](#textalchemy), [textalchemy.cli](#textalchemy-cli), [textalchemy.core.logging](#textalchemy-core-logging).
 
-Прямые импорты в тестах: [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_cli.py](../../tests/test_cli.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_template_cli.py](../../tests/test_template_cli.py).
+Прямые импорты в тестах: [tests/convert/test_color_budget.py](../../tests/convert/test_color_budget.py), [tests/convert/test_emphasis_quality.py](../../tests/convert/test_emphasis_quality.py), [tests/convert/test_formula_quality.py](../../tests/convert/test_formula_quality.py), [tests/convert/test_heading_budget.py](../../tests/convert/test_heading_budget.py), [tests/convert/test_object_quality.py](../../tests/convert/test_object_quality.py), [tests/convert/test_pptx_writer.py](../../tests/convert/test_pptx_writer.py), [tests/convert/test_text_edit_budget.py](../../tests/convert/test_text_edit_budget.py), [tests/convert/test_text_flow.py](../../tests/convert/test_text_flow.py), [tests/convert/test_text_quality.py](../../tests/convert/test_text_quality.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_cli.py](../../tests/test_cli.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_formats_release_integration.py](../../tests/test_formats_release_integration.py), [tests/test_recognize/test_easyocr_acceptance.py](../../tests/test_recognize/test_easyocr_acceptance.py), [tests/test_template_cli.py](../../tests/test_template_cli.py), [tests/test_web_pdf_interactions.py](../../tests/test_web_pdf_interactions.py).
 
 
 <a id="area-pipeline"></a>
@@ -1932,7 +1989,7 @@ Cross-platform perceptual comparison for rendered document pages.
 
 Импорты: [textalchemy.recognize.classifier](#textalchemy-recognize-classifier), [textalchemy.recognize.layout](#textalchemy-recognize-layout), [textalchemy.recognize.ocr](#textalchemy-recognize-ocr).
 
-Прямые импорты в тестах: [tests/test_recognize/test_classifier.py](../../tests/test_recognize/test_classifier.py), [tests/test_recognize/test_layout.py](../../tests/test_recognize/test_layout.py), [tests/test_recognize/test_ocr.py](../../tests/test_recognize/test_ocr.py).
+Прямые импорты в тестах: [tests/test_easyocr_e2e.py](../../tests/test_easyocr_e2e.py), [tests/test_recognize/test_classifier.py](../../tests/test_recognize/test_classifier.py), [tests/test_recognize/test_easyocr_acceptance.py](../../tests/test_recognize/test_easyocr_acceptance.py), [tests/test_recognize/test_layout.py](../../tests/test_recognize/test_layout.py), [tests/test_recognize/test_ocr.py](../../tests/test_recognize/test_ocr.py), [tests/test_recognize/test_web_easyocr_acceptance.py](../../tests/test_recognize/test_web_easyocr_acceptance.py).
 
 <a id="textalchemy-recognize-classifier"></a>
 ### textalchemy.recognize.classifier
@@ -1963,7 +2020,7 @@ Cross-platform perceptual comparison for rendered document pages.
 
 OCR subsystem — Tesseract / EasyOCR / PaddleOCR backends.
 
-Символы (строка): [OcrResult (26)](../../src/textalchemy/recognize/ocr.py#L26), [OcrEngine (33)](../../src/textalchemy/recognize/ocr.py#L33).
+Символы (строка): [OcrResult (29)](../../src/textalchemy/recognize/ocr.py#L29), [OcrEngine (36)](../../src/textalchemy/recognize/ocr.py#L36).
 
 Импорты: [textalchemy.core.artifacts](#textalchemy-core-artifacts), [textalchemy.core.exceptions](#textalchemy-core-exceptions), [textalchemy.core.io](#textalchemy-core-io), [textalchemy.formats.pdf_ocr_types](#textalchemy-formats-pdf_ocr_types).
 
@@ -2052,7 +2109,7 @@ Values accepted and returned by the document template engine.
 
 Импорты: [textalchemy](#textalchemy), [textalchemy.core.database](#textalchemy-core-database), [textalchemy.core.inspection](#textalchemy-core-inspection), [textalchemy.core.io](#textalchemy-core-io), [textalchemy.organize.bibliography](#textalchemy-organize-bibliography), [textalchemy.web.queue](#textalchemy-web-queue), [textalchemy.web.runtime](#textalchemy-web-runtime), [textalchemy.web.services.bibliography](#textalchemy-web-services-bibliography), [textalchemy.web.services.conversion_tasks](#textalchemy-web-services-conversion_tasks), [textalchemy.web.services.matching](#textalchemy-web-services-matching), [textalchemy.web.tasks](#textalchemy-web-tasks), [textalchemy.web.workspace](#textalchemy-web-workspace).
 
-Прямые импорты в тестах: [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_web_batch_archive.py](../../tests/test_web_batch_archive.py).
+Прямые импорты в тестах: [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_formats_release_integration.py](../../tests/test_formats_release_integration.py), [tests/test_web_batch_archive.py](../../tests/test_web_batch_archive.py).
 
 <a id="textalchemy-web-main"></a>
 ### textalchemy.web.main
@@ -2089,7 +2146,7 @@ In-process очередь фоновых задач Web-приложения.
 
 Символы (строка): [TaskQueue (23)](../../src/textalchemy/web/queue.py#L23), [RecoverySummary (102)](../../src/textalchemy/web/queue.py#L102), [recover_persisted_tasks (109)](../../src/textalchemy/web/queue.py#L109), [recover_interrupted_tasks (133)](../../src/textalchemy/web/queue.py#L133).
 
-Прямые импорты в тестах: [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_web.py](../../tests/test_web.py), [tests/test_web_batch_options.py](../../tests/test_web_batch_options.py), [tests/test_web_batch_services.py](../../tests/test_web_batch_services.py), [tests/test_web_emphasis_quality.py](../../tests/test_web_emphasis_quality.py), [tests/test_web_formula_quality.py](../../tests/test_web_formula_quality.py), [tests/test_web_html.py](../../tests/test_web_html.py), [tests/test_web_tasks.py](../../tests/test_web_tasks.py).
+Прямые импорты в тестах: [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_powerpoint_acceptance.py](../../tests/test_powerpoint_acceptance.py), [tests/test_web.py](../../tests/test_web.py), [tests/test_web_batch_options.py](../../tests/test_web_batch_options.py), [tests/test_web_batch_services.py](../../tests/test_web_batch_services.py), [tests/test_web_color_quality.py](../../tests/test_web_color_quality.py), [tests/test_web_docx_layout.py](../../tests/test_web_docx_layout.py), [tests/test_web_emphasis_quality.py](../../tests/test_web_emphasis_quality.py), [tests/test_web_epub_native.py](../../tests/test_web_epub_native.py), [tests/test_web_epub_structures.py](../../tests/test_web_epub_structures.py), [tests/test_web_formula_quality.py](../../tests/test_web_formula_quality.py), [tests/test_web_heading_budget.py](../../tests/test_web_heading_budget.py), [tests/test_web_html.py](../../tests/test_web_html.py), [tests/test_web_html_accessibility.py](../../tests/test_web_html_accessibility.py), [tests/test_web_html_ledger.py](../../tests/test_web_html_ledger.py), [tests/test_web_pdf_interactions.py](../../tests/test_web_pdf_interactions.py), [tests/test_web_pdf_vectors.py](../../tests/test_web_pdf_vectors.py), [tests/test_web_tasks.py](../../tests/test_web_tasks.py), [tests/test_web_vector_fallback.py](../../tests/test_web_vector_fallback.py), [tests/test_web_word_evidence.py](../../tests/test_web_word_evidence.py), [tests/test_word_acceptance.py](../../tests/test_word_acceptance.py).
 
 <a id="textalchemy-web-routes"></a>
 ### textalchemy.web.routes
@@ -2122,7 +2179,7 @@ API управления библиотекой (CRUD bibliography + smart-parse
 
 Основные HTTP endpoints конвертации и совместимый facade для дочерних route-модулей.
 
-Символы (строка): [resume_conversion_task (90)](../../src/textalchemy/web/routes/convert.py#L90), [api_convert_capabilities (96)](../../src/textalchemy/web/routes/convert.py#L96), [api_convert_inspect (101)](../../src/textalchemy/web/routes/convert.py#L101), [api_convert (112)](../../src/textalchemy/web/routes/convert.py#L112), [api_convert_status (166)](../../src/textalchemy/web/routes/convert.py#L166), [api_convert_result (174)](../../src/textalchemy/web/routes/convert.py#L174).
+Символы (строка): [resume_conversion_task (94)](../../src/textalchemy/web/routes/convert.py#L94), [api_convert_capabilities (100)](../../src/textalchemy/web/routes/convert.py#L100), [api_convert_inspect (105)](../../src/textalchemy/web/routes/convert.py#L105), [api_convert (116)](../../src/textalchemy/web/routes/convert.py#L116), [api_convert_status (174)](../../src/textalchemy/web/routes/convert.py#L174), [api_convert_result (193)](../../src/textalchemy/web/routes/convert.py#L193).
 
 Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.inspection](#textalchemy-core-inspection), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.quality_policy](#textalchemy-core-quality_policy), [textalchemy.core.types](#textalchemy-core-types), [textalchemy.web.app](#textalchemy-web-app), [textalchemy.web.preview](#textalchemy-web-preview), [textalchemy.web.routes](#textalchemy-web-routes), [textalchemy.web.routes.convert_jobs](#textalchemy-web-routes-convert_jobs), [textalchemy.web.routes.convert_preview](#textalchemy-web-routes-convert_preview), [textalchemy.web.services.conversion_catalog](#textalchemy-web-services-conversion_catalog), [textalchemy.web.services.conversion_inspection](#textalchemy-web-services-conversion_inspection), [textalchemy.web.services.conversion_submission](#textalchemy-web-services-conversion_submission), [textalchemy.web.services.conversion_tasks](#textalchemy-web-services-conversion_tasks), [textalchemy.web.workspace](#textalchemy-web-workspace).
 
@@ -2135,7 +2192,7 @@ API управления библиотекой (CRUD bibliography + smart-parse
 
 HTTP-адаптеры пакетной конвертации и истории заданий.
 
-Символы (строка): [api_convert_batch (37)](../../src/textalchemy/web/routes/convert_jobs.py#L37), [api_convert_jobs (71)](../../src/textalchemy/web/routes/convert_jobs.py#L71), [api_convert_job (76)](../../src/textalchemy/web/routes/convert_jobs.py#L76), [api_convert_job_delete (84)](../../src/textalchemy/web/routes/convert_jobs.py#L84), [api_convert_job_archive (92)](../../src/textalchemy/web/routes/convert_jobs.py#L92), [api_convert_job_rerun (122)](../../src/textalchemy/web/routes/convert_jobs.py#L122), [api_convert_job_cancel (140)](../../src/textalchemy/web/routes/convert_jobs.py#L140).
+Символы (строка): [api_convert_batch (37)](../../src/textalchemy/web/routes/convert_jobs.py#L37), [api_convert_jobs (75)](../../src/textalchemy/web/routes/convert_jobs.py#L75), [api_convert_job (80)](../../src/textalchemy/web/routes/convert_jobs.py#L80), [api_convert_job_delete (88)](../../src/textalchemy/web/routes/convert_jobs.py#L88), [api_convert_job_archive (96)](../../src/textalchemy/web/routes/convert_jobs.py#L96), [api_convert_job_rerun (126)](../../src/textalchemy/web/routes/convert_jobs.py#L126), [api_convert_job_cancel (144)](../../src/textalchemy/web/routes/convert_jobs.py#L144).
 
 Импорты: [textalchemy.web.app](#textalchemy-web-app), [textalchemy.web.routes](#textalchemy-web-routes), [textalchemy.web.routes.convert](#textalchemy-web-routes-convert), [textalchemy.web.services.batch_actions](#textalchemy-web-services-batch_actions), [textalchemy.web.services.batch_archive](#textalchemy-web-services-batch_archive), [textalchemy.web.services.batch_history](#textalchemy-web-services-batch_history), [textalchemy.web.services.batch_retry](#textalchemy-web-services-batch_retry), [textalchemy.web.services.batch_submission](#textalchemy-web-services-batch_submission).
 
@@ -2183,9 +2240,9 @@ HTTP-адаптер извлечения текста/LaTeX из загруже�
 
 API генерации документов по шаблонам (DocumentModel + TemplateSchema).
 
-Символы (строка): [DatasetInput (67)](../../src/textalchemy/web/routes/generate.py#L67), [list_datasets (95)](../../src/textalchemy/web/routes/generate.py#L95), [get_dataset (102)](../../src/textalchemy/web/routes/generate.py#L102), [create_dataset (109)](../../src/textalchemy/web/routes/generate.py#L109), [update_dataset (115)](../../src/textalchemy/web/routes/generate.py#L115), [api_list_templates (123)](../../src/textalchemy/web/routes/generate.py#L123), [api_generate_template_schema (128)](../../src/textalchemy/web/routes/generate.py#L128), [api_generate_template_preview_meta (136)](../../src/textalchemy/web/routes/generate.py#L136), [api_generate_template_preview (150)](../../src/textalchemy/web/routes/generate.py#L150), [api_generate (165)](../../src/textalchemy/web/routes/generate.py#L165), [api_generated_result (192)](../../src/textalchemy/web/routes/generate.py#L192), [api_generated_page (201)](../../src/textalchemy/web/routes/generate.py#L201).
+Символы (строка): [DatasetInput (68)](../../src/textalchemy/web/routes/generate.py#L68), [list_datasets (96)](../../src/textalchemy/web/routes/generate.py#L96), [get_dataset (103)](../../src/textalchemy/web/routes/generate.py#L103), [create_dataset (110)](../../src/textalchemy/web/routes/generate.py#L110), [update_dataset (116)](../../src/textalchemy/web/routes/generate.py#L116), [api_list_templates (124)](../../src/textalchemy/web/routes/generate.py#L124), [api_generate_template_schema (129)](../../src/textalchemy/web/routes/generate.py#L129), [api_generate_template_preview_meta (137)](../../src/textalchemy/web/routes/generate.py#L137), [api_generate_template_preview (151)](../../src/textalchemy/web/routes/generate.py#L151), [api_generate (166)](../../src/textalchemy/web/routes/generate.py#L166), [api_generate_live_preview (193)](../../src/textalchemy/web/routes/generate.py#L193), [api_generated_result (201)](../../src/textalchemy/web/routes/generate.py#L201), [api_generated_page (210)](../../src/textalchemy/web/routes/generate.py#L210).
 
-Импорты: [textalchemy.core.exceptions](#textalchemy-core-exceptions), [textalchemy.generate](#textalchemy-generate), [textalchemy.web.app](#textalchemy-web-app), [textalchemy.web.preview](#textalchemy-web-preview), [textalchemy.web.services.generated_preview](#textalchemy-web-services-generated_preview), [textalchemy.web.services.generator_catalog](#textalchemy-web-services-generator_catalog), [textalchemy.web.services.generator_datasets](#textalchemy-web-services-generator_datasets), [textalchemy.web.services.generator_execution](#textalchemy-web-services-generator_execution), [textalchemy.web.services.generator_sessions](#textalchemy-web-services-generator_sessions), [textalchemy.web.services.ocr_drafts](#textalchemy-web-services-ocr_drafts), [textalchemy.web.services.template_source](#textalchemy-web-services-template_source), [textalchemy.web.services.template_variables](#textalchemy-web-services-template_variables), [textalchemy.web.workspace](#textalchemy-web-workspace).
+Импорты: [textalchemy.core.exceptions](#textalchemy-core-exceptions), [textalchemy.generate](#textalchemy-generate), [textalchemy.web.app](#textalchemy-web-app), [textalchemy.web.preview](#textalchemy-web-preview), [textalchemy.web.services.generated_preview](#textalchemy-web-services-generated_preview), [textalchemy.web.services.generator_catalog](#textalchemy-web-services-generator_catalog), [textalchemy.web.services.generator_datasets](#textalchemy-web-services-generator_datasets), [textalchemy.web.services.generator_execution](#textalchemy-web-services-generator_execution), [textalchemy.web.services.generator_sessions](#textalchemy-web-services-generator_sessions), [textalchemy.web.services.live_preview](#textalchemy-web-services-live_preview), [textalchemy.web.services.ocr_drafts](#textalchemy-web-services-ocr_drafts), [textalchemy.web.services.template_source](#textalchemy-web-services-template_source), [textalchemy.web.services.template_variables](#textalchemy-web-services-template_variables), [textalchemy.web.workspace](#textalchemy-web-workspace).
 
 Прямые импорты в тестах: [tests/test_web_generate_schema.py](../../tests/test_web_generate_schema.py).
 
@@ -2378,7 +2435,7 @@ Process startup policy for the threaded Web application.
 
 Повтор сохранённых файлов пакета с проверкой актуального состояния.
 
-Символы (строка): [submit_saved_tasks (26)](../../src/textalchemy/web/services/batch_retry.py#L26), [retry_saved_task (42)](../../src/textalchemy/web/services/batch_retry.py#L42), [BatchRetryService (68)](../../src/textalchemy/web/services/batch_retry.py#L68).
+Символы (строка): [submit_saved_tasks (28)](../../src/textalchemy/web/services/batch_retry.py#L28), [retry_saved_task (44)](../../src/textalchemy/web/services/batch_retry.py#L44), [BatchRetryService (70)](../../src/textalchemy/web/services/batch_retry.py#L70).
 
 Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.types](#textalchemy-core-types), [textalchemy.web.services.batch_actions](#textalchemy-web-services-batch_actions), [textalchemy.web.services.conversion_catalog](#textalchemy-web-services-conversion_catalog), [textalchemy.web.tasks](#textalchemy-web-tasks).
 
@@ -2439,11 +2496,11 @@ Bibliography use cases, independent of HTTP and Web application state.
 
 Каталог доступных Web-маршрутов конвертации и их представление.
 
-Символы (строка): [resolve_conversion (69)](../../src/textalchemy/web/services/conversion_catalog.py#L69), [web_plan_supported (87)](../../src/textalchemy/web/services/conversion_catalog.py#L87), [preservation_below (92)](../../src/textalchemy/web/services/conversion_catalog.py#L92), [available_conversions (101)](../../src/textalchemy/web/services/conversion_catalog.py#L101), [output_path_for (168)](../../src/textalchemy/web/services/conversion_catalog.py#L168).
+Символы (строка): [resolve_conversion (73)](../../src/textalchemy/web/services/conversion_catalog.py#L73), [web_plan_supported (93)](../../src/textalchemy/web/services/conversion_catalog.py#L93), [preservation_below (98)](../../src/textalchemy/web/services/conversion_catalog.py#L98), [available_conversions (107)](../../src/textalchemy/web/services/conversion_catalog.py#L107), [output_path_for (179)](../../src/textalchemy/web/services/conversion_catalog.py#L179).
 
-Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.core.artifacts](#textalchemy-core-artifacts), [textalchemy.core.conversion_graph](#textalchemy-core-conversion_graph), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.types](#textalchemy-core-types), [textalchemy.web.services.conversion_availability](#textalchemy-web-services-conversion_availability), [textalchemy.web.services.conversion_guidance](#textalchemy-web-services-conversion_guidance).
+Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.convert.input_policy](#textalchemy-convert-input_policy), [textalchemy.core.artifacts](#textalchemy-core-artifacts), [textalchemy.core.conversion_graph](#textalchemy-core-conversion_graph), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.types](#textalchemy-core-types), [textalchemy.web.services.conversion_availability](#textalchemy-web-services-conversion_availability), [textalchemy.web.services.conversion_guidance](#textalchemy-web-services-conversion_guidance).
 
-Прямые импорты в тестах: [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py).
+Прямые импорты в тестах: [tests/convert/test_djvu_integration.py](../../tests/convert/test_djvu_integration.py), [tests/convert/test_txt_writer.py](../../tests/convert/test_txt_writer.py), [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_formats/test_epub_model.py](../../tests/test_formats/test_epub_model.py), [tests/test_formats/test_html_model.py](../../tests/test_formats/test_html_model.py), [tests/test_web_conversion_catalog.py](../../tests/test_web_conversion_catalog.py).
 
 <a id="textalchemy-web-services-conversion_guidance"></a>
 ### textalchemy.web.services.conversion_guidance
@@ -2476,9 +2533,9 @@ Bibliography use cases, independent of HTTP and Web application state.
 
 Restore independently selected checks from durable task metadata.
 
-Символы (строка): [request_policy_fields (10)](../../src/textalchemy/web/services/conversion_policy.py#L10), [stored_policy_fields (26)](../../src/textalchemy/web/services/conversion_policy.py#L26).
+Символы (строка): [request_policy_fields (11)](../../src/textalchemy/web/services/conversion_policy.py#L11), [stored_policy_fields (30)](../../src/textalchemy/web/services/conversion_policy.py#L30).
 
-Импорты: [textalchemy.core.emphasis_quality](#textalchemy-core-emphasis_quality), [textalchemy.core.formula_quality_policy](#textalchemy-core-formula_quality_policy), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.quality_policy](#textalchemy-core-quality_policy), [textalchemy.core.text_quality_policy](#textalchemy-core-text_quality_policy).
+Импорты: [textalchemy.convert.heading_budget](#textalchemy-convert-heading_budget), [textalchemy.core.emphasis_quality](#textalchemy-core-emphasis_quality), [textalchemy.core.formula_quality_policy](#textalchemy-core-formula_quality_policy), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.quality_policy](#textalchemy-core-quality_policy), [textalchemy.core.text_quality_policy](#textalchemy-core-text_quality_policy).
 
 <a id="textalchemy-web-services-conversion_preview"></a>
 ### textalchemy.web.services.conversion_preview
@@ -2487,11 +2544,11 @@ Restore independently selected checks from durable task metadata.
 
 Предпросмотр сохранённого результата без HTTP и выдачи устаревшего кэша.
 
-Символы (строка): [PreviewError (14)](../../src/textalchemy/web/services/conversion_preview.py#L14), [PreviewSnapshot (23)](../../src/textalchemy/web/services/conversion_preview.py#L23), [PreviewImage (32)](../../src/textalchemy/web/services/conversion_preview.py#L32), [ConversionPreviewService (39)](../../src/textalchemy/web/services/conversion_preview.py#L39).
+Символы (строка): [PreviewError (17)](../../src/textalchemy/web/services/conversion_preview.py#L17), [PreviewSnapshot (26)](../../src/textalchemy/web/services/conversion_preview.py#L26), [PreviewImage (35)](../../src/textalchemy/web/services/conversion_preview.py#L35), [ConversionPreviewService (42)](../../src/textalchemy/web/services/conversion_preview.py#L42).
 
 Импорты: [textalchemy.quality.visual](#textalchemy-quality-visual), [textalchemy.web.preview](#textalchemy-web-preview), [textalchemy.web.tasks](#textalchemy-web-tasks).
 
-Прямые импорты в тестах: [tests/test_web_preview_services.py](../../tests/test_web_preview_services.py).
+Прямые импорты в тестах: [tests/test_web_preview_services.py](../../tests/test_web_preview_services.py), [tests/test_web_visual_evidence.py](../../tests/test_web_visual_evidence.py).
 
 <a id="textalchemy-web-services-conversion_results"></a>
 ### textalchemy.web.services.conversion_results
@@ -2500,9 +2557,9 @@ Restore independently selected checks from durable task metadata.
 
 Публичные метаданные результата и инспекции конвертации.
 
-Символы (строка): [inspection_payload (9)](../../src/textalchemy/web/services/conversion_results.py#L9), [artifact_meta (17)](../../src/textalchemy/web/services/conversion_results.py#L17).
+Символы (строка): [inspection_payload (9)](../../src/textalchemy/web/services/conversion_results.py#L9), [artifact_meta (17)](../../src/textalchemy/web/services/conversion_results.py#L17), [inspect_task_source (23)](../../src/textalchemy/web/services/conversion_results.py#L23).
 
-Импорты: [textalchemy.core.types](#textalchemy-core-types), [textalchemy.web.services.conversion_catalog](#textalchemy-web-services-conversion_catalog).
+Импорты: [textalchemy.convert.library_import](#textalchemy-convert-library_import), [textalchemy.core.types](#textalchemy-core-types), [textalchemy.web.services.conversion_catalog](#textalchemy-web-services-conversion_catalog).
 
 <a id="textalchemy-web-services-conversion_submission"></a>
 ### textalchemy.web.services.conversion_submission
@@ -2511,9 +2568,9 @@ Restore independently selected checks from durable task metadata.
 
 Общие настройки и одиночный запуск конвертации без HTTP.
 
-Символы (строка): [ConversionRequestError (27)](../../src/textalchemy/web/services/conversion_submission.py#L27), [SubmissionUnavailableError (35)](../../src/textalchemy/web/services/conversion_submission.py#L35), [ConversionSettings (44)](../../src/textalchemy/web/services/conversion_submission.py#L44), [check_min_retention (72)](../../src/textalchemy/web/services/conversion_submission.py#L72), [check_conversion_route (78)](../../src/textalchemy/web/services/conversion_submission.py#L78), [ConversionSubmissionService (95)](../../src/textalchemy/web/services/conversion_submission.py#L95).
+Символы (строка): [ConversionRequestError (27)](../../src/textalchemy/web/services/conversion_submission.py#L27), [SubmissionUnavailableError (35)](../../src/textalchemy/web/services/conversion_submission.py#L35), [ConversionSettings (44)](../../src/textalchemy/web/services/conversion_submission.py#L44), [check_min_retention (76)](../../src/textalchemy/web/services/conversion_submission.py#L76), [check_conversion_route (82)](../../src/textalchemy/web/services/conversion_submission.py#L82), [ConversionSubmissionService (104)](../../src/textalchemy/web/services/conversion_submission.py#L104).
 
-Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.core.artifacts](#textalchemy-core-artifacts), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.quality_policy](#textalchemy-core-quality_policy), [textalchemy.core.types](#textalchemy-core-types), [textalchemy.web.services.conversion_catalog](#textalchemy-web-services-conversion_catalog), [textalchemy.web.services.conversion_policy](#textalchemy-web-services-conversion_policy), [textalchemy.web.services.upload_input](#textalchemy-web-services-upload_input), [textalchemy.web.tasks](#textalchemy-web-tasks).
+Импорты: [textalchemy.convert.executor](#textalchemy-convert-executor), [textalchemy.core.artifacts](#textalchemy-core-artifacts), [textalchemy.core.document_model](#textalchemy-core-document_model), [textalchemy.core.object_quality_policy](#textalchemy-core-object_quality_policy), [textalchemy.core.quality_policy](#textalchemy-core-quality_policy), [textalchemy.core.types](#textalchemy-core-types), [textalchemy.web.services.conversion_availability](#textalchemy-web-services-conversion_availability), [textalchemy.web.services.conversion_catalog](#textalchemy-web-services-conversion_catalog), [textalchemy.web.services.conversion_policy](#textalchemy-web-services-conversion_policy), [textalchemy.web.services.upload_input](#textalchemy-web-services-upload_input), [textalchemy.web.tasks](#textalchemy-web-tasks).
 
 Прямые импорты в тестах: [tests/test_web_submission_services.py](../../tests/test_web_submission_services.py).
 
@@ -2614,6 +2671,19 @@ Persistent generator snapshots with transactional revision checks.
 Импорты: [textalchemy.generate.template_schema](#textalchemy-generate-template_schema), [textalchemy.web.services.generator_datasets](#textalchemy-web-services-generator_datasets).
 
 Прямые импорты в тестах: [tests/test_web_generator_services.py](../../tests/test_web_generator_services.py).
+
+<a id="textalchemy-web-services-live_preview"></a>
+### textalchemy.web.services.live_preview
+
+[src/textalchemy/web/services/live_preview.py](../../src/textalchemy/web/services/live_preview.py)
+
+Быстрый просмотр шаблона через HTML без офисного рендера и сохранения задачи.
+
+Символы (строка): [LivePreviewService (27)](../../src/textalchemy/web/services/live_preview.py#L27).
+
+Импорты: [textalchemy.convert.html_writer](#textalchemy-convert-html_writer), [textalchemy.core.artifacts](#textalchemy-core-artifacts), [textalchemy.core.exceptions](#textalchemy-core-exceptions), [textalchemy.formats.docx](#textalchemy-formats-docx), [textalchemy.generate.model_template](#textalchemy-generate-model_template), [textalchemy.web.services.generator_catalog](#textalchemy-web-services-generator_catalog), [textalchemy.web.services.generator_execution](#textalchemy-web-services-generator_execution).
+
+Прямые импорты в тестах: [tests/test_web_live_preview.py](../../tests/test_web_live_preview.py).
 
 <a id="textalchemy-web-services-localization"></a>
 ### textalchemy.web.services.localization
@@ -2749,6 +2819,17 @@ Web uploads and run outputs, confined to managed workspaces and task TTL.
 
 Прямые импорты в тестах: [tests/test_web_ingest_e2e.py](../../tests/test_web_ingest_e2e.py), [tests/test_web_ingest_services.py](../../tests/test_web_ingest_services.py).
 
+<a id="textalchemy-web-services-target_program_evidence"></a>
+### textalchemy.web.services.target_program_evidence
+
+[src/textalchemy/web/services/target_program_evidence.py](../../src/textalchemy/web/services/target_program_evidence.py)
+
+Validate scoped QA evidence; the application never infers a target-app edit.
+
+Символы (строка): [validated_check (11)](../../src/textalchemy/web/services/target_program_evidence.py#L11).
+
+Прямые импорты в тестах: [tests/test_target_program_evidence.py](../../tests/test_target_program_evidence.py).
+
 <a id="textalchemy-web-services-task_center"></a>
 ### textalchemy.web.services.task_center
 
@@ -2759,6 +2840,8 @@ Application projection for the global task and storage center.
 Символы (строка): [TaskCenterService (13)](../../src/textalchemy/web/services/task_center.py#L13).
 
 Импорты: [textalchemy.web.tasks](#textalchemy-web-tasks).
+
+Прямые импорты в тестах: [tests/test_task_center_counts.py](../../tests/test_task_center_counts.py).
 
 <a id="textalchemy-web-services-template_conditions"></a>
 ### textalchemy.web.services.template_conditions
@@ -2857,9 +2940,9 @@ Variable policy and immutable template copies, using native library snapshots.
 
 Символы (строка): [TaskStore (32)](../../src/textalchemy/web/tasks.py#L32).
 
-Импорты: [textalchemy.core.artifacts](#textalchemy-core-artifacts), [textalchemy.core.io](#textalchemy-core-io).
+Импорты: [textalchemy.core.artifacts](#textalchemy-core-artifacts), [textalchemy.core.io](#textalchemy-core-io), [textalchemy.web.services.target_program_evidence](#textalchemy-web-services-target_program_evidence).
 
-Прямые импорты в тестах: [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_web.py](../../tests/test_web.py), [tests/test_web_batch_archive.py](../../tests/test_web_batch_archive.py), [tests/test_web_batch_cancel.py](../../tests/test_web_batch_cancel.py), [tests/test_web_batch_options.py](../../tests/test_web_batch_options.py), [tests/test_web_batch_services.py](../../tests/test_web_batch_services.py), [tests/test_web_html.py](../../tests/test_web_html.py), [tests/test_web_ingest_services.py](../../tests/test_web_ingest_services.py), [tests/test_web_m4_completion.py](../../tests/test_web_m4_completion.py), [tests/test_web_ocr_edit.py](../../tests/test_web_ocr_edit.py), [tests/test_web_pdf_diagnostics.py](../../tests/test_web_pdf_diagnostics.py), [tests/test_web_pdf_order.py](../../tests/test_web_pdf_order.py), [tests/test_web_pdf_tables.py](../../tests/test_web_pdf_tables.py), [tests/test_web_preview_e2e.py](../../tests/test_web_preview_e2e.py), [tests/test_web_preview_services.py](../../tests/test_web_preview_services.py), [tests/test_web_submission_services.py](../../tests/test_web_submission_services.py), [tests/test_web_tasks.py](../../tests/test_web_tasks.py).
+Прямые импорты в тестах: [tests/test_browser_e2e.py](../../tests/test_browser_e2e.py), [tests/test_target_program_evidence.py](../../tests/test_target_program_evidence.py), [tests/test_web.py](../../tests/test_web.py), [tests/test_web_batch_archive.py](../../tests/test_web_batch_archive.py), [tests/test_web_batch_cancel.py](../../tests/test_web_batch_cancel.py), [tests/test_web_batch_options.py](../../tests/test_web_batch_options.py), [tests/test_web_batch_services.py](../../tests/test_web_batch_services.py), [tests/test_web_html.py](../../tests/test_web_html.py), [tests/test_web_html_accessibility.py](../../tests/test_web_html_accessibility.py), [tests/test_web_ingest_services.py](../../tests/test_web_ingest_services.py), [tests/test_web_m4_completion.py](../../tests/test_web_m4_completion.py), [tests/test_web_ocr_edit.py](../../tests/test_web_ocr_edit.py), [tests/test_web_pdf_diagnostics.py](../../tests/test_web_pdf_diagnostics.py), [tests/test_web_pdf_order.py](../../tests/test_web_pdf_order.py), [tests/test_web_pdf_tables.py](../../tests/test_web_pdf_tables.py), [tests/test_web_preview_e2e.py](../../tests/test_web_preview_e2e.py), [tests/test_web_preview_services.py](../../tests/test_web_preview_services.py), [tests/test_web_submission_services.py](../../tests/test_web_submission_services.py), [tests/test_web_tasks.py](../../tests/test_web_tasks.py), [tests/test_web_visual_evidence.py](../../tests/test_web_visual_evidence.py).
 
 <a id="textalchemy-web-workspace"></a>
 ### textalchemy.web.workspace
@@ -2878,6 +2961,7 @@ Web-facing helpers for bounded artifact workspaces.
 |---|
 | [src/textalchemy/web/static/css/style.css](../../src/textalchemy/web/static/css/style.css) |
 | [src/textalchemy/web/static/js/app.js](../../src/textalchemy/web/static/js/app.js) |
+| [src/textalchemy/web/static/js/components/drawer.js](../../src/textalchemy/web/static/js/components/drawer.js) |
 | [src/textalchemy/web/static/js/components/ingest-input.js](../../src/textalchemy/web/static/js/components/ingest-input.js) |
 | [src/textalchemy/web/static/js/components/task-center.js](../../src/textalchemy/web/static/js/components/task-center.js) |
 | [src/textalchemy/web/static/js/i18n.js](../../src/textalchemy/web/static/js/i18n.js) |
@@ -2891,6 +2975,7 @@ Web-facing helpers for bounded artifact workspaces.
 | [src/textalchemy/web/static/js/pages/convert/issues.js](../../src/textalchemy/web/static/js/pages/convert/issues.js) |
 | [src/textalchemy/web/static/js/pages/convert/preview.js](../../src/textalchemy/web/static/js/pages/convert/preview.js) |
 | [src/textalchemy/web/static/js/pages/convert/quality.js](../../src/textalchemy/web/static/js/pages/convert/quality.js) |
+| [src/textalchemy/web/static/js/pages/convert/target-checks.js](../../src/textalchemy/web/static/js/pages/convert/target-checks.js) |
 | [src/textalchemy/web/static/js/pages/convert/view.js](../../src/textalchemy/web/static/js/pages/convert/view.js) |
 | [src/textalchemy/web/static/js/pages/convert.js](../../src/textalchemy/web/static/js/pages/convert.js) |
 | [src/textalchemy/web/static/js/pages/export.js](../../src/textalchemy/web/static/js/pages/export.js) |
@@ -2933,7 +3018,7 @@ Web-facing helpers for bounded artifact workspaces.
 | [src/textalchemy/web/templates/partials/generator_data.html](../../src/textalchemy/web/templates/partials/generator_data.html) |
 | [src/textalchemy/web/templates/partials/header.html](../../src/textalchemy/web/templates/partials/header.html) |
 | [src/textalchemy/web/templates/partials/icon_sprite.html](../../src/textalchemy/web/templates/partials/icon_sprite.html) |
-| [src/textalchemy/web/templates/partials/language_dialog.html](../../src/textalchemy/web/templates/partials/language_dialog.html) |
+| [src/textalchemy/web/templates/partials/ingest_empty.html](../../src/textalchemy/web/templates/partials/ingest_empty.html) |
 | [src/textalchemy/web/templates/partials/library_nav.html](../../src/textalchemy/web/templates/partials/library_nav.html) |
 | [src/textalchemy/web/templates/partials/navigation.html](../../src/textalchemy/web/templates/partials/navigation.html) |
 | [src/textalchemy/web/templates/partials/task_center.html](../../src/textalchemy/web/templates/partials/task_center.html) |

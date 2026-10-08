@@ -66,11 +66,19 @@ nav:
       - Библиотека документов: doc/development/document-library.md
       - Запросы к OpenDoc: doc/development/library-requests/opendoc.md
       - Контракты и план OpenDoc Formats: doc/development/library-requests/opendoc-formats.md
+      - Повторное чтение заголовков DOCX: doc/development/library-requests/heading-roundtrip.md
+      - Текст и пагинация пользовательского DOCX: doc/development/library-requests/docx-user-layout.md
+      - Интерактивные объекты и страницы PDF: doc/development/library-requests/pdf-interactions-export.md
+      - Геометрия сканированного PDF: doc/development/library-requests/pdf-scan-geometry.md
+      - Нативное оформление сложного PPTX: doc/development/library-requests/pptx-native-visual.md
+      - Приёмка HTML-семантики: doc/development/library-requests/html-accessibility.md
       - Интерфейс шаблонизатора: doc/development/templating.md
       - Собранная зависимость OpenDoc: doc/development/vendor-opendoc.md
       - Собранные адаптеры: doc/development/vendor-opendoc-formats.md
       - Устройство проекта: doc/development/AGENTS.md
       - Стандарты: doc/development/CODING_STANDARDS.md
+      - Приёмка текстового слоя DjVu: doc/development/library-requests/djvu-text.md
+      - Решение по XLSX/ODS: doc/development/spreadsheets.md
       - Корпус: doc/development/corpus.md
       - Происхождение Office-файлов: doc/development/office-corpus.md
   - Карта документации: doc/README.md

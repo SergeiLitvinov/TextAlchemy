@@ -109,6 +109,8 @@ class BatchSubmissionService:
                     settings.max_text_edits,
                     settings.max_changed_formulas,
                     settings.max_changed_emphasis,
+                    settings.max_changed_headings,
+                    settings.txt_encoding,
                 )
                 tasks.append(
                     {

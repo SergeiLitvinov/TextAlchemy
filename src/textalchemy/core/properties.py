@@ -1,36 +1,36 @@
-"""Compatibility imports; document implementation lives in opendoc."""
+"""Compatibility imports; document implementation lives in opendoc_model."""
 
-from opendoc.properties import (
+from opendoc_model.properties import (
     PROPERTY_SCHEMA_VERSION as PROPERTY_SCHEMA_VERSION,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     ImageProperties as ImageProperties,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     ParagraphProperties as ParagraphProperties,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     SectionProperties as SectionProperties,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     TableCellProperties as TableCellProperties,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     TableProperties as TableProperties,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     TableRowProperties as TableRowProperties,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     TextStyleProperties as TextStyleProperties,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     VersionedProperties as VersionedProperties,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     WrapPoint as WrapPoint,
 )
-from opendoc.properties import (
+from opendoc_model.properties import (
     WrapPolygon as WrapPolygon,
 )
 

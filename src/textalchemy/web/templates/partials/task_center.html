@@ -1,10 +1,10 @@
-<aside class="task-center" id="taskCenter" aria-labelledby="task-center-title" inert>
+<aside class="task-center" id="taskCenter" aria-labelledby="task-center-title" tabindex="-1" inert>
     <div class="task-center-head">
         <div>
             <p class="eyebrow">На этом устройстве</p>
             <h2 id="task-center-title">Задачи и результаты</h2>
         </div>
-        <button class="icon-button" type="button" data-task-center-close aria-label="Закрыть центр задач">×</button>
+        <button class="icon-button" type="button" data-task-center-close aria-label="Закрыть центр задач"><svg class="ui-icon" aria-hidden="true"><use href="#icon-close"/></svg></button>
     </div>
     <div class="storage-summary" id="storageSummary">
         <span class="storage-indicator" aria-hidden="true"></span>
@@ -21,3 +21,10 @@
     </div>
 </aside>
 <div class="task-center-backdrop" data-task-center-close hidden></div>
+<dialog class="confirmation-dialog" id="clearTasksDialog" aria-labelledby="clear-tasks-title" aria-describedby="clear-tasks-description">
+    <form method="dialog">
+        <h2 id="clear-tasks-title">Удалить завершённые задачи?</h2>
+        <p id="clear-tasks-description">Их исходники, предпросмотры и файлы результата будут удалены. Скачайте нужные результаты перед очисткой. Выполняющиеся задачи останутся.</p>
+        <div class="form-actions"><button class="btn-secondary" value="cancel" autofocus>Оставить задачи</button><button class="btn-danger" value="clear">Удалить завершённые</button></div>
+    </form>
+</dialog>

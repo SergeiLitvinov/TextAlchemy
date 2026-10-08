@@ -1,4 +1,5 @@
 "use strict";
+import {createDrawer} from './drawer.js';
 
 const drawer = document.getElementById("taskCenter");
 const list = document.getElementById("globalTaskList");
@@ -21,18 +22,18 @@ const labels = {
 const modes = {balanced: "Разумный баланс", faithful: "Максимальное сходство", editable: "Удобное редактирование"};
 let refreshTimer = null;
 
-function setOpen(open) {
-  if (!drawer) return;
-  drawer.classList.toggle("open", open);
-  drawer.inert = !open;
-  document.body.classList.toggle("task-center-open", open);
-  triggers.forEach((trigger) => trigger.setAttribute("aria-expanded", String(open)));
-  if (backdrop) backdrop.hidden = !open;
-  if (open) {
-    drawer.querySelector("[data-task-center-close]")?.focus();
-    loadTasks();
-  }
-}
+createDrawer({
+  panel: drawer, triggers, closeTargets: closeButtons,
+  background: [document.querySelector('.header'), document.querySelector('.app-layout')],
+  fallbackFocus: () => document.querySelector('.header [data-task-center-open]'),
+  onChange(open) {
+    drawer.classList.toggle('open', open);
+    drawer.inert = !open;
+    document.body.classList.toggle('task-center-open', open);
+    if (backdrop) backdrop.hidden = !open;
+    if (open) loadTasks();
+  },
+});
 
 function ageLabel(seconds) {
   if (seconds === null || seconds === undefined) return "";
@@ -52,11 +53,11 @@ function sizeLabel(bytes) {
 function taskMarkup(task) {
   const route = [task.source_format, task.target_format].filter(Boolean).join(" → ");
   const actions = [];
-  if (task.result_url) actions.push(`<a class="btn-link" href="${window.esc(task.result_url)}">Скачать</a>`);
-  if (task.can_cancel) actions.push(`<button class="btn-link" type="button" data-task-action="cancel" data-task-id="${window.esc(task.task_id)}">Отменить</button>`);
-  if (task.can_rerun) actions.push(`<button class="btn-link" type="button" data-task-action="rerun" data-task-id="${window.esc(task.task_id)}">Повторить</button>`);
+  if (task.result_url) actions.push(`<a class="btn-link" data-task-focus="download" href="${window.esc(task.result_url)}">Скачать</a>`);
+  if (task.can_cancel) actions.push(`<button class="btn-link" type="button" data-task-focus="cancel" data-task-action="cancel" data-task-id="${window.esc(task.task_id)}">Отменить</button>`);
+  if (task.can_rerun) actions.push(`<button class="btn-link" type="button" data-task-focus="rerun" data-task-action="rerun" data-task-id="${window.esc(task.task_id)}">Повторить</button>`);
   const error = task.error ? `<small class="task-error">${window.esc(task.error)}</small>` : "";
-  return `<article class="global-task ${window.esc(task.status)}">
+  return `<article class="global-task ${window.esc(task.status)}" data-task-id="${window.esc(task.task_id)}">
     <span class="task-state-dot" aria-hidden="true"></span>
     <div><strong>${window.esc(task.filename)}</strong><small>${window.esc(route || modes[task.mode] || "Обработка документа")} · ${window.esc(ageLabel(task.age_seconds))}</small>${error}</div>
     <span class="task-status">${window.esc(labels[task.status] || task.status)}</span><span class="task-actions">${actions.join("")}</span>
@@ -72,9 +73,16 @@ async function loadTasks() {
     status.textContent = data.active ? `${data.active} выполняется` : "Нет активных задач";
     storageSize.textContent = sizeLabel(data.storage?.bytes || 0);
     clearButton.hidden = !data.tasks.some((task) => !["queued", "running", "cancelling"].includes(task.status));
+    const focused = list.contains(document.activeElement) ? document.activeElement : null;
+    const taskId = focused?.closest('article')?.dataset.taskId;
+    const action = focused?.dataset.taskFocus;
     list.innerHTML = data.tasks.length
       ? data.tasks.map(taskMarkup).join("")
       : '<div class="task-center-empty"><span aria-hidden="true">✓</span><strong>Задач пока нет</strong><small>Новые конвертации появятся здесь и останутся доступны на всех страницах.</small></div>';
+    if (focused && action && taskId) {
+      const replacement = list.querySelector(`article[data-task-id="${CSS.escape(taskId)}"] [data-task-focus="${CSS.escape(action)}"]`);
+      (replacement || drawer.querySelector('[data-task-center-close]')).focus();
+    }
     const hasActive = Boolean(data.active);
     clearTimeout(refreshTimer);
     if (hasActive) refreshTimer = setTimeout(loadTasks, 1500);
@@ -83,15 +91,15 @@ async function loadTasks() {
   }
 }
 
-triggers.forEach((trigger) => trigger.addEventListener("click", () => setOpen(true)));
-closeButtons.forEach((trigger) => trigger.addEventListener("click", () => setOpen(false)));
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && drawer?.classList.contains("open")) setOpen(false);
-});
-clearButton?.addEventListener("click", async () => {
-  await window.api("/api/tasks/finished", {method: "DELETE"});
-  window.toast("Завершённые задачи удалены", "success");
-  loadTasks();
+const clearDialog = document.getElementById('clearTasksDialog');
+clearButton?.addEventListener('click', () => { clearDialog.returnValue = ''; clearDialog.showModal(); });
+clearDialog?.addEventListener('close', async () => {
+  if (clearDialog.returnValue !== 'clear') return;
+  try {
+    await window.api("/api/tasks/finished", {method: "DELETE"});
+    window.toast("Завершённые задачи удалены", "success");
+    loadTasks();
+  } catch (_) { status.textContent = 'Не удалось очистить задачи. Попробуйте ещё раз.'; }
 });
 list?.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-task-action]");

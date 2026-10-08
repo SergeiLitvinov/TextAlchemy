@@ -29,25 +29,26 @@ def accessible(page):
 
 def test_auto_preview_keeps_latest_input_and_serializes_requests(e2e_server, page, m4_client):
     requests = []
-    page.route('**/api/generate', lambda route: requests.append(route))
+    page.route('**/api/generate/live-preview', lambda route: requests.append(route))
     page.goto(e2e_server + '/generate')
+    fixtures._generator_step(page)
     page.locator('#field-title').fill('Первый вариант')
-    expect(page.locator('#filledPreviewStatus')).to_have_text('Создаём предпросмотр…', timeout=10000)
+    expect(page.locator('#livePreviewStatus')).to_have_text('Обновляем черновик…', timeout=10000)
     page.locator('#field-title').fill('Второй вариант')
     page.locator('#field-title').fill('Последний вариант')
     # Let the debounce elapse while the server still holds the earlier request.
     page.wait_for_timeout(1800)
     assert len(requests) == 1
-    requests[0].fulfill(json={'success': True, 'id': 'old', 'pages': 0, 'filename': 'old.docx',
-                              'download': '/api/generate/results/old', 'available': False})
+    requests[0].fulfill(json={'success': True, 'html': '<html><head></head><body>Устаревший ответ</body></html>'})
     page.wait_for_timeout(1800)
     assert len(requests) == 2
     assert 'Последний вариант' in requests[1].request.post_data
-    assert page.locator('#filledDownload').get_attribute('href') != '/api/generate/results/old'
-    requests[1].fulfill(json={'success': True, 'id': 'new', 'pages': 0, 'filename': 'new.docx',
-                              'download': '/api/generate/results/new', 'available': False})
-    expect(page.locator('#filledDownload')).to_have_attribute('href', '/api/generate/results/new')
-    expect(page.locator('#previewFilled')).to_be_hidden()
+    assert 'Устаревший ответ' not in (page.locator('#livePreviewFrame').get_attribute('srcdoc') or '')
+    requests[1].fulfill(json={'success': True, 'html': '<html><head></head><body>Последний вариант</body></html>'})
+    expect(page.frame_locator('#livePreviewFrame').locator('body')).to_have_text('Последний вариант')
+    expect(page.locator('#livePreviewFrame')).to_have_attribute('sandbox', '')
+    assert "default-src 'none'" in page.locator('#livePreviewFrame').get_attribute('srcdoc')
+    expect(page.locator('#filledDownload')).to_be_hidden()
     assert page.e2e_errors == []
 
 
@@ -55,6 +56,8 @@ def test_auto_preview_keeps_latest_input_and_serializes_requests(e2e_server, pag
 def test_sample_to_field_preview_download(e2e_server, page, m4_client, width):
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(e2e_server + "/generate")
+    fixtures._generator_step(page)
+    fixtures._generator_step(page, 0)
     page.get_by_text("Создать шаблон из своего DOCX", exact=True).click()
     page.locator("#sourceUpload").set_input_files(
         {
@@ -76,6 +79,7 @@ def test_sample_to_field_preview_download(e2e_server, page, m4_client, width):
     page.locator("#sourceSave").click()
     expect(page.locator("#field-field_1")).to_be_visible(timeout=30000)
     page.locator("#field-field_1").fill("Петров Пётр Петрович")
+    page.locator('#previewAccurate').click()
     expect(page.locator("#filledDownload")).to_be_visible(timeout=60000)
     with page.expect_download() as downloaded:
         page.locator("#filledDownload").click()
@@ -84,6 +88,7 @@ def test_sample_to_field_preview_download(e2e_server, page, m4_client, width):
     assert result.paragraphs[2].text == "Исполнитель: Иванов Иван Иванович"
     assert result.sections[0].footer.paragraphs[0].text == "Подпись: Петров Пётр Петрович"
     page.locator("#field-field_1").fill("")
+    page.locator('#previewAccurate').click()
     expect(page.locator("#filledDownload")).to_have_text("Скачать черновик", timeout=60000)
     expect(page.locator("#filledPreviewStatus")).to_contain_text("Осталось заполнить: ФИО руководителя")
     with page.expect_download() as draft_download:
@@ -94,8 +99,9 @@ def test_sample_to_field_preview_download(e2e_server, page, m4_client, width):
     accessible(page)
     page.locator("#field-field_1").fill("Новое значение")
     expect(page.locator("#filledDownload")).to_be_hidden()
-    expect(page.locator("#filledPreviewStatus")).to_contain_text("изменились")
+    expect(page.locator("#livePreview")).to_be_visible()
     page.reload()
+    fixtures._generator_step(page)
     page.locator("#restoreDraft").click()
     expect(page.locator("#field-field_1")).to_have_value("Новое значение")
     accessible(page)

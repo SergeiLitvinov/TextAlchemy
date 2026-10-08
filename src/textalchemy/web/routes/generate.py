@@ -58,6 +58,7 @@ from textalchemy.web.services.generator_execution import (
     generate_pdf_template as generate_pdf_template,
 )
 from textalchemy.web.services.generator_sessions import GeneratorDatasetService
+from textalchemy.web.services.live_preview import LivePreviewService
 from textalchemy.web.services.ocr_drafts import DraftConflictError
 from textalchemy.web.services.template_source import fill_text_package
 from textalchemy.web.services.template_variables import custom_templates
@@ -186,6 +187,14 @@ def api_generate(
         background_tasks.add_task(result.cleanup)
         return FileResponse(result.path, filename=result.path.name, media_type=result.media_type)
     return result
+
+
+@app.post("/api/generate/live-preview")
+def api_generate_live_preview(
+    template: str = Form(...), params: str = Form("{}"), source: bool = Form(False)
+) -> dict[str, Any]:
+    """Черновой HTML для заполнения или чтения исходника без офисного движка."""
+    return LivePreviewService(workspace_factory=create_web_workspace).preview(template=template, params=params, source=source)
 
 
 @app.get("/api/generate/results/{task_id}")

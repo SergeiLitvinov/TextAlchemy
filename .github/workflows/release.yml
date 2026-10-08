@@ -103,7 +103,7 @@ jobs:
         run: |
           uv build --out-dir dist
           uv run --no-sync python -m tools.release --dist dist --tag "v$RELEASE_VERSION"
-          cp vendor/opendoc/*.whl vendor/opendoc-formats/*.whl dist/
+          cp vendor/opendoc-model/*.whl vendor/opendoc-formats/*.whl dist/
       - name: Recheck downloaded release archives against source
         if: steps.version.outputs.changed == 'false'
         env:

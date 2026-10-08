@@ -18,8 +18,11 @@ from textalchemy.formats.pdf_ocr_types import OcrBlockGeometry, OcrPageResult
 
 logger = logging.getLogger(__name__)
 
-# Бэкенды, которые реально поддерживают режим handwriting.
+# Бэкенды с отдельным набором порогов; это не специализированная рукописная модель.
 _HANDWRITING_BACKENDS = {"easyocr"}
+
+# CLI/Web retain Tesseract language names; EasyOCR uses ISO 639-1 identifiers.
+_EASYOCR_LANGUAGE_CODES = {"rus": "ru", "eng": "en"}
 
 
 @dataclass
@@ -218,13 +221,13 @@ class OcrEngine:
         import easyocr
         from PIL import Image
 
-        reader = easyocr.Reader(self.languages, gpu=self.use_gpu)
+        reader = easyocr.Reader([_EASYOCR_LANGUAGE_CODES.get(lang, lang) for lang in self.languages], gpu=self.use_gpu)
 
         if handwriting:
             results = reader.readtext(
                 str(image_path),
                 detail=1,
-                paragraph=True,
+                paragraph=False,  # Paragraph output omits confidence; retain per-region triples.
                 min_size=10,
                 text_threshold=0.5,
                 low_text=0.4,
@@ -261,7 +264,7 @@ class OcrEngine:
         from paddleocr import PaddleOCR
         from PIL import Image
 
-        lang = "ru" if "ru" in self.languages else "en"
+        lang = "ru" if {"ru", "rus"}.intersection(self.languages) else "en"
         os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 
         ocr = PaddleOCR(
@@ -327,13 +330,13 @@ class OcrEngine:
     def _recognize_easyocr(self, image_path: Path, handwriting: bool = False) -> OcrResult:
         import easyocr
 
-        reader = easyocr.Reader(self.languages, gpu=self.use_gpu)
+        reader = easyocr.Reader([_EASYOCR_LANGUAGE_CODES.get(lang, lang) for lang in self.languages], gpu=self.use_gpu)
 
         if handwriting:
             results = reader.readtext(
                 str(image_path),
                 detail=1,
-                paragraph=True,
+                paragraph=False,  # Keep region geometry and confidence in the public result.
                 min_size=10,
                 text_threshold=0.5,
                 low_text=0.4,
@@ -360,7 +363,7 @@ class OcrEngine:
     def _recognize_paddle(self, image_path: Path) -> OcrResult:
         from paddleocr import PaddleOCR
 
-        lang = "ru" if "ru" in self.languages else "en"
+        lang = "ru" if {"ru", "rus"}.intersection(self.languages) else "en"
 
         os.environ["PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK"] = "True"
 

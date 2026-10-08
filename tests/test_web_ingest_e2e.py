@@ -23,7 +23,7 @@ def test_file_options_explicit_keyboard_start_and_result(
     page.goto(e2e_server + "/" + kind)
     posts = []
     page.on("request", lambda request: posts.append(request) if request.method == "POST" else None)
-    expect(page.locator("#resultCard")).to_be_hidden()
+    expect(page.locator("#resultEmpty")).to_be_visible()
     expect(page.locator("#processBtn")).to_be_disabled()
     source = fixtures._make_pdf(tmp_path / "Документ.pdf", "User can check options first")
     page.locator("#fileInput").set_input_files(source)
@@ -31,7 +31,7 @@ def test_file_options_explicit_keyboard_start_and_result(
     if kind == "recognize":
         page.locator("#scenario").select_option("fast")
         page.locator("#lang").select_option("eng")
-    expect(page.locator("#resultCard")).to_be_hidden()
+    expect(page.locator("#resultEmpty")).to_be_visible()
     assert posts == []
     assert not [item for item in Axe().run(page)["violations"] if item.get("impact") in ("serious", "critical")]
     page.locator("#processBtn").focus()
@@ -143,7 +143,7 @@ def test_latex_failure_is_not_shown_as_result_and_retry_uses_same_docx(
     monkeypatch.setattr(extract_route, "docx_to_latex", fail)
     page.locator("#processBtn").click()
     expect(page.locator("#status")).to_contain_text("Failed to prepare LaTeX")
-    expect(page.locator("#resultCard")).to_be_hidden()
+    expect(page.locator("#resultEmpty")).to_be_visible()
     expect(page.locator("#output-kind")).to_have_value("latex")
 
     def recovered(path: Path, target: Path, _kind: str) -> None:
