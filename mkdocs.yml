@@ -68,6 +68,7 @@ nav:
       - Контракты и план OpenDoc Formats: doc/development/library-requests/opendoc-formats.md
       - Повторное чтение заголовков DOCX: doc/development/library-requests/heading-roundtrip.md
       - Текст и пагинация пользовательского DOCX: doc/development/library-requests/docx-user-layout.md
+      - Нативный отказ SmartArt и OLE: doc/development/library-requests/docx-smartart-ole.md
       - Интерактивные объекты и страницы PDF: doc/development/library-requests/pdf-interactions-export.md
       - Геометрия сканированного PDF: doc/development/library-requests/pdf-scan-geometry.md
       - Нативное оформление сложного PPTX: doc/development/library-requests/pptx-native-visual.md

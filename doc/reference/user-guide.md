@@ -107,6 +107,9 @@
 - [DOCX 0.16.0: роль заголовка и Word](../guide/verification.md#docx-0160-роль-заголовка-и-word)
 - [DOCX 0.16.1: ширины и проверки интерфейса](../guide/verification.md#docx-0161-ширины-и-проверки-интерфейса)
 - [PDF и совместимость 0.17.0](../guide/verification.md#pdf-и-совместимость-0170)
+- [PDF-закладки 0.18.0](../guide/verification.md#pdf-закладки-0180)
+- [DOCX 0.18.0: комментарий и выбранная защита](../guide/verification.md#docx-0180-комментарий-и-выбранная-защита)
+- [SmartArt и OLE 0.18.0: приёмка не пройдена](../guide/verification.md#smartart-и-ole-0180-приёмка-не-пройдена)
 
 ## Web: контракты API и хранения
 

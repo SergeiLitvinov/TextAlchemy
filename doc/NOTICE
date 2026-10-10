@@ -27,7 +27,7 @@ Steve Canny, MIT. Licence: doc/licenses/python-docx-MIT.txt
 https://github.com/python-openxml/python-docx
 
 The source distribution includes the official OpenDoc Model 0.7.2 and OpenDoc
-Formats 0.17.0 wheels, each with its own MIT licence and notices. Preserve
+Formats 0.18.0 wheels, each with its own MIT licence and notices. Preserve
 the original wheels and provenance files. No engine binaries are bundled.
 
 Other dependencies are installed separately. Their terms remain applicable,

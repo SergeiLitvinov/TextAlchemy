@@ -67,7 +67,7 @@ def validate_wheel(path: Path, project: dict, help_data: bytes) -> None:
             if dist_info + "licenses/" + name not in names:
                 raise ValueError(f"Licence text missing from wheel: {name}")
         requirements = metadata.get_all("Requires-Dist", [])
-        for requirement in ("opendoc-model==0.7.2", "opendoc-formats[fonts,pdf-text]==0.17.0"):
+        for requirement in ("opendoc-model==0.7.2", "opendoc-formats[fonts,pdf-text]==0.18.0"):
             if requirement not in requirements:
                 raise ValueError(f"Missing immutable library requirement: {requirement}")
         bundled = archive.read("textalchemy/web/assets/documentation.zip")
@@ -91,6 +91,7 @@ def validate_sdist(path: Path, root: Path, project: dict) -> None:
         required = {*LICENSES, "pyproject.toml", "uv.lock", "mkdocs.yml", "README.md", "TODO.md",
                     "contracts/libraries.json", "contracts/dependencies.json", "tools/release.py",
                     "doc/development/releases.md", "tests/test_release.py"}
+        required.update(script.relative_to(root).as_posix() for script in root.glob("tools/acceptance/*.ps1"))
         if not required.issubset(files):
             raise ValueError("Incomplete source distribution: " + ", ".join(sorted(required - set(files))))
         metadata = BytesParser().parsebytes(archive.extractfile(files["PKG-INFO"]).read())

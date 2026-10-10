@@ -2133,13 +2133,13 @@ wheels = [
 
 [[package]]
 name = "opendoc-formats"
-version = "0.17.0"
-source = { path = "vendor/opendoc-formats/opendoc_formats-0.17.0-py3-none-any.whl" }
+version = "0.18.0"
+source = { path = "vendor/opendoc-formats/opendoc_formats-0.18.0-py3-none-any.whl" }
 dependencies = [
     { name = "opendoc-model" },
 ]
 wheels = [
-    { filename = "opendoc_formats-0.17.0-py3-none-any.whl", hash = "sha256:c184f2152c8eb0ce8a56df288d1623aef0a8695b6e4c90925e45c68e1a5a451b" },
+    { filename = "opendoc_formats-0.18.0-py3-none-any.whl", hash = "sha256:a29d78f40440136b8ce669ed6aa53ec3dc338d4a2ac0f7d62ff5c58a2556a7d0" },
 ]
 
 [package.optional-dependencies]
@@ -3718,12 +3718,12 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.3" },
     { name = "mkdocs", marker = "extra == 'docs'", specifier = ">=1.6.1,<2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.0.0" },
-    { name = "opendoc-formats", extras = ["docx"], marker = "extra == 'docx'", path = "vendor/opendoc-formats/opendoc_formats-0.17.0-py3-none-any.whl" },
-    { name = "opendoc-formats", extras = ["epub"], marker = "extra == 'epub'", path = "vendor/opendoc-formats/opendoc_formats-0.17.0-py3-none-any.whl" },
-    { name = "opendoc-formats", extras = ["html"], marker = "extra == 'html'", path = "vendor/opendoc-formats/opendoc_formats-0.17.0-py3-none-any.whl" },
-    { name = "opendoc-formats", extras = ["pdf"], marker = "extra == 'pdf'", path = "vendor/opendoc-formats/opendoc_formats-0.17.0-py3-none-any.whl" },
-    { name = "opendoc-formats", extras = ["pdf-text", "fonts"], path = "vendor/opendoc-formats/opendoc_formats-0.17.0-py3-none-any.whl" },
-    { name = "opendoc-formats", extras = ["pptx"], marker = "extra == 'pptx'", path = "vendor/opendoc-formats/opendoc_formats-0.17.0-py3-none-any.whl" },
+    { name = "opendoc-formats", extras = ["docx"], marker = "extra == 'docx'", path = "vendor/opendoc-formats/opendoc_formats-0.18.0-py3-none-any.whl" },
+    { name = "opendoc-formats", extras = ["epub"], marker = "extra == 'epub'", path = "vendor/opendoc-formats/opendoc_formats-0.18.0-py3-none-any.whl" },
+    { name = "opendoc-formats", extras = ["html"], marker = "extra == 'html'", path = "vendor/opendoc-formats/opendoc_formats-0.18.0-py3-none-any.whl" },
+    { name = "opendoc-formats", extras = ["pdf"], marker = "extra == 'pdf'", path = "vendor/opendoc-formats/opendoc_formats-0.18.0-py3-none-any.whl" },
+    { name = "opendoc-formats", extras = ["pdf-text", "fonts"], path = "vendor/opendoc-formats/opendoc_formats-0.18.0-py3-none-any.whl" },
+    { name = "opendoc-formats", extras = ["pptx"], marker = "extra == 'pptx'", path = "vendor/opendoc-formats/opendoc_formats-0.18.0-py3-none-any.whl" },
     { name = "opendoc-model", path = "vendor/opendoc-model/opendoc_model-0.7.2-py3-none-any.whl" },
     { name = "paddleocr", marker = "extra == 'ocr'", specifier = ">=3.4.0" },
     { name = "paddlepaddle", marker = "python_full_version < '3.14' and extra == 'ocr'", specifier = ">=3.3.1" },

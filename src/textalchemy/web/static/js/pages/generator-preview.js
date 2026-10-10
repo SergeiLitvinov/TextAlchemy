@@ -61,9 +61,9 @@ export function createGeneratedPreview($, getParams, renderErrors) {
             if (!data.success) { renderErrors(data.errors); note(data.error || 'Просмотр недоступен. Можно создать и скачать документ.'); return; }
             if (kind === 'pages') {
                 result = data; page = 1; renderPages(); $('filledDownload').hidden = false;
-                note(data.draft ? 'Черновик. Осталось заполнить: ' + data.missing_fields.map(field => field.label).join(', ')
-                    : 'Файл создан. Скачивание выдаёт именно этот результат.');
-                if (!data.available) note('Просмотр страниц недоступен. Скачайте созданный файл для проверки.');
+                const status = data.draft ? 'Черновик. Осталось заполнить: ' + data.missing_fields.map(field => field.label).join(', ')
+                    : 'Файл создан. Скачивание выдаёт именно этот результат.';
+                note(status + (!data.available ? ' Просмотр страниц недоступен. Скачайте созданный файл для проверки.' : ''));
             } else {
                 // Документ отображается в изолированной рамке без скриптов и внешних запросов.
                 const guard = `<meta http-equiv="Content-Security-Policy" content="${policy}">`;

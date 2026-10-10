@@ -108,7 +108,7 @@
 | `nvidia-nvtx-cu12 12.8.90` | NVIDIA Tools Extension | Apache-2.0 | [license-file](https://files.pythonhosted.org/packages/a2/eb/86626c1bbc2edb86323022371c39aa48df6fd8b0a1647bc274577f72e90b/nvidia_nvtx_cu12-12.8.90-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl) | ocr |
 | `opencv-contrib-python 4.10.0.84` | Wrapper package for OpenCV python bindings. | Apache-2.0 | [declared](https://pypi.org/pypi/opencv-contrib-python/4.10.0.84/json) | ocr |
 | `opencv-python-headless 4.13.0.92` | Wrapper package for OpenCV python bindings. | Apache-2.0 | [declared](https://pypi.org/pypi/opencv-python-headless/4.13.0.92/json) | ocr, pdf |
-| `opendoc-formats 0.17.0` | Обработчики форматов, LaTeX и нативный доступ к документам | MIT | [license-file](https://github.com/SergeiLitvinov/opendoc-formats/releases/tag/v0.17.0) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
+| `opendoc-formats 0.18.0` | Обработчики форматов, LaTeX и нативный доступ к документам | MIT | [license-file](https://github.com/SergeiLitvinov/opendoc-formats/releases/tag/v0.18.0) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
 | `opendoc-model 0.7.2` | Модель документа, JSON, ресурсы, валидация и сравнение | MIT | [license-file](https://github.com/SergeiLitvinov/opendoc-model/releases/tag/v0.7.2) | base, dev, docs, docx, epub, html, ocr, pdf, pptx, web |
 | `opt-einsum 3.3.0` | Optimizing numpys einsum function | MIT | [declared](https://pypi.org/pypi/opt-einsum/3.3.0/json) | ocr |
 | `packaging 26.2` | Core utilities for Python packages | Apache-2.0 OR BSD-2-Clause | [declared](https://pypi.org/pypi/packaging/26.2/json) | dev, docs, ocr |

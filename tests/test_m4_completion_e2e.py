@@ -53,7 +53,16 @@ def test_auto_preview_keeps_latest_input_and_serializes_requests(e2e_server, pag
 
 
 @pytest.mark.parametrize("width", [375, 1280])
-def test_sample_to_field_preview_download(e2e_server, page, m4_client, width):
+@pytest.mark.parametrize("unavailable", [False, True])
+def test_sample_to_field_preview_download(e2e_server, page, m4_client, width, unavailable):
+    if unavailable:
+        def missing_pages(route):
+            response = route.fetch()
+            data = response.json()
+            if data.get("success"):
+                data.update(available=False, pages=0)
+            route.fulfill(response=response, json=data)
+        page.route("**/api/generate", missing_pages)
     page.set_viewport_size({"width": width, "height": 900})
     page.goto(e2e_server + "/generate")
     fixtures._generator_step(page)
@@ -91,6 +100,8 @@ def test_sample_to_field_preview_download(e2e_server, page, m4_client, width):
     page.locator('#previewAccurate').click()
     expect(page.locator("#filledDownload")).to_have_text("Скачать черновик", timeout=60000)
     expect(page.locator("#filledPreviewStatus")).to_contain_text("Осталось заполнить: ФИО руководителя")
+    if unavailable:
+        expect(page.locator("#filledPreviewStatus")).to_contain_text("Просмотр страниц недоступен")
     with page.expect_download() as draft_download:
         page.locator("#filledDownload").click()
     draft = Document(draft_download.value.path())
