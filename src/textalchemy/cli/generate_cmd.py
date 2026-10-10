@@ -67,7 +67,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
                 print(json.dumps(payload, ensure_ascii=False, indent=2))
             else:
                 print(f"Generated: {report.output_path}")
-                print(f"Quality: {'lossless' if report.lossless else 'with reported losses'}")
+                print(f"Quality: {'no reported losses' if report.lossless else 'with reported losses'}")
                 for issue in report.issues:
                     place = f" ({issue.location})" if issue.location else ""
                     print(f"  {issue.severity.value}: {issue.message}{place}")

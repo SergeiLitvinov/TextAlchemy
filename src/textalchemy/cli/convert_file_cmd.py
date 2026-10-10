@@ -71,7 +71,7 @@ def cmd_convert_file(args: argparse.Namespace) -> int:
         print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2))
     elif report.success:
         print(f"Converted: {report.output_path}")
-        print("Quality: " + ("lossless" if report.lossless else "with reported simplifications"))
+        print("Quality: " + ("no reported losses" if report.lossless else "with reported simplifications"))
         for step in report.metrics.get("executed_steps", []):
             print(f"  {step}")
     else:

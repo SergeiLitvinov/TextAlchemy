@@ -753,11 +753,11 @@
     },
     {
       "name": "opendoc-formats",
-      "version": "0.18.0",
+      "version": "0.19.1",
       "description": "Обработчики форматов, LaTeX и нативный доступ к документам",
       "license": "MIT",
       "status": "license-file",
-      "evidence": "https://github.com/SergeiLitvinov/opendoc-formats/releases/tag/v0.18.0",
+      "evidence": "https://github.com/SergeiLitvinov/opendoc-formats/releases/tag/v0.19.1",
       "audited_on": "2026-10-08"
     },
     {

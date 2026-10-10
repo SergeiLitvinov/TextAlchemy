@@ -55,7 +55,7 @@ uv run textalchemy run doc/examples/text-to-docx.yaml --json
 | [OpenDoc Formats](https://github.com/SergeiLitvinov/opendoc-formats) | Импорт/экспорт форматов, LaTeX и нативный доступ к документам |
 | TextAlchemy | Сценарии, интерфейс, OCR, шаблоны, библиография, политики качества, задачи и публикация результата |
 
-Приложение подключает неизменённые официальные wheel OpenDoc Model 0.7.2 (`opendoc-model`, импорт `opendoc_model`) и OpenDoc Formats 0.18.0. Исходники соседних проектов не нужны. У библиотек свои контракты и планы; приложение не дублирует их обработчики. [Границы и обновление](doc/development/document-library.md).
+Приложение подключает неизменённые официальные wheel OpenDoc Model 0.7.2 (`opendoc-model`, импорт `opendoc_model`) и OpenDoc Formats 0.19.1. Исходники соседних проектов не нужны. У библиотек свои контракты и планы; приложение не дублирует их обработчики. [Границы и обновление](doc/development/document-library.md).
 
 ## Документация и разработка
 

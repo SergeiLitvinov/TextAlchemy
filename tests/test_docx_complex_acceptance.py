@@ -189,3 +189,66 @@ def test_native_complex_sources_refused_by_zero_loss_budget(tmp_path, kind, feat
     assert any(issue.feature == feature and issue.location for issue in rejected.issues)
     assert output.read_bytes() == b"previous artifact"
     assert source.read_bytes() == original
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32" or os.getenv("TEXTALCHEMY_WORD_ACCEPTANCE") != "1",
+    reason="Requires installed Word/Excel and explicit local acceptance run",
+)
+@pytest.mark.parametrize("kind,feature", [("smartart", "docx.smartart"), ("ole", "docx.embedded-ole")])
+def test_native_objects_two_cycles_and_native_edit(tmp_path, kind, feature):
+    tools = Path(__file__).resolve().parents[1] / "tools/acceptance"
+    shell = shutil.which("pwsh") or "powershell"
+    made = subprocess.run(
+        [shell, "-NoProfile", "-NonInteractive", "-File", str(tools / "docx-objects.ps1"),
+         "-OutputDirectory", str(tmp_path), "-Kind", kind],
+        capture_output=True, text=True, encoding="utf-8", timeout=90, check=True,
+    )
+    source = tmp_path / f"own-{kind}.docx"
+    original = source.read_bytes()
+    assert json.loads(made.stdout)["source_sha256"] == sha256(original).hexdigest()
+
+    def inspect_native(path, edited=None):
+        args = [shell, "-NoProfile", "-NonInteractive", "-File", str(tools / "word-objects.ps1"),
+                "-InputPath", str(path), "-Kind", kind]
+        if edited:
+            args += ["-EditedPath", str(edited)]
+        observed = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", timeout=90)
+        assert observed.returncode == 0, observed.stderr
+        result = json.loads(observed.stdout)
+        assert result["opened"] and result["source_unchanged"]
+        return result
+
+    expected = inspect_native(source)["before"]
+    assert (expected["nodes"] == [f"Own node {i}" for i in range(1, 6)] if kind == "smartart"
+            else expected["a1"] == "Own embedded cell" and expected["a2"] == 7)
+    current = source
+    observations = []
+    for index in range(2):
+        model = tmp_path / f"cycle-{index}.json"
+        output = tmp_path / f"cycle-{index}.docx"
+        imported, exported = cycle(current, model, output)
+        assert not imported.lossless and not exported.lossless
+        assert any(issue.feature == feature and issue.location for issue in imported.issues)
+        assert any(issue.feature == feature and issue.location for issue in exported.issues)
+        edited = tmp_path / "native-edit.docx" if index == 0 else None
+        native = inspect_native(output, edited)
+        assert native["before"] == expected
+        if index == 0:
+            expected = native["after"]
+            assert (expected["nodes"][0] == "Own native node edit" if kind == "smartart"
+                    else expected["a1"] == "Own native cell edit" and expected["a2"] == 7)
+            current = edited
+        else:
+            assert native["after"] is None
+        observations.append(native)
+    previous = tmp_path / "previous.docx"
+    previous.write_bytes(b"previous artifact")
+    refused = ConversionExecutor().execute(ConversionRequest(
+        model, previous, DocFormat.MODEL, DocFormat.DOCX, quality_policy=QualityPolicy(0),
+    ))
+    assert not refused.success and previous.read_bytes() == b"previous artifact"
+    assert source.read_bytes() == original
+    (tmp_path / "word-evidence.json").write_text(json.dumps({
+        "source_sha256": sha256(original).hexdigest(), "scope": kind, "cycles": observations,
+    }, indent=2), encoding="utf-8")

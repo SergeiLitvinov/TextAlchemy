@@ -30,21 +30,25 @@ def accessible(page):
 def test_auto_preview_keeps_latest_input_and_serializes_requests(e2e_server, page, m4_client):
     requests = []
     page.route('**/api/generate/live-preview', lambda route: requests.append(route))
-    page.goto(e2e_server + '/generate')
-    fixtures._generator_step(page)
+    # Hold the initial preview deliberately: typing can occur before it finishes.
+    with page.expect_request('**/api/generate/live-preview'):
+        page.goto(e2e_server + '/generate')
+        fixtures._generator_step(page)
     page.locator('#field-title').fill('Первый вариант')
-    expect(page.locator('#livePreviewStatus')).to_have_text('Обновляем черновик…', timeout=10000)
+    with page.expect_request(lambda request: request.url.endswith('/api/generate/live-preview')
+                             and 'Первый вариант' in (request.post_data or '')):
+        requests[0].fulfill(json={'success': True, 'html': '<html><head></head><body>Начальный ответ</body></html>'})
     page.locator('#field-title').fill('Второй вариант')
     page.locator('#field-title').fill('Последний вариант')
     # Let the debounce elapse while the server still holds the earlier request.
     page.wait_for_timeout(1800)
-    assert len(requests) == 1
-    requests[0].fulfill(json={'success': True, 'html': '<html><head></head><body>Устаревший ответ</body></html>'})
-    page.wait_for_timeout(1800)
     assert len(requests) == 2
-    assert 'Последний вариант' in requests[1].request.post_data
+    requests[1].fulfill(json={'success': True, 'html': '<html><head></head><body>Устаревший ответ</body></html>'})
+    page.wait_for_timeout(1800)
+    assert len(requests) == 3
+    assert 'Последний вариант' in requests[2].request.post_data
     assert 'Устаревший ответ' not in (page.locator('#livePreviewFrame').get_attribute('srcdoc') or '')
-    requests[1].fulfill(json={'success': True, 'html': '<html><head></head><body>Последний вариант</body></html>'})
+    requests[2].fulfill(json={'success': True, 'html': '<html><head></head><body>Последний вариант</body></html>'})
     expect(page.frame_locator('#livePreviewFrame').locator('body')).to_have_text('Последний вариант')
     expect(page.locator('#livePreviewFrame')).to_have_attribute('sandbox', '')
     assert "default-src 'none'" in page.locator('#livePreviewFrame').get_attribute('srcdoc')

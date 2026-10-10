@@ -110,6 +110,11 @@
 - [PDF-закладки 0.18.0](../guide/verification.md#pdf-закладки-0180)
 - [DOCX 0.18.0: комментарий и выбранная защита](../guide/verification.md#docx-0180-комментарий-и-выбранная-защита)
 - [SmartArt и OLE 0.18.0: приёмка не пройдена](../guide/verification.md#smartart-и-ole-0180-приёмка-не-пройдена)
+- [PDF: геометрия 0.19.0](../guide/verification.md#pdf-геометрия-0190)
+- [SmartArt и OLE 0.19.1](../guide/verification.md#smartart-и-ole-0191)
+- [PDF: обрезка и наложения 0.19.1](../guide/verification.md#pdf-обрезка-и-наложения-0191)
+- [Частный DOCX-корпус 0.19.1](../guide/verification.md#частный-docx-корпус-0191)
+- [Полный прогон 0.19.1](../guide/verification.md#полный-прогон-0191)
 
 ## Web: контракты API и хранения
 

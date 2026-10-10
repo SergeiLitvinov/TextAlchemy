@@ -67,7 +67,7 @@ def validate_wheel(path: Path, project: dict, help_data: bytes) -> None:
             if dist_info + "licenses/" + name not in names:
                 raise ValueError(f"Licence text missing from wheel: {name}")
         requirements = metadata.get_all("Requires-Dist", [])
-        for requirement in ("opendoc-model==0.7.2", "opendoc-formats[fonts,pdf-text]==0.18.0"):
+        for requirement in ("opendoc-model==0.7.2", "opendoc-formats[fonts,pdf-text]==0.19.1"):
             if requirement not in requirements:
                 raise ValueError(f"Missing immutable library requirement: {requirement}")
         bundled = archive.read("textalchemy/web/assets/documentation.zip")

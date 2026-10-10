@@ -17,7 +17,7 @@ authors = [
 dependencies = [
     # Core
     "opendoc-model==0.7.2",
-    "opendoc-formats[pdf-text,fonts]==0.18.0",
+    "opendoc-formats[pdf-text,fonts]==0.19.1",
     "pyyaml>=6.0.1",
     "platformdirs>=4.0.0",
     "jinja2>=3.1.3",
@@ -26,20 +26,20 @@ dependencies = [
 
 [project.optional-dependencies]
 pdf = [
-    "opendoc-formats[pdf]==0.18.0",
+    "opendoc-formats[pdf]==0.19.1",
 ]
 docx = [
-    "opendoc-formats[docx]==0.18.0",
+    "opendoc-formats[docx]==0.19.1",
 ]
 pptx = [
     "Pillow>=10.0.0",
-    "opendoc-formats[pptx]==0.18.0",
+    "opendoc-formats[pptx]==0.19.1",
 ]
 epub = [
-    "opendoc-formats[epub]==0.18.0",
+    "opendoc-formats[epub]==0.19.1",
 ]
 html = [
-    "opendoc-formats[html]==0.18.0",
+    "opendoc-formats[html]==0.19.1",
 ]
 web = [
     "Pillow>=10.0.0",
@@ -108,4 +108,4 @@ source = ["textalchemy"]
 
 [tool.uv.sources]
 opendoc-model = { path = "vendor/opendoc-model/opendoc_model-0.7.2-py3-none-any.whl" }
-opendoc-formats = { path = "vendor/opendoc-formats/opendoc_formats-0.18.0-py3-none-any.whl" }
+opendoc-formats = { path = "vendor/opendoc-formats/opendoc_formats-0.19.1-py3-none-any.whl" }
